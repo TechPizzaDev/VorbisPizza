@@ -10,10 +10,10 @@ namespace NVorbis
     /// </summary>
     public sealed class VorbisReader : IVorbisReader
     {
-        internal static Func<Stream, bool, IContainerReader> CreateContainerReader { get; set; } = 
+        internal static Func<Stream, bool, IContainerReader> CreateContainerReader { get; set; } =
             (s, leaveOpen) => new Ogg.ContainerReader(s, leaveOpen);
-        
-        internal static Func<IPacketProvider, IVorbisStreamDecoder> CreateStreamDecoder { get; set; } = 
+
+        internal static Func<IPacketProvider, IVorbisStreamDecoder> CreateStreamDecoder { get; set; } =
             pp => new VorbisStreamDecoder(pp, new Factory());
 
         private readonly List<IVorbisStreamDecoder> _decoders;
@@ -28,7 +28,7 @@ namespace NVorbis
         /// Creates a new instance of <see cref="VorbisReader"/> reading from the specified file.
         /// </summary>
         /// <param name="fileName">The file to read from.</param>
-        public VorbisReader(string fileName) : this(File.OpenRead(fileName), true)
+        public VorbisReader(string fileName) : this(File.OpenRead(fileName), false)
         {
         }
 
@@ -139,19 +139,19 @@ namespace NVorbis
 
         public bool FindNextStream()
         {
-            if (_containerReader == null) 
+            if (_containerReader == null)
                 return false;
             return _containerReader.FindNextStream();
         }
 
         public bool SwitchStreams(int index)
         {
-            if (index < 0 || index >= _decoders.Count) 
+            if (index < 0 || index >= _decoders.Count)
                 throw new ArgumentOutOfRangeException(nameof(index));
 
             var newDecoder = _decoders[index];
             var oldDecoder = _streamDecoder;
-            if (newDecoder == oldDecoder) 
+            if (newDecoder == oldDecoder)
                 return false;
 
             // carry-through the clipping setting
@@ -175,7 +175,7 @@ namespace NVorbis
         public int ReadSamples(Span<float> buffer)
         {
             // don't allow non-aligned reads (always on a full sample boundary!)
-            int count = buffer.Length % _streamDecoder.Channels;
+            int count = buffer.Length - buffer.Length % _streamDecoder.Channels;
             if (count > 0)
                 return _streamDecoder.Read(buffer.Slice(0, count));
             return 0;

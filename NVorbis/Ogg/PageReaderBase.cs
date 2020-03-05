@@ -114,19 +114,20 @@ namespace NVorbis.Ogg
         private int FillHeader(Span<byte> buf, int maxTries = 10)
         {
             int count = buf.Length;
-            var copyCount = 0;
+            int copyCount = 0;
             if (_overflowBuf != null)
             {
                 copyCount = Math.Min(_overflowBuf.Length - _overflowBufIndex, count);
                 _overflowBuf.AsSpan(_overflowBufIndex, copyCount).CopyTo(buf);
-                buf = buf.Slice(copyCount);
 
                 count -= copyCount;
+                buf = buf.Slice(copyCount, count);
+
                 if ((_overflowBufIndex += copyCount) == _overflowBuf.Length)
                     _overflowBuf = null;
             }
             if (count > 0)
-                copyCount += EnsureRead(buf.Slice(0, count), maxTries);
+                copyCount += EnsureRead(buf, maxTries);
             return copyCount;
         }
 
@@ -224,19 +225,19 @@ namespace NVorbis.Ogg
             if (!CheckLock())
                 throw new InvalidOperationException("Must be locked prior to reading!");
 
-            var isResync = false;
-
-            var ofs = 0;
-            int cnt;
             PrepareStreamForNextPage();
-            while ((cnt = FillHeader(_headerBuf.AsSpan(ofs, 27 - ofs))) > 0)
+
+            bool isResync = false;
+            int offset = 0;
+            int count;
+            while ((count = FillHeader(_headerBuf.AsSpan(offset, 27 - offset))) > 0)
             {
-                cnt += ofs;
-                for (var i = 0; i < cnt - 4; i++)
+                count += offset;
+                for (int i = 0; i < count - 4; i++)
                 {
-                    if (VerifyHeader(_headerBuf.AsSpan(i), ref cnt, true))
+                    if (VerifyHeader(_headerBuf.AsSpan(i), ref count, true))
                     {
-                        if (VerifyPage(_headerBuf, i, cnt, out var pageBuf, out var bytesRead))
+                        if (VerifyPage(_headerBuf, i, count, out var pageBuf, out var bytesRead))
                         {
                             // one way or the other, we have to clear out the page's bytes from the queue (if queued)
                             ClearEnqueuedData(bytesRead);
@@ -246,9 +247,7 @@ namespace NVorbis.Ogg
 
                             // pass it to our inheritor
                             if (AddPage(pageBuf, isResync))
-                            {
                                 return true;
-                            }
 
                             // otherwise, the whole page is useless...
 
@@ -256,8 +255,8 @@ namespace NVorbis.Ogg
                             WasteBits += pageBuf.Length * 8;
 
                             // set up to load the next page, then loop
-                            ofs = 0;
-                            cnt = 0;
+                            offset = 0;
+                            count = 0;
                             break;
                         }
                         else if (pageBuf != null)
@@ -269,16 +268,16 @@ namespace NVorbis.Ogg
                     isResync = true;
                 }
 
-                if (cnt >= 3)
+                if (count >= 3)
                 {
-                    _headerBuf[0] = _headerBuf[cnt - 3];
-                    _headerBuf[1] = _headerBuf[cnt - 2];
-                    _headerBuf[2] = _headerBuf[cnt - 1];
-                    ofs = 3;
+                    _headerBuf[0] = _headerBuf[count - 3];
+                    _headerBuf[1] = _headerBuf[count - 2];
+                    _headerBuf[2] = _headerBuf[count - 1];
+                    offset = 3;
                 }
             }
 
-            if (cnt == 0)
+            if (count == 0)
             {
                 SetEndOfStreams();
             }
