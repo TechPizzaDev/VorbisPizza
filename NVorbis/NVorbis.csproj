@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>netstandard2.0;net45</TargetFrameworks>
+    <TargetFrameworks>netstandard2.1</TargetFrameworks>
     <RootNamespace>NVorbis</RootNamespace>
     <Description>A fully managed implementation of a Xiph.org Foundation Ogg Vorbis decoder.</Description>
     <Company>Andrew Ward</Company>
@@ -31,10 +31,6 @@
       <Pack>True</Pack>
       <PackagePath></PackagePath>
     </None>
-  </ItemGroup>
-
-  <ItemGroup>
-    <PackageReference Include="System.ValueTuple" Version="4.5.0" />
   </ItemGroup>
 
 </Project>
