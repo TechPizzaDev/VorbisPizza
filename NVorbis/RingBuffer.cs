@@ -50,10 +50,9 @@ namespace NVorbis
 
         internal int Channels;
 
-        internal void CopyTo(float[] buffer, int index, int count)
+        internal void CopyTo(Span<float> buffer)
         {
-            if (index < 0 || index + count > buffer.Length) throw new ArgumentOutOfRangeException("index");
-
+            int count = buffer.Length;
             var start = _start;
             RemoveItems(count);
 
@@ -62,11 +61,11 @@ namespace NVorbis
             if (count > len) throw new ArgumentOutOfRangeException("count");
 
             var cnt = Math.Min(count, _bufLen - start);
-            Buffer.BlockCopy(_buffer, start * sizeof(float), buffer, index * sizeof(float), cnt * sizeof(float));
-
+            _buffer.AsSpan(start, cnt).CopyTo(buffer);
+            
             if (cnt < count)
             {
-                Buffer.BlockCopy(_buffer, 0, buffer, (index + cnt) * sizeof(float), (count - cnt) * sizeof(float));
+                _buffer.AsSpan(0, (count - cnt)).CopyTo(buffer.Slice(cnt));
             }
         }
 

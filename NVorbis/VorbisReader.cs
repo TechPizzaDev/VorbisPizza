@@ -200,22 +200,17 @@ namespace NVorbis
         /// Reads decoded samples from the current logical stream
         /// </summary>
         /// <param name="buffer">The buffer to write the samples to</param>
-        /// <param name="offset">The offset into the buffer to write the samples to</param>
-        /// <param name="count">The number of samples to write</param>
         /// <returns>The number of samples written</returns>
-        public int ReadSamples(float[] buffer, int offset, int count)
+        public int ReadSamples(Span<float> buffer)
         {
-            if (offset < 0) throw new ArgumentOutOfRangeException("offset");
-            if (count < 0 || offset + count > buffer.Length) throw new ArgumentOutOfRangeException("count");
-
-            count = ActiveDecoder.ReadSamples(buffer, offset, count);
+            int count = ActiveDecoder.ReadSamples(buffer);
 
             if (ClipSamples)
             {
                 var decoder = _decoders[_streamIndex];
-                for (int i = 0; i < count; i++, offset++)
+                for (int i = 0; i < count; i++)
                 {
-                    buffer[offset] = Utils.ClipValue(buffer[offset], ref decoder._clipped);
+                    buffer[i] = Utils.ClipValue(buffer[i], ref decoder._clipped);
                 }
             }
 
@@ -276,7 +271,7 @@ namespace NVorbis
         /// Gets or sets the current timestamp of the decoder.  
         /// Is the timestamp before the next sample to be decoded,
         /// </summary>
-        public TimeSpan DecodedTime
+        public TimeSpan TimePosition
         {
             get => TimeSpan.FromSeconds((double)ActiveDecoder.CurrentPosition / SampleRate);
             set => ActiveDecoder.SeekTo((long)(value.TotalSeconds * SampleRate));
@@ -286,7 +281,7 @@ namespace NVorbis
         /// <summary>
         /// Gets or sets the current position of the next sample to be decoded.
         /// </summary>
-        public long DecodedPosition
+        public long SamplePosition
         {
             get => ActiveDecoder.CurrentPosition;
             set => ActiveDecoder.SeekTo(value);

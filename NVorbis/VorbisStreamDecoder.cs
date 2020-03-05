@@ -395,7 +395,7 @@ namespace NVorbis
         void SaveBuffer()
         {
             var buf = new float[_preparedLength * _channels];
-            ReadSamples(buf, 0, buf.Length);
+            ReadSamples(buf);
             _prevBuffer = buf;
         }
 
@@ -772,18 +772,21 @@ namespace NVorbis
 
         #endregion
 
-        internal int ReadSamples(float[] buffer, int offset, int count)
+        internal int ReadSamples(Span<float> buffer)
         {
             int samplesRead = 0;
 
+            int count = buffer.Length;
+
             lock (_seekLock)
             {
+                int offset = 0;
                 if (_prevBuffer != null)
                 {
                     // get samples from the previous buffer's data
                     var cnt = Math.Min(count, _prevBuffer.Length);
-                    Buffer.BlockCopy(_prevBuffer, 0, buffer, offset, cnt * sizeof(float));
-
+                    _prevBuffer.AsSpan(0, cnt).CopyTo(buffer);
+                    
                     // if we have samples left over, rebuild the previous buffer array...
                     if (cnt < _prevBuffer.Length)
                     {
@@ -818,7 +821,7 @@ namespace NVorbis
                     if (_prevBuffer != null)
                     {
                         // uh-oh... something is wrong...
-                        return ReadSamples(buffer, offset, _prevBuffer.Length);
+                        return ReadSamples(buffer.Slice(offset, _prevBuffer.Length));
                     }
                 }
 
@@ -828,7 +831,7 @@ namespace NVorbis
                     count = _preparedLength * _channels;
                 }
 
-                _outputBuffer.CopyTo(buffer, offset, count);
+                _outputBuffer.CopyTo(buffer.Slice(offset, count));
                 _preparedLength -= count / _channels;
                 _reportedPosition = _currentPosition - _preparedLength;
             }
@@ -884,7 +887,7 @@ namespace NVorbis
                     var seekBuffer = new float[cnt];
                     while (cnt > 0)
                     {
-                        var temp = ReadSamples(seekBuffer, 0, cnt);
+                        var temp = ReadSamples(seekBuffer);
                         if (temp == 0) break;   // we're at the end...
                         cnt -= temp;
                     }
