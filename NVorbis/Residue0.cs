@@ -82,7 +82,7 @@ namespace NVorbis
             int stages;
             for (int j = 0; j < _classifications; j++)
             {
-                stages = Utils.ilog(_cascade[j]);
+                stages = Utils.ILog(_cascade[j]);
                 _books[j] = new ICodebook[stages];
                 if (stages > 0)
                 {

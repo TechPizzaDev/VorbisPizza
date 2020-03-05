@@ -28,7 +28,7 @@ namespace NVorbis
                 couplingSteps = (int)packet.ReadBits(8) + 1;
             }
 
-            var couplingBits = Utils.ilog(channels - 1);
+            var couplingBits = Utils.ILog(channels - 1);
             _couplingAngle = new int[couplingSteps];
             _couplingMangitude = new int[couplingSteps];
             for (var j = 0; j < couplingSteps; j++)

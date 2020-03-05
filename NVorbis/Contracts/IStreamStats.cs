@@ -1,5 +1,4 @@
-﻿using System;
-
+﻿
 namespace NVorbis.Contracts
 {
     /// <summary>
@@ -28,7 +27,8 @@ namespace NVorbis.Contracts
         long ContainerBits { get; }
 
         /// <summary>
-        /// Gets the number of bits read that do not contribute to the output audio.  Does not include framing bits from the container.
+        /// Gets the number of bits read that do not contribute to the output audio. 
+        /// Does not include framing bits from the container.
         /// </summary>
         long OverheadBits { get; }
 

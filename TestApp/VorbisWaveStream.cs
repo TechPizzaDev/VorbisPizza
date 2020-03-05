@@ -87,9 +87,11 @@ namespace TestApp
 
         public int Read(float[] buffer, int offset, int count)
         {
-            if (IsParameterChange) throw new InvalidOperationException("Parameter change pending!  Call ClearParameterChange() before reading more data.");
+            if (IsParameterChange) 
+                throw new InvalidOperationException(
+                    "Parameter change pending!  Call ClearParameterChange() before reading more data.");
 
-            var cnt = _reader.ReadSamples(buffer, offset, count);
+            var cnt = _reader.ReadSamples(buffer.AsSpan(offset, count));
             if (cnt == 0)
             {
                 if (_reader.IsEndOfStream && AutoAdvanceToNextStream)
@@ -127,7 +129,9 @@ namespace TestApp
             get => _reader.StreamIndex;
             set
             {
-                if (value < 0 || value >= _reader.Streams.Count) throw new ArgumentOutOfRangeException(nameof(value));
+                if (value < 0 || value >= _reader.Streams.Count)
+                    throw new ArgumentOutOfRangeException(nameof(value));
+
                 if (_reader.SwitchStreams(value))
                 {
                     UpdateWaveFormat();

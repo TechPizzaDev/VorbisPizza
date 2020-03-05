@@ -34,7 +34,7 @@ namespace NVorbis
                 _n4 = _n2 >> 1;
                 _n8 = _n4 >> 1;
 
-                _ld = Utils.ilog(n) - 1;
+                _ld = Utils.ILog(n) - 1;
 
                 // first, calc the "twiddle factors"
                 _a = new float[_n2];

@@ -1,5 +1,6 @@
 ﻿using NVorbis.Contracts.Ogg;
 using System;
+using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.IO;
 
@@ -16,12 +17,12 @@ namespace NVorbis.Ogg
         private int _overflowBufIndex;
 
         private Stream _stream;
-        private bool _closeOnDispose;
+        private bool _leaveOpen;
 
-        protected PageReaderBase(Stream stream, bool closeOnDispose)
+        protected PageReaderBase(Stream stream, bool leaveOpen)
         {
             _stream = stream;
-            _closeOnDispose = closeOnDispose;
+            _leaveOpen = leaveOpen;
         }
 
         protected long StreamPosition => _stream?.Position ?? throw new ObjectDisposedException(nameof(PageReaderBase));
@@ -49,8 +50,9 @@ namespace NVorbis.Ogg
 
             pageBuf = new byte[dataLen + segCnt + 27];
             Buffer.BlockCopy(headerBuf, index, pageBuf, 0, segCnt + 27);
-            bytesRead = EnsureRead(pageBuf, segCnt + 27, dataLen);
-            if (bytesRead != dataLen) return false;
+            bytesRead = EnsureRead(pageBuf.AsSpan(segCnt + 27, dataLen));
+            if (bytesRead != dataLen)
+                return false;
             dataLen = pageBuf.Length;
 
             _crc.Reset();
@@ -66,12 +68,12 @@ namespace NVorbis.Ogg
             {
                 _crc.Update(pageBuf[i]);
             }
-            return _crc.Test(BitConverter.ToUInt32(pageBuf, 22));
+            return _crc.Test(BinaryPrimitives.ReadUInt32LittleEndian(pageBuf.AsSpan(22)));
         }
 
         private bool AddPage(byte[] pageBuf, bool isResync)
         {
-            var streamSerial = BitConverter.ToInt32(pageBuf, 14);
+            int streamSerial = BinaryPrimitives.ReadInt32LittleEndian(pageBuf.AsSpan(14));
             if (!_ignoredSerials.Contains(streamSerial))
             {
                 if (AddPage(streamSerial, pageBuf, isResync))
@@ -109,58 +111,51 @@ namespace NVorbis.Ogg
             }
         }
 
-        private int FillHeader(byte[] buf, int index, int count, int maxTries = 10)
+        private int FillHeader(Span<byte> buf, int maxTries = 10)
         {
+            int count = buf.Length;
             var copyCount = 0;
             if (_overflowBuf != null)
             {
                 copyCount = Math.Min(_overflowBuf.Length - _overflowBufIndex, count);
-                Buffer.BlockCopy(_overflowBuf, _overflowBufIndex, buf, index, copyCount);
-                index += copyCount;
+                _overflowBuf.AsSpan(_overflowBufIndex, copyCount).CopyTo(buf);
+                buf = buf.Slice(copyCount);
+
                 count -= copyCount;
                 if ((_overflowBufIndex += copyCount) == _overflowBuf.Length)
-                {
                     _overflowBuf = null;
-                }
             }
             if (count > 0)
-            {
-                copyCount += EnsureRead(buf, index, count, maxTries);
-            }
+                copyCount += EnsureRead(buf.Slice(0, count), maxTries);
             return copyCount;
         }
 
-        private bool VerifyHeader(byte[] buffer, int index, ref int cnt, bool isFromReadNextPage)
+        private bool VerifyHeader(Span<byte> buffer, ref int cnt, bool isFromReadNextPage)
         {
-            if (buffer[index] == 0x4f && buffer[index + 1] == 0x67 && buffer[index + 2] == 0x67 && buffer[index + 3] == 0x53)
+            if (buffer[0] == 0x4f &&
+                buffer[1] == 0x67 && 
+                buffer[2] == 0x67 &&
+                buffer[3] == 0x53)
             {
                 if (cnt < 27)
                 {
                     if (isFromReadNextPage)
-                    {
-                        cnt += FillHeader(buffer, 27 - cnt + index, 27 - cnt);
-                    }
+                        cnt += FillHeader(buffer.Slice(27 - cnt, 27 - cnt));
                     else
-                    {
-                        cnt += EnsureRead(buffer, 27 - cnt + index, 27 - cnt);
-                    }
+                        cnt += EnsureRead(buffer.Slice(27 - cnt, 27 - cnt));
                 }
 
                 if (cnt >= 27)
                 {
-                    var segCnt = buffer[index + 26];
+                    var segCnt = buffer[26];
+
                     if (isFromReadNextPage)
-                    {
-                        cnt += FillHeader(buffer, index + 27, segCnt);
-                    }
+                        cnt += FillHeader(buffer.Slice(27, segCnt));
                     else
-                    {
-                        cnt += EnsureRead(buffer, index + 27, segCnt);
-                    }
-                    if (cnt == index + 27 + segCnt)
-                    {
+                        cnt += EnsureRead(buffer.Slice(27, segCnt));
+
+                    if (cnt == 27 + segCnt)
                         return true;
-                    }
                 }
             }
             return false;
@@ -171,19 +166,18 @@ namespace NVorbis.Ogg
         // Note that it will loop until getting a certain count of zero reads (default: 10).
         // This means in most cases, the network stream probably died by the time we return
         // a short read.
-        protected int EnsureRead(byte[] buf, int index, int count, int maxTries = 10)
+        protected int EnsureRead(Span<byte> buf, int maxTries = 10)
         {
             var read = 0;
             var tries = 0;
             do
             {
-                var cnt = _stream.Read(buf, index + read, count - read);
+                var cnt = _stream.Read(buf.Slice(read, buf.Length - read));
                 if (cnt == 0 && ++tries == maxTries)
-                {
                     break;
-                }
+                
                 read += cnt;
-            } while (read < count);
+            } while (read < buf.Length);
             return read;
         }
 
@@ -191,9 +185,9 @@ namespace NVorbis.Ogg
         /// Verifies the sync sequence and loads the rest of the header.
         /// </summary>
         /// <returns><see langword="true"/> if successful, otherwise <see langword="false"/>.</returns>
-        protected bool VerifyHeader(byte[] buffer, int index, ref int cnt)
+        protected bool VerifyHeader(Span<byte> buffer, ref int cnt)
         {
-            return VerifyHeader(buffer, index, ref cnt, false);
+            return VerifyHeader(buffer, ref cnt, false);
         }
 
         /// <summary>
@@ -227,19 +221,20 @@ namespace NVorbis.Ogg
         public bool ReadNextPage()
         {
             // make sure we're locked; no sense reading if we aren't
-            if (!CheckLock()) throw new InvalidOperationException("Must be locked prior to reading!");
+            if (!CheckLock())
+                throw new InvalidOperationException("Must be locked prior to reading!");
 
             var isResync = false;
 
             var ofs = 0;
             int cnt;
             PrepareStreamForNextPage();
-            while ((cnt = FillHeader(_headerBuf, ofs, 27 - ofs)) > 0)
+            while ((cnt = FillHeader(_headerBuf.AsSpan(ofs, 27 - ofs))) > 0)
             {
                 cnt += ofs;
                 for (var i = 0; i < cnt - 4; i++)
                 {
-                    if (VerifyHeader(_headerBuf, i, ref cnt, true))
+                    if (VerifyHeader(_headerBuf.AsSpan(i), ref cnt, true))
                     {
                         if (VerifyPage(_headerBuf, i, cnt, out var pageBuf, out var bytesRead))
                         {
@@ -297,10 +292,8 @@ namespace NVorbis.Ogg
         {
             SetEndOfStreams();
 
-            if (_closeOnDispose)
-            {
+            if (!_leaveOpen)
                 _stream?.Dispose();
-            }
             _stream = null;
         }
     }

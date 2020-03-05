@@ -10,20 +10,18 @@ namespace NVorbis
     public class NewStreamEventArgs : EventArgs
     {
         /// <summary>
-        /// Creates a new instance of <see cref="NewStreamEventArgs"/> with the specified <see cref="IStreamDecoder"/>.
+        /// Creates a new instance of <see cref="NewStreamEventArgs"/> with the specified <see cref="IVorbisStreamDecoder"/>.
         /// </summary>
-        /// <param name="streamDecoder">An <see cref="IStreamDecoder"/> instance.</param>
-        public NewStreamEventArgs(IStreamDecoder streamDecoder)
+        /// <param name="streamDecoder">An <see cref="IVorbisStreamDecoder"/> instance.</param>
+        public NewStreamEventArgs(IVorbisStreamDecoder streamDecoder)
         {
-            if (streamDecoder == null) throw new ArgumentNullException("packetProvider");
-
-            StreamDecoder = streamDecoder;
+            StreamDecoder = streamDecoder ?? throw new ArgumentNullException(nameof(streamDecoder));
         }
 
         /// <summary>
-        /// Gets new the <see cref="IStreamDecoder"/> instance.
+        /// Gets new the <see cref="IVorbisStreamDecoder"/> instance.
         /// </summary>
-        public IStreamDecoder StreamDecoder { get; private set; }
+        public IVorbisStreamDecoder StreamDecoder { get; private set; }
 
         /// <summary>
         /// Gets or sets whether to ignore the logical stream associated with the packet provider.

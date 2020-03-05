@@ -1,6 +1,7 @@
 ﻿using NVorbis.Contracts;
 using NVorbis.Contracts.Ogg;
 using System;
+using System.Buffers.Binary;
 using System.Collections.Generic;
 
 namespace NVorbis.Ogg
@@ -43,12 +44,12 @@ namespace NVorbis.Ogg
                     return false;
                 }
                 isResync = true;
-                _lastSeqNo = BitConverter.ToInt32(buf, 18);
+                _lastSeqNo = BinaryPrimitives.ReadInt32LittleEndian(buf.AsSpan(18));
             }
             else
             {
                 // check the sequence number
-                var seqNo = BitConverter.ToInt32(buf, 18);
+                var seqNo = BinaryPrimitives.ReadInt32LittleEndian(buf.AsSpan(18));
                 isResync |= seqNo != _lastSeqNo + 1;
                 _lastSeqNo = seqNo;
             }
@@ -185,7 +186,7 @@ namespace NVorbis.Ogg
             long? granulePos = null;
             if (isLast)
             {
-                granulePos = BitConverter.ToInt64(pageBuf, 6);
+                granulePos = BinaryPrimitives.ReadInt64LittleEndian(pageBuf.AsSpan(6));
 
                 // fifth, set flags from the end page
                 if (((PageFlags)pageBuf[5] & PageFlags.EndOfStream) != 0 || (_isEndOfStream && _pageQueue.Count == 0))
@@ -307,7 +308,7 @@ namespace NVorbis.Ogg
             base.Done();
         }
 
-        long Contracts.IPacketProvider.GetGranuleCount() => throw new NotSupportedException();
-        long Contracts.IPacketProvider.SeekTo(long granulePos, int preRoll, GetPacketGranuleCount getPacketGranuleCount) => throw new NotSupportedException();
+        long IPacketProvider.GetGranuleCount() => throw new NotSupportedException();
+        long IPacketProvider.SeekTo(long granulePos, int preRoll, GetPacketGranuleCount getPacketGranuleCount) => throw new NotSupportedException();
     }
 }

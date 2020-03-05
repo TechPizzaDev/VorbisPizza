@@ -150,7 +150,8 @@ namespace NVorbis
         ulong IPacket.ReadBits(int count)
         {
             // short-circuit 0
-            if (count == 0) return 0UL;
+            if (count == 0)
+                return 0UL;
 
             var value = TryPeekBits(count, out _);
 
@@ -167,7 +168,8 @@ namespace NVorbis
         /// <returns>The value of the bits read.</returns>
         public ulong TryPeekBits(int count, out int bitsRead)
         {
-            if (count < 0 || count > 64) throw new ArgumentOutOfRangeException(nameof(count));
+            if (count < 0 || count > 64) 
+                throw new ArgumentOutOfRangeException(nameof(count));
             if (count == 0)
             {
                 bitsRead = 0;

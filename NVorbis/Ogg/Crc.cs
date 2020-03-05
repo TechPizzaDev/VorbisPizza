@@ -19,7 +19,7 @@
             }
         }
 
-        uint _crc;
+        private uint _crc;
 
         public Crc()
         {

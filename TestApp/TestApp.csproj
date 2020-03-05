@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>net45;netcoreapp3.1</TargetFrameworks>
+    <TargetFrameworks>netcoreapp3.1</TargetFrameworks>
     <NeutralLanguage>en</NeutralLanguage>
     <OutputType>Exe</OutputType>
     <AssemblyName>TestApp</AssemblyName>

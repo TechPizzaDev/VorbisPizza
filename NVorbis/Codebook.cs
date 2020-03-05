@@ -60,7 +60,8 @@ namespace NVorbis
         {
             // first, check the sync pattern
             var chkVal = packet.ReadBits(24);
-            if (chkVal != 0x564342UL) throw new InvalidDataException("Book header had invalid signature!");
+            if (chkVal != 0x564342UL) 
+                throw new InvalidDataException("Book header had invalid signature!");
 
             // get the counts
             Dimensions = (int)packet.ReadBits(16);
@@ -85,7 +86,7 @@ namespace NVorbis
                 var len = (int)packet.ReadBits(5) + 1;
                 for (var i = 0; i < Entries;)
                 {
-                    var cnt = (int)packet.ReadBits(Utils.ilog(Entries - i));
+                    var cnt = (int)packet.ReadBits(Utils.ILog(Entries - i));
 
                     while (--cnt >= 0)
                     {
@@ -233,7 +234,7 @@ namespace NVorbis
             var lookupTable = new float[lookupValueCount];
             if (MapType == 1)
             {
-                lookupValueCount = lookup1_values();
+                lookupValueCount = Lookup1_values();
             }
 
             var multiplicands = new uint[lookupValueCount];
@@ -282,7 +283,7 @@ namespace NVorbis
             _lookupTable = lookupTable;
         }
 
-        int lookup1_values()
+        int Lookup1_values()
         {
             var r = (int)Math.Floor(Math.Exp(Math.Log(Entries) / Dimensions));
 
@@ -322,9 +323,7 @@ namespace NVorbis
         public float this[int entry, int dim] => _lookupTable[entry * Dimensions + dim];
 
         public int Dimensions { get; private set; }
-
         public int Entries { get; private set; }
-
         public int MapType { get; private set; }
     }
 }
