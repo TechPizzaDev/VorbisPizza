@@ -12,57 +12,57 @@ namespace NVorbis
     public interface IVorbisStreamStatus
     {
         /// <summary>
-        /// Gets the counters for latency and bitrate calculations, as well as overall bit counts
+        /// Gets the counters for latency and bitrate calculations, as well as overall bit counts.
         /// </summary>
         void ResetStats();
 
         /// <summary>
-        /// Gets the calculated bit rate of audio stream data for the everything decoded so far
+        /// Gets the calculated bit rate of audio stream data for the everything decoded so far.
         /// </summary>
         int EffectiveBitRate { get; }
 
         /// <summary>
-        /// Gets the calculated bit rate for the last ~1 second of audio
+        /// Gets the calculated bit rate for the last ~1 second of audio.
         /// </summary>
         int InstantBitRate { get; }
 
         /// <summary>
-        /// Gets the calculated latency per page
+        /// Gets the calculated latency per page.
         /// </summary>
         TimeSpan PageLatency { get; }
 
         /// <summary>
-        /// Gets the calculated latency per packet
+        /// Gets the calculated latency per packet.
         /// </summary>
         TimeSpan PacketLatency { get; }
 
         /// <summary>
-        /// Gets the calculated latency per second of output
+        /// Gets the calculated latency per second of output.
         /// </summary>
         TimeSpan SecondLatency { get; }
 
         /// <summary>
-        /// Gets the number of bits read that do not contribute to the output audio
+        /// Gets the number of bits read that do not contribute to the output audio.
         /// </summary>
         long OverheadBits { get; }
 
         /// <summary>
-        /// Gets the number of bits read that contribute to the output audio
+        /// Gets the number of bits read that contribute to the output audio.
         /// </summary>
         long AudioBits { get; }
 
         /// <summary>
-        /// Gets the number of pages read so far in the current stream
+        /// Gets the number of pages read so far in the current stream.
         /// </summary>
         int PagesRead { get; }
 
         /// <summary>
-        /// Gets the total number of pages in the current stream
+        /// Gets the total number of pages in the current stream.
         /// </summary>
         int TotalPages { get; }
 
         /// <summary>
-        /// Gets whether the stream has been clipped since the last reset
+        /// Gets whether the stream has been clipped since the last reset.
         /// </summary>
         bool Clipped { get; }
     }

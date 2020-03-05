@@ -144,7 +144,7 @@ namespace NVorbis
                 int stages;
                 for (int j = 0; j < _classifications; j++)
                 {
-                    stages = Utils.ilog(_cascade[j]);
+                    stages = Utils.ILog(_cascade[j]);
                     _books[j] = new VorbisCodebook[stages];
                     if (stages > 0)
                     {

@@ -47,7 +47,7 @@ namespace NVorbis
             _n4 = _n2 >> 1;
             _n8 = _n4 >> 1;
 
-            _ld = Utils.ilog(n) - 1;
+            _ld = Utils.ILog(n) - 1;
 
             // first, calc the "twiddle factors"
             _A = new float[_n2];
@@ -87,8 +87,7 @@ namespace NVorbis
         {
             lock (_threadLocalBuffers)
             {
-                float[] buf;
-                if (!_threadLocalBuffers.TryGetValue(System.Threading.Thread.CurrentThread.ManagedThreadId, out buf))
+                if (!_threadLocalBuffers.TryGetValue(System.Threading.Thread.CurrentThread.ManagedThreadId, out float[] buf))
                 {
                     _threadLocalBuffers[System.Threading.Thread.CurrentThread.ManagedThreadId] = (buf = new float[_n2]);
                 }

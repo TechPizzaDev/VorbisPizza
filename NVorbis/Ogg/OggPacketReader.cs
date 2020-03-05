@@ -12,7 +12,7 @@ using System.IO;
 
 namespace NVorbis.Ogg
 {
-    [System.Diagnostics.DebuggerTypeProxy(typeof(PacketReader.DebugView))]
+    [System.Diagnostics.DebuggerTypeProxy(typeof(DebugView))]
     class PacketReader : IPacketProvider
     {
         class DebugView
@@ -25,9 +25,9 @@ namespace NVorbis.Ogg
                 _reader = reader;
             }
 
-            public ContainerReader Container { get { return _reader._container; } }
-            public int StreamSerial { get { return _reader._streamSerial; } }
-            public bool EndOfStreamFound { get { return _reader._eosFound; } }
+            public ContainerReader Container => _reader._container;
+            public int StreamSerial => _reader._streamSerial;
+            public bool EndOfStreamFound => _reader._eosFound;
 
             public int CurrentPacketIndex
             {
@@ -105,7 +105,6 @@ namespace NVorbis.Ogg
                     node = temp;
                     node.Prev = null;
                 }
-                node = null;
             }
 
             _last = null;
@@ -161,10 +160,7 @@ namespace NVorbis.Ogg
             }
         }
 
-        internal bool HasEndOfStream
-        {
-            get { return _eosFound; }
-        }
+        internal bool HasEndOfStream => _eosFound;
 
         internal void SetEndOfStream()
         {
@@ -184,10 +180,7 @@ namespace NVorbis.Ogg
             }
         }
 
-        public int StreamSerial
-        {
-            get { return _streamSerial; }
-        }
+        public int StreamSerial => _streamSerial;
 
         public long ContainerBits
         {
@@ -195,10 +188,7 @@ namespace NVorbis.Ogg
             set;
         }
 
-        public bool CanSeek
-        {
-            get { return true; }
-        }
+        public bool CanSeek => true;
 
         // This is fast path... don't make the caller wait if we can help it...
         public DataPacket GetNextPacket()

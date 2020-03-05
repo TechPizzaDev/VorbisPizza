@@ -49,11 +49,7 @@ namespace NVorbis
             internal bool ForceEnergy { get; set; }
             internal bool ForceNoEnergy { get; set; }
 
-            internal bool ExecuteChannel
-            {
-                // if we have energy or are forcing energy, return !ForceNoEnergy, else false
-                get { return (ForceEnergy | HasEnergy) & !ForceNoEnergy; }
-            }
+            internal bool ExecuteChannel => (ForceEnergy | HasEnergy) & !ForceNoEnergy;
         }
 
         class Floor0 : VorbisFloor
@@ -90,7 +86,7 @@ namespace NVorbis
 
                     _books[i] = book;
                 }
-                _bookBits = Utils.ilog(_books.Length);
+                _bookBits = Utils.ILog(_books.Length);
 
                 _barkMaps = new Dictionary<int, int[]>();
                 _barkMaps[_vorbis.Block0Size] = SynthesizeBarkCurve(_vorbis.Block0Size / 2);
@@ -140,10 +136,7 @@ namespace NVorbis
 
             class PacketData0 : PacketData
             {
-                protected override bool HasEnergy
-                {
-                    get { return Amp > 0f; }
-                }
+                protected override bool HasEnergy => Amp > 0f;
 
                 internal float[] Coeff;
                 internal float Amp;
@@ -396,10 +389,7 @@ namespace NVorbis
 
             class PacketData1 : PacketData
             {
-                protected override bool HasEnergy
-                {
-                    get { return PostCount > 0; }
-                }
+                protected override bool HasEnergy => PostCount > 0;
 
                 public int[] Posts = new int[64];
                 public int PostCount;

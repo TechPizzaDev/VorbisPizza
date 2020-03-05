@@ -31,10 +31,7 @@ namespace NVorbis.Ogg
         /// <summary>
         /// Gets the list of stream serials found in the container so far.
         /// </summary>
-        public int[] StreamSerials
-        {
-            get { return System.Linq.Enumerable.ToArray<int>(_packetReaders.Keys); }
-        }
+        public int[] StreamSerials => System.Linq.Enumerable.ToArray(_packetReaders.Keys);
 
         /// <summary>
         /// Event raised when a new logical stream is found in the container.
@@ -63,7 +60,8 @@ namespace NVorbis.Ogg
             _stream = stream ?? throw new ArgumentNullException(nameof(stream));
             _closeOnDispose = closeOnDispose;
 
-            if (!_stream.CanSeek) throw new ArgumentException("The specified stream must be seek-able!", nameof(stream));
+            if (!_stream.CanSeek) 
+                throw new ArgumentException("The specified stream must be seek-able!", nameof(stream));
         }
 
         /// <summary>
@@ -82,18 +80,14 @@ namespace NVorbis.Ogg
         {
             // don't use _packetReaders directly since that'll change the enumeration...
             foreach (var streamSerial in StreamSerials)
-            {
                 _packetReaders[streamSerial].Dispose();
-            }
-
+            
             _nextPageOffset = 0L;
             _containerBits = 0L;
             _wasteBits = 0L;
 
             if (_closeOnDispose)
-            {
                 _stream.Dispose();
-            }
         }
 
         /// <summary>
@@ -104,8 +98,7 @@ namespace NVorbis.Ogg
         /// <exception cref="ArgumentOutOfRangeException">The specified stream serial was not found.</exception>
         public IPacketProvider GetStream(int streamSerial)
         {
-            PacketReader provider;
-            if (!_packetReaders.TryGetValue(streamSerial, out provider))
+            if (!_packetReaders.TryGetValue(streamSerial, out PacketReader provider))
             {
                 throw new ArgumentOutOfRangeException("streamSerial");
             }
@@ -133,10 +126,7 @@ namespace NVorbis.Ogg
         /// <summary>
         /// Gets the number of pages that have been read in the container.
         /// </summary>
-        public int PagesRead
-        {
-            get { return _pageCount; }
-        }
+        public int PagesRead => _pageCount;
 
         /// <summary>
         /// Retrieves the total number of pages in the container.
@@ -159,18 +149,12 @@ namespace NVorbis.Ogg
         /// <summary>
         /// Gets whether the container supports seeking.
         /// </summary>
-        public bool CanSeek
-        {
-            get { return true; }
-        }
+        public bool CanSeek => true;
 
         /// <summary>
         /// Gets the number of bits in the container that are not associated with a logical stream.
         /// </summary>
-        public long WasteBits
-        {
-            get { return _wasteBits; }
-        }
+        public long WasteBits => _wasteBits;
 
 
         // private implmentation bits
@@ -233,7 +217,8 @@ namespace NVorbis.Ogg
 
             // figure out the length of the page
             var segCnt = (int)_readBuffer[26];
-            if (_stream.Read(_readBuffer, 0, segCnt) != segCnt) return null;
+            if (_stream.Read(_readBuffer, 0, segCnt) != segCnt)
+                return null;
 
             var packetSizes = new List<int>(segCnt);
 
@@ -295,19 +280,19 @@ namespace NVorbis.Ogg
                     if (b == 0x4f)
                     {
                         if (_stream.ReadByte() == 0x67)
-						{
-							if (_stream.ReadByte() == 0x67)
-							{
-								if (_stream.ReadByte() == 0x53)
-								{
-									// found it!
-									startPos += cnt;
-									break;
-								}
-								_stream.Seek(-1, SeekOrigin.Current);
-							}
-							_stream.Seek(-1, SeekOrigin.Current);
-						}
+                        {
+                            if (_stream.ReadByte() == 0x67)
+                            {
+                                if (_stream.ReadByte() == 0x53)
+                                {
+                                    // found it!
+                                    startPos += cnt;
+                                    break;
+                                }
+                                _stream.Seek(-1, SeekOrigin.Current);
+                            }
+                            _stream.Seek(-1, SeekOrigin.Current);
+                        }
                         _stream.Seek(-1, SeekOrigin.Current);
                     }
                     else if (b == -1)
@@ -332,8 +317,7 @@ namespace NVorbis.Ogg
         bool AddPage(PageHeader hdr)
         {
             // get our packet reader (create one if we have to)
-            PacketReader packetReader;
-            if (!_packetReaders.TryGetValue(hdr.StreamSerial, out packetReader))
+            if (!_packetReaders.TryGetValue(hdr.StreamSerial, out PacketReader packetReader))
             {
                 packetReader = new PacketReader(this, hdr.StreamSerial);
             }
@@ -448,7 +432,8 @@ namespace NVorbis.Ogg
 
         internal void GatherNextPage(int streamSerial)
         {
-            if (!_packetReaders.ContainsKey(streamSerial)) throw new ArgumentOutOfRangeException("streamSerial");
+            if (!_packetReaders.ContainsKey(streamSerial)) 
+                throw new ArgumentOutOfRangeException("streamSerial");
 
             int nextSerial;
             do

@@ -92,7 +92,7 @@ namespace NVorbis
                 var len = (int)packet.ReadBits(5) + 1;
                 for (var i = 0; i < Entries; )
                 {
-                    var cnt = (int)packet.ReadBits(Utils.ilog(Entries - i));
+                    var cnt = (int)packet.ReadBits(Utils.ILog(Entries - i));
 
                     while (--cnt >= 0)
                     {
@@ -303,7 +303,7 @@ namespace NVorbis
         internal int MapType;
 
         HuffmanListNode PrefixOverflowTree;
-        System.Collections.Generic.List<HuffmanListNode> PrefixList;
+        List<HuffmanListNode> PrefixList;
         int PrefixBitLength;
         int MaxBits;
 
@@ -318,8 +318,7 @@ namespace NVorbis
 
         internal int DecodeScalar(DataPacket packet)
         {
-            int bitCnt;
-            var bits = (int)packet.TryPeekBits(PrefixBitLength, out bitCnt);
+            var bits = (int)packet.TryPeekBits(PrefixBitLength, out int bitCnt);
             if (bitCnt == 0) return -1;
 
             // try to get the value from the prefix list...

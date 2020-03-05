@@ -9,23 +9,23 @@ namespace NVorbis
 {
     static class Utils
     {
-        static internal int ilog(int x)
+        public static int ILog(int x)
         {
-            int cnt = 0;
+            int count = 0;
             while (x > 0)
             {
-                ++cnt;
-                x >>= 1;    // this is safe because we'll never get here if the sign bit is set
+                count++;
+                x >>= 1;  // this is safe because we'll never get here if the sign bit is set
             }
-            return cnt;
+            return count;
         }
 
-        static internal uint BitReverse(uint n)
+        public static uint BitReverse(uint n)
         {
             return BitReverse(n, 32);
         }
 
-        static internal uint BitReverse(uint n, int bits)
+        public static uint BitReverse(uint n, int bits)
         {
             n = ((n & 0xAAAAAAAA) >> 1) | ((n & 0x55555555) << 1);
             n = ((n & 0xCCCCCCCC) >> 2) | ((n & 0x33333333) << 2);
@@ -40,11 +40,12 @@ namespace NVorbis
         {
             [System.Runtime.InteropServices.FieldOffset(0)]
             public float Float;
+
             [System.Runtime.InteropServices.FieldOffset(0)]
             public uint Bits;
         }
 
-        static internal float ClipValue(float value, ref bool clipped)
+        public static float ClipValue(float value, ref bool clipped)
         {
             /************
              * There is some magic happening here... IEEE 754 single precision floats are built such that:
@@ -64,14 +65,15 @@ namespace NVorbis
                 clipped = true;
                 fb.Bits = 0x3f7fffff | (fb.Bits & 0x80000000);
             }
+
             return fb.Float;
         }
 
-        static internal float ConvertFromVorbisFloat32(uint bits)
+        public static float ConvertFromVorbisFloat32(uint bits)
         {
             // do as much as possible with bit tricks in integer math
             var sign = ((int)bits >> 31);   // sign-extend to the full 32-bits
-            var exponent = (double)((int)((bits & 0x7fe00000) >> 21) - 788);  // grab the exponent, remove the bias, store as double (for the call to System.Math.Pow(...))
+            var exponent = (float)((int)((bits & 0x7fe00000) >> 21) - 788);  // grab the exponent, remove the bias
             var mantissa = (float)(((bits & 0x1fffff) ^ sign) + (sign & 1));  // grab the mantissa and apply the sign bit.  store as float
 
             // NB: We could use bit tricks to calc the exponent, but it can't be more than 63 in either direction.
@@ -80,20 +82,16 @@ namespace NVorbis
             //     Either way, we'll play it safe and let the BCL calculate it.
 
             // now switch to single-precision and calc the return value
-            return mantissa * (float)System.Math.Pow(2.0, exponent);
+            return mantissa * System.MathF.Pow(2f, exponent);
         }
 
         // this is a no-allocation way to sum an int queue
-        static internal int Sum(System.Collections.Generic.Queue<int> queue)
+        public static int Sum(System.Collections.Generic.Queue<int> queue)
         {
-            var value = 0;
-            for (int i = 0; i < queue.Count; i++)
-            {
-                var temp = queue.Dequeue();
-                value += temp;
-                queue.Enqueue(temp);
-            }
-            return value;
+            int sum = 0;
+            foreach (var item in queue)
+                sum += item;
+            return sum;
         }
     }
 }
