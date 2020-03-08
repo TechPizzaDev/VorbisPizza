@@ -119,8 +119,6 @@ namespace NVorbis
         /// <exception cref="ArgumentOutOfRangeException"><paramref name="count"/> is not between 0 and 64.</exception>
         public ulong TryPeekBits(int count, out int bitsRead)
         {
-            ulong value = 0;
-
             if (count < 0 || count > 64) 
                 throw new ArgumentOutOfRangeException(nameof(count));
 
@@ -136,8 +134,7 @@ namespace NVorbis
                 if (val == -1)
                 {
                     bitsRead = _bitCount;
-                    value = _bitBucket;
-                    return value;
+                    return _bitBucket;
                 }
 
                 _bitBucket = (ulong)(val & 0xFF) << _bitCount | _bitBucket;
@@ -147,7 +144,7 @@ namespace NVorbis
                     _overflowBits = (byte)(val >> (72 - _bitCount));
             }
 
-            value = _bitBucket;
+            ulong value = _bitBucket;
             if (count < 64)
                 value &= (1UL << count) - 1;
 
