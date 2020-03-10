@@ -457,7 +457,7 @@ namespace NVorbis
         /// <returns>The value of the next 64 bits.</returns>
         public ulong ReadUInt64()
         {
-            return (ulong)ReadBits(64);
+            return ReadBits(64);
         }
 
         /// <summary>

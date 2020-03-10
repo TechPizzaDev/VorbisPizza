@@ -251,7 +251,7 @@ namespace NVorbis
                     for (var i = 0; i < Dimensions; i++)
                     {
                         var moff = (idx / idxDiv) % lookupValueCount;
-                        var value = (float)multiplicands[moff] * deltaValue + minValue + last;
+                        var value = multiplicands[moff] * deltaValue + minValue + last;
                         lookupTable[idx * Dimensions + i] = (float)value;
 
                         if (sequence_p) last = value;

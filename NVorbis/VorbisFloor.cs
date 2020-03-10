@@ -157,7 +157,7 @@ namespace NVorbis
                     // this is pretty well stolen directly from libvorbis...  BSD license
                     Array.Clear(data.Coeff, 0, data.Coeff.Length);
 
-                    data.Amp = (float)(data.Amp / _ampDiv * _ampOfs);
+                    data.Amp = data.Amp / _ampDiv * _ampOfs;
 
                     var bookNum = (uint)packet.ReadBits(_bookBits);
                     if (bookNum >= _books.Length)
