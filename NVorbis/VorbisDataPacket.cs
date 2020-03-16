@@ -12,7 +12,7 @@ namespace NVorbis
     /// <summary>
     /// A single data packet from a logical Vorbis stream.
     /// </summary>
-    public abstract partial class DataPacket
+    public abstract partial class VorbisDataPacket
     {
         ulong _bitBucket;           // 8
         int _bitCount;              // 4
@@ -48,7 +48,7 @@ namespace NVorbis
         /// Creates a new instance with the specified length.
         /// </summary>
         /// <param name="length">The length of the packet.</param>
-        protected DataPacket(int length)
+        protected VorbisDataPacket(int length)
         {
             Length = length;
         }
@@ -62,7 +62,7 @@ namespace NVorbis
         /// <summary>
         /// Indicates that the packet has been read and its data is no longer needed.
         /// </summary>
-        virtual public void Done()
+        public virtual void Done()
         {
         }
 

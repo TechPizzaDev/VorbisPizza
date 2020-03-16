@@ -6,16 +6,15 @@
  *                                                                          *
  ***************************************************************************/
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 
 namespace NVorbis
 {
+    public delegate void ParameterChangeEvent(object sender, ParameterChangeEventArgs eventArgs);
+
     /// <summary>
     /// Provides packets on-demand for the Vorbis stream decoder.
     /// </summary>
-    public interface IPacketProvider : IDisposable
+    public interface IVorbisPacketProvider : IDisposable
     {
         /// <summary>
         /// Gets the serial number associated with this stream.
@@ -36,20 +35,20 @@ namespace NVorbis
         /// Retrieves the total number of pages (or frames) this stream uses.
         /// </summary>
         /// <returns>The page count.</returns>
-        /// <exception cref="InvalidOperationException"><see cref="CanSeek"/> is <c>False</c>.</exception>
+        /// <exception cref="InvalidOperationException"><see cref="CanSeek"/> is <c>false</c>.</exception>
         int GetTotalPageCount();
 
         /// <summary>
         /// Retrieves the next packet in the stream.
         /// </summary>
         /// <returns>The next packet in the stream or <c>null</c> if no more packets.</returns>
-        DataPacket GetNextPacket();
+        VorbisDataPacket GetNextPacket();
 
         /// <summary>
         /// Retrieves the next packet in the stream but does not advance to the following packet.
         /// </summary>
         /// <returns>The next packet in the stream or <c>null</c> if no more packets.</returns>
-        DataPacket PeekNextPacket();
+        VorbisDataPacket PeekNextPacket();
 
         /// <summary>
         /// Retrieves the packet specified from the stream.
@@ -58,7 +57,7 @@ namespace NVorbis
         /// <returns>The specified packet.</returns>
         /// <exception cref="ArgumentOutOfRangeException"><paramref name="packetIndex"/> is less than 0 or past the end of the stream.</exception>
         /// <exception cref="InvalidOperationException"><see cref="CanSeek"/> is <c>False</c>.</exception>
-        DataPacket GetPacket(int packetIndex);
+        VorbisDataPacket GetPacket(int packetIndex);
 
         /// <summary>
         /// Retrieves the total number of granules in this Vorbis stream.
@@ -74,18 +73,19 @@ namespace NVorbis
         /// <param name="packetGranuleCountCallback">A callback method that takes the current and previous packets and returns the number of granules in the current packet.</param>
         /// <returns>The index of the packet that includes the specified granule position or -1 if none found.</returns>
         /// <exception cref="ArgumentOutOfRangeException"><paramref name="granulePos"/> is less than 0 or is after the last granule.</exception>
-        DataPacket FindPacket(long granulePos, Func<DataPacket, DataPacket, int> packetGranuleCountCallback);
+        VorbisDataPacket FindPacket(
+            long granulePos, Func<VorbisDataPacket, VorbisDataPacket, int> packetGranuleCountCallback);
 
         /// <summary>
         /// Sets the next packet to be returned, applying a pre-roll as necessary.
         /// </summary>
         /// <param name="packet">The packet to key from.</param>
         /// <param name="preRoll">The number of packets to return before the indicated packet.</param>
-        void SeekToPacket(DataPacket packet, int preRoll);
+        void SeekToPacket(VorbisDataPacket packet, int preRoll);
 
         /// <summary>
         /// Occurs when the stream is about to change parameters.
         /// </summary>
-        event EventHandler<ParameterChangeEventArgs> ParameterChange;
+        event ParameterChangeEvent ParameterChange;
     }
 }

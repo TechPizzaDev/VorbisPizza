@@ -13,7 +13,7 @@ namespace NVorbis
 {
     abstract class VorbisResidue
     {
-        internal static VorbisResidue Init(VorbisStreamDecoder vorbis, DataPacket packet)
+        internal static VorbisResidue Init(VorbisStreamDecoder vorbis, VorbisDataPacket packet)
         {
             var type = (int)packet.ReadBits(16);
 
@@ -70,9 +70,9 @@ namespace NVorbis
             return temp;
         }
 
-        abstract internal float[][] Decode(DataPacket packet, bool[] doNotDecode, int channels, int blockSize);
+        abstract internal float[][] Decode(VorbisDataPacket packet, bool[] doNotDecode, int channels, int blockSize);
 
-        abstract protected void Init(DataPacket packet);
+        abstract protected void Init(VorbisDataPacket packet);
 
         // residue type 0... samples are grouped by channel, then stored with non-interleaved dimensions (d0, d0, d0, d0, ..., d1, d1, d1, d1, ..., d2, d2, d2, d2, etc...)
         class Residue0 : VorbisResidue
@@ -92,7 +92,7 @@ namespace NVorbis
 
             internal Residue0(VorbisStreamDecoder vorbis) : base(vorbis) { }
 
-            protected override void Init(DataPacket packet)
+            protected override void Init(VorbisDataPacket packet)
             {
                 // this is pretty well stolen directly from libvorbis...  BSD license
                 _begin = (int)packet.ReadBits(24);
@@ -185,7 +185,7 @@ namespace NVorbis
                 }
             }
 
-            internal override float[][] Decode(DataPacket packet, bool[] doNotDecode, int channels, int blockSize)
+            internal override float[][] Decode(VorbisDataPacket packet, bool[] doNotDecode, int channels, int blockSize)
             {
                 var residue = GetResidueBuffer(doNotDecode.Length);
 
@@ -253,7 +253,7 @@ namespace NVorbis
                 return residue;
             }
 
-            virtual protected bool WriteVectors(VorbisCodebook codebook, DataPacket packet, float[][] residue, int channel, int offset, int partitionSize)
+            virtual protected bool WriteVectors(VorbisCodebook codebook, VorbisDataPacket packet, float[][] residue, int channel, int offset, int partitionSize)
             {
                 var res = residue[channel];
                 var step = partitionSize / codebook.Dimensions;
@@ -281,7 +281,7 @@ namespace NVorbis
         {
             internal Residue1(VorbisStreamDecoder vorbis) : base(vorbis) { }
 
-            protected override bool WriteVectors(VorbisCodebook codebook, DataPacket packet, float[][] residue, int channel, int offset, int partitionSize)
+            protected override bool WriteVectors(VorbisCodebook codebook, VorbisDataPacket packet, float[][] residue, int channel, int offset, int partitionSize)
             {
                 var res = residue[channel];
 
@@ -311,14 +311,14 @@ namespace NVorbis
 
             // We can use the type 0 logic by saying we're doing a single channel buffer big enough to hold the samples for all channels
             // This works because WriteVectors(...) "knows" the correct channel count and processes the data accordingly.
-            internal override float[][] Decode(DataPacket packet, bool[] doNotDecode, int channels, int blockSize)
+            internal override float[][] Decode(VorbisDataPacket packet, bool[] doNotDecode, int channels, int blockSize)
             {
                 _channels = channels;
 
                 return base.Decode(packet, doNotDecode, 1, blockSize * channels);
             }
 
-            protected override bool WriteVectors(VorbisCodebook codebook, DataPacket packet, float[][] residue, int channel, int offset, int partitionSize)
+            protected override bool WriteVectors(VorbisCodebook codebook, VorbisDataPacket packet, float[][] residue, int channel, int offset, int partitionSize)
             {
                 var chPtr = 0;
 

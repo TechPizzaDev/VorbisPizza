@@ -8,67 +8,21 @@
 using System;
 using System.Linq;
 using System.IO;
-using System.Collections;
 using System.Collections.Generic;
 
 namespace NVorbis
 {
     class VorbisCodebook
     {
-        // This is "borrowed" from GitHub: TechnologicalPizza/MonoGame.NVorbis
-        class FastRange : IReadOnlyList<int>
-        {
-            [ThreadStatic]
-            static FastRange _cachedRange;
-
-            internal static FastRange Get(int start, int count)
-            {
-                var fr = _cachedRange ?? (_cachedRange = new FastRange());
-                fr._start = start;
-                fr._count = count;
-                return fr;
-            }
-
-            int _start;
-            int _count;
-
-            private FastRange() { }
-
-            public int this[int index]
-            {
-                get
-                {
-                    if (index > _count) throw new ArgumentOutOfRangeException();
-                    return _start + index;
-                }
-            }
-
-            public int Count => _count;
-
-            public IEnumerator<int> GetEnumerator()
-            {
-                throw new NotSupportedException();
-            }
-
-            IEnumerator IEnumerable.GetEnumerator()
-            {
-                return GetEnumerator();
-            }
-        }
-
-        internal static VorbisCodebook Init(VorbisStreamDecoder vorbis, DataPacket packet, int number)
-        {
-            return new VorbisCodebook(packet, number);
-        }
-
-        private VorbisCodebook(DataPacket packet, int number)
+        public VorbisCodebook(VorbisDataPacket packet, int number)
         {
             // save off the book number
             BookNum = number;
 
             // first, check the sync pattern
             var chkVal = packet.ReadBits(24);
-            if (chkVal != 0x564342UL) throw new InvalidDataException();
+            if (chkVal != 0x564342UL)
+                throw new InvalidDataException();
 
             // get the counts
             Dimensions = (int)packet.ReadBits(16);
@@ -81,7 +35,7 @@ namespace NVorbis
             InitLookupTable(packet);
         }
 
-        void InitTree(DataPacket packet)
+        void InitTree(VorbisDataPacket packet)
         {
             bool sparse;
             int total = 0;
@@ -89,17 +43,14 @@ namespace NVorbis
             if (packet.ReadBit())
             {
                 // ordered
-                var len = (int)packet.ReadBits(5) + 1;
+                int length = (int)packet.ReadBits(5) + 1;
                 for (var i = 0; i < Entries; )
                 {
-                    var cnt = (int)packet.ReadBits(Utils.ILog(Entries - i));
-
-                    while (--cnt >= 0)
-                    {
-                        Lengths[i++] = len;
-                    }
-
-                    ++len;
+                    int count = (int)packet.ReadBits(Utils.ILog(Entries - i));
+                    while (--count >= 0)
+                        Lengths[i++] = length;
+                    
+                    length++;
                 }
                 total = 0;
                 sparse = false;
@@ -125,7 +76,6 @@ namespace NVorbis
             // figure out the maximum bit size; if all are unused, don't do anything else
             if ((MaxBits = Lengths.Max()) > -1)
             {
-                int sortedCount = 0;
                 int[] codewordLengths = null;
                 if (sparse && total >= Entries >> 2)
                 {
@@ -136,15 +86,7 @@ namespace NVorbis
                 }
 
                 // compute size of sorted tables
-                if (sparse)
-                {
-                    sortedCount = total;
-                }
-                else
-                {
-                    sortedCount = 0;
-                }
-
+                int sortedCount = sparse ? total : 0;
                 int sortedEntries = sortedCount;
 
                 int[] values = null;
@@ -160,51 +102,76 @@ namespace NVorbis
                     values = new int[sortedEntries];
                 }
 
-                if (!ComputeCodewords(sparse, sortedEntries, codewords, codewordLengths, len: Lengths, n: Entries, values: values)) throw new InvalidDataException();
+                if (!ComputeCodewords(
+                    sparse, codewords, codewordLengths, Lengths, n: Entries, values))
+                    throw new InvalidDataException();
 
-                var valueList = (IReadOnlyList<int>)values ?? FastRange.Get(0, codewords.Length);
+                var lengths = codewordLengths ?? Lengths;
 
-                PrefixList = Huffman.BuildPrefixedLinkedList(valueList, codewordLengths ?? Lengths, codewords, out PrefixBitLength, out PrefixOverflowTree);
+                if (values != null)
+                {
+                    PrefixList = Huffman.BuildPrefixedLinkedList(
+                        values, lengths, codewords, out PrefixBitLength, out PrefixOverflowTree);
+                }
+                else
+                {
+                    PrefixList = Huffman.BuildPrefixedLinkedList(
+                        new Int32Range(0, codewords.Length),
+                        lengths, codewords, out PrefixBitLength, out PrefixOverflowTree);
+                }
             }
         }
 
-        bool ComputeCodewords(bool sparse, int sortedEntries, int[] codewords, int[] codewordLengths, int[] len, int n, int[] values)
+        bool ComputeCodewords(
+            bool sparse, int[] codewords, int[] codewordLengths, int[] lengths, int n, int[] values)
         {
-            int i, k, m = 0;
+            int k, m = 0;
+            
+            for (k = 0; k < n; ++k) 
+                if (lengths[k] > 0) 
+                    break;
+
+            if (k == n)
+                return true;
+
+            AddEntry(sparse, codewords, codewordLengths, 0, k, m++, lengths[k], values);
+
             uint[] available = new uint[32];
 
-            for (k = 0; k < n; ++k) if (len[k] > 0) break;
-            if (k == n) return true;
-
-            AddEntry(sparse, codewords, codewordLengths, 0, k, m++, len[k], values);
-
-            for (i = 1; i <= len[k]; ++i) available[i] = 1U << (32 - i);
+            int i;
+            for (i = 1; i <= lengths[k]; ++i)
+                available[i] = 1U << (32 - i);
 
             for (i = k + 1; i < n; ++i)
             {
                 uint res;
-                int z = len[i], y;
-                if (z <= 0) continue;
+                int z = lengths[i], y;
+                if (z <= 0) 
+                    continue;
 
-                while (z > 0 && available[z] == 0) --z;
-                if (z == 0) return false;
+                while (z > 0 && available[z] == 0) 
+                    --z;
+                if (z == 0) 
+                    return false;
+
                 res = available[z];
                 available[z] = 0;
-                AddEntry(sparse, codewords, codewordLengths, Utils.BitReverse(res), i, m++, len[i], values);
+                AddEntry(
+                    sparse, codewords, codewordLengths, Utils.BitReverse(res), i, m++, lengths[i], values);
 
-                if (z != len[i])
+                if (z != lengths[i])
                 {
-                    for (y = len[i]; y > z; --y)
-                    {
+                    for (y = lengths[i]; y > z; --y)
                         available[y] = res + (1U << (32 - y));
-                    }
                 }
             }
 
             return true;
         }
 
-        void AddEntry(bool sparse, int[] codewords, int[] codewordLengths, uint huffCode, int symbol, int count, int len, int[] values)
+        void AddEntry(
+            bool sparse, int[] codewords, int[] codewordLengths,
+            uint huffCode, int symbol, int count, int len, int[] values)
         {
             if (sparse)
             {
@@ -218,10 +185,11 @@ namespace NVorbis
             }
         }
 
-        void InitLookupTable(DataPacket packet)
+        void InitLookupTable(VorbisDataPacket packet)
         {
             MapType = (int)packet.ReadBits(4);
-            if (MapType == 0) return;
+            if (MapType == 0)
+                return;
 
             var minValue = Utils.ConvertFromVorbisFloat32(packet.ReadUInt32());
             var deltaValue = Utils.ConvertFromVorbisFloat32(packet.ReadUInt32());
@@ -231,16 +199,12 @@ namespace NVorbis
             var lookupValueCount = Entries * Dimensions;
             var lookupTable = new float[lookupValueCount];
             if (MapType == 1)
-            {
-                lookupValueCount = lookup1_values();
-            }
-
+                lookupValueCount = Lookup1_values();
+            
             var multiplicands = new uint[lookupValueCount];
             for (var i = 0; i < lookupValueCount; i++)
-            {
                 multiplicands[i] = (uint)packet.ReadBits(valueBits);
-            }
-
+            
             // now that we have the initial data read in, calculate the entry tree
             if (MapType == 1)
             {
@@ -254,7 +218,8 @@ namespace NVorbis
                         var value = multiplicands[moff] * deltaValue + minValue + last;
                         lookupTable[idx * Dimensions + i] = (float)value;
 
-                        if (sequence_p) last = value;
+                        if (sequence_p) 
+                            last = value;
 
                         idxDiv *= lookupValueCount;
                     }
@@ -271,7 +236,8 @@ namespace NVorbis
                         var value = multiplicands[moff] * deltaValue + minValue + last;
                         lookupTable[idx * Dimensions + i] = (float)value;
 
-                        if (sequence_p) last = value;
+                        if (sequence_p) 
+                            last = value;
 
                         ++moff;
                     }
@@ -281,11 +247,12 @@ namespace NVorbis
             LookupTable = lookupTable;
         }
 
-        int lookup1_values()
+        int Lookup1_values()
         {
-            var r = (int)Math.Floor(Math.Exp(Math.Log(Entries) / Dimensions));
+            int r = (int)Math.Floor(Math.Exp(Math.Log(Entries) / Dimensions));
             
-            if (Math.Floor(Math.Pow(r + 1, Dimensions)) <= Entries) ++r;
+            if (Math.Floor(Math.Pow(r + 1, Dimensions)) <= Entries)
+                ++r;
             
             return r;
         }
@@ -316,10 +283,11 @@ namespace NVorbis
             }
         }
 
-        internal int DecodeScalar(DataPacket packet)
+        internal int DecodeScalar(VorbisDataPacket packet)
         {
             var bits = (int)packet.TryPeekBits(PrefixBitLength, out int bitCnt);
-            if (bitCnt == 0) return -1;
+            if (bitCnt == 0)
+                return -1;
 
             // try to get the value from the prefix list...
             var node = PrefixList[bits];
@@ -330,7 +298,7 @@ namespace NVorbis
             }
 
             // nope, not possible... run the tree
-            bits = (int)packet.TryPeekBits(MaxBits, out bitCnt);
+            bits = (int)packet.TryPeekBits(MaxBits, out _);
 
             node = PrefixOverflowTree;
             do

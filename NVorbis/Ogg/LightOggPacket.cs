@@ -3,10 +3,10 @@ using System.Linq;
 
 namespace NVorbis.Ogg
 {
-    internal class LightPacket : DataPacket
+    internal class LightOggPacket : VorbisDataPacket
     {
-        LightPageReader _reader;
-        LightPacketProvider _packetProvider;
+        LightOggPageReader _reader;
+        LightOggPacketProvider _packetProvider;
         IList<(long, int)> _dataSrc;
         int _dataIndex;
         int _dataOfs;
@@ -14,9 +14,9 @@ namespace NVorbis.Ogg
 
         public int Index { get; }
 
-        public LightPacket(
-            LightPageReader reader, 
-            LightPacketProvider packetProvider, 
+        public LightOggPacket(
+            LightOggPageReader reader, 
+            LightOggPacketProvider packetProvider, 
             int index, 
             IList<(long, int)> data)
             : base(GetSizeSum(data))

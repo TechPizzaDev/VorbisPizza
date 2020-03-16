@@ -11,7 +11,7 @@ namespace NVorbis
 {
     abstract class VorbisMapping
     {
-        internal static VorbisMapping Init(VorbisStreamDecoder vorbis, DataPacket packet)
+        internal static VorbisMapping Init(VorbisStreamDecoder vorbis, VorbisDataPacket packet)
         {
             var type = (int)packet.ReadBits(16);
 
@@ -33,7 +33,7 @@ namespace NVorbis
             _vorbis = vorbis;
         }
 
-        abstract protected void Init(DataPacket packet);
+        abstract protected void Init(VorbisDataPacket packet);
 
         internal Submap[] Submaps;
 
@@ -45,7 +45,7 @@ namespace NVorbis
         {
             internal Mapping0(VorbisStreamDecoder vorbis) : base(vorbis) { }
 
-            protected override void Init(DataPacket packet)
+            protected override void Init(VorbisDataPacket packet)
             {
                 var submapCount = 1;
                 if (packet.ReadBit()) submapCount += (int)packet.ReadBits(4);

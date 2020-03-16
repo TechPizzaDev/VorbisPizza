@@ -1,10 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace NVorbis.Ogg
 {
-    internal class LightPacketProvider : IPacketProvider
+    internal class LightOggPacketProvider : IVorbisPacketProvider
     {
         List<long> _pageOffsets = new List<long>();
         List<long> _pageGranules = new List<long>();
@@ -13,19 +12,26 @@ namespace NVorbis.Ogg
         Dictionary<int, int> _packetGranuleCounts = new Dictionary<int, int>();
         Dictionary<int, long> _packetGranulePositions = new Dictionary<int, long>();
 
-        LightPageReader _reader;
+        LightOggPageReader _reader;
         int _lastSeqNbr;
         bool _isEndOfStream;
         int _packetIndex;
         int _packetCount;
-        LightPacket _lastPacket;
+        LightOggPacket _lastPacket;
         List<(long DataOffset, int Size)> _cachedSegments;
         int _cachedPageSeqNo;
         bool _cachedIsResync;
         bool _cachedLastContinues;
         int? _cachedPageIndex;
 
-        internal LightPacketProvider(LightPageReader reader)
+        public int StreamSerial { get; }
+
+        public bool CanSeek => true;
+        public long ContainerBits => _reader?.ContainerBits ?? 0;
+
+        public event ParameterChangeEvent ParameterChange;
+
+        internal LightOggPacketProvider(LightOggPageReader reader)
         {
             _reader = reader ?? throw new ArgumentNullException(nameof(reader));
 
@@ -34,21 +40,13 @@ namespace NVorbis.Ogg
             AddPage();
         }
 
-        public int StreamSerial { get; }
-
-        public bool CanSeek => true;
-
-        public long ContainerBits => _reader?.ContainerBits ?? 0;
-
-        public event EventHandler<ParameterChangeEventArgs> ParameterChange;
-
         internal void AddPage()
         {
             // The Ogg spec states that partial packets are counted on their _ending_ page.
             // We count them on their _starting_ page.
             // This makes it simpler to read them in GetPacket(int).
-            // As a practical matter, our storage is opaque so it really doesn't matter how we count them,
-            //  as long as our indexing works out the same as the encoder's.
+            // As a practical matter, our storage is opaque so it doesn't matter how we count them,
+            // as long as our indexing works out the same as the encoder's.
 
             // verify we're not already ended (_isEndOfStream)
             if (!_isEndOfStream)
@@ -71,10 +69,13 @@ namespace NVorbis.Ogg
                         eos = true;
                 }
 
-                if (_reader.IsResync || (_lastSeqNbr != 0 && _lastSeqNbr + 1 != _reader.SequenceNumber))
+                if (_reader.IsResync || 
+                    (_lastSeqNbr != 0 && _lastSeqNbr + 1 != _reader.SequenceNumber))
                 {
-                    // as a practical matter, if the sequence numbers are "wrong", our logical stream is now out of sync
-                    // so whether the page header sync was lost or we just got an out of order page / sequence jump, we're counting it as a resync
+                    // as a practical matter, if the sequence numbers are "wrong", 
+                    // our logical stream is now out of sync
+                    // so whether the page header sync was lost or we just got an 
+                    // out of order page / sequence jump, we're counting it as a resync
                     _pageOffsets.Add(-_reader.PageOffset);
                 }
                 else
@@ -101,14 +102,13 @@ namespace NVorbis.Ogg
         {
             _packetGranuleCounts[index] = granuleCount;
             if (granulePos > 0)
-            {
                 _packetGranulePositions[index] = granulePos;
-            }
         }
 
         public long GetGranuleCount()
         {
-            if (_reader == null) throw new ObjectDisposedException(nameof(LightPacketProvider));
+            if (_reader == null)
+                throw new ObjectDisposedException(GetType().FullName);
 
             _reader.Lock();
             _reader.ReadAllPages();
@@ -119,7 +119,8 @@ namespace NVorbis.Ogg
 
         public int GetTotalPageCount()
         {
-            if (_reader == null) throw new ObjectDisposedException(nameof(LightPacketProvider));
+            if (_reader == null)
+                throw new ObjectDisposedException(GetType().FullName);
 
             _reader.Lock();
             _reader.ReadAllPages();
@@ -128,85 +129,88 @@ namespace NVorbis.Ogg
             return _pageOffsets.Count;
         }
 
-        public DataPacket FindPacket(long granulePos, Func<DataPacket, DataPacket, int> packetGranuleCountCallback)
+        public VorbisDataPacket FindPacket(
+            long granulePos,
+            Func<VorbisDataPacket, VorbisDataPacket, int> packetGranuleCountCallback)
         {
-            if (_reader == null) throw new ObjectDisposedException(nameof(LightPacketProvider));
+            if (_reader == null)
+                throw new ObjectDisposedException(GetType().FullName);
 
             // look for the page that contains the granulePos requested, then
-            var pageIdx = 0;
-            var pktIdx = 0;
-            while (pageIdx < _pageGranules.Count && _pageGranules[pageIdx] < granulePos && !_isEndOfStream)
+            int pageIndex = 0;
+            int packetIndex = 0;
+            while (
+                pageIndex < _pageGranules.Count && 
+                _pageGranules[pageIndex] < granulePos &&
+                !_isEndOfStream)
             {
-                pktIdx += _pagePacketCounts[pageIdx];
-                if (++pageIdx == _pageGranules.Count)
+                packetIndex += _pagePacketCounts[pageIndex];
+                if (++pageIndex == _pageGranules.Count)
                 {
                     if (!GetNextPage())
-                    {
                         // couldn't find it
                         return null;
-                    }
                 }
             }
 
             // look for the packet that contains the granulePos requested
-            var pkt = GetPacket(--pktIdx);
+            var packet = GetPacket(--packetIndex);
             do
             {
-                var prvPkt = pkt;
-                pkt = GetPacket(++pktIdx);
-                if (pkt == null)
-                {
+                var prvPkt = packet;
+                packet = GetPacket(++packetIndex);
+                if (packet == null)
                     return null;
-                }
-                if (!_packetGranuleCounts.ContainsKey(((LightPacket)pkt).Index))
-                {
-                    pkt.GranuleCount = packetGranuleCountCallback(pkt, prvPkt);
-                }
-                pkt.GranulePosition = prvPkt.GranulePosition + pkt.GranuleCount.Value;
+
+                if (!_packetGranuleCounts.ContainsKey(((LightOggPacket)packet).Index))
+                    packet.GranuleCount = packetGranuleCountCallback(packet, prvPkt);
+
+                packet.GranulePosition = prvPkt.GranulePosition + packet.GranuleCount.Value;
                 prvPkt.Done();
             }
-            while (pkt.GranulePosition <= granulePos);
+            while (packet.GranulePosition <= granulePos);
 
             // if we get to here, that means we found the correct packet
-            return pkt;
+            return packet;
         }
 
-        public DataPacket GetNextPacket()
+        public VorbisDataPacket GetNextPacket()
         {
             var pkt = GetPacket(_packetIndex);
             if (pkt != null)
-            {
-                ++_packetIndex;
-            }
+                _packetIndex++;
             return pkt;
         }
 
-        public DataPacket PeekNextPacket()
+        public VorbisDataPacket PeekNextPacket()
         {
             return GetPacket(_packetIndex);
         }
 
-        public void SeekToPacket(DataPacket packet, int preRoll)
+        public void SeekToPacket(VorbisDataPacket packet, int preRoll)
         {
-            if (_reader == null) throw new ObjectDisposedException(nameof(LightPacketProvider));
+            if (_reader == null)
+                throw new ObjectDisposedException(GetType().FullName);
 
             // save off the packet index in our DataPacket implementation
-            if (preRoll < 0) throw new ArgumentOutOfRangeException(nameof(preRoll), "Must be positive or zero!");
-            if (!(packet is LightPacket pkt)) throw new ArgumentException("Must be a packet from LightContainerReader!", nameof(packet));
+            if (preRoll < 0)
+                throw new ArgumentOutOfRangeException(nameof(preRoll), "Must be positive or zero!");
+
+            if (!(packet is LightOggPacket lightPacket))
+                throw new ArgumentException("Must be a packet from LightContainerReader!", nameof(packet));
 
             // we can seek back to the first packet, but no further
-            _packetIndex = Math.Max(0, pkt.Index - preRoll);
+            _packetIndex = Math.Max(0, lightPacket.Index - preRoll);
         }
 
-        public DataPacket GetPacket(int packetIndex)
+        public VorbisDataPacket GetPacket(int packetIndex)
         {
-            if (_reader == null) throw new ObjectDisposedException(nameof(LightPacketProvider));
+            if (_reader == null)
+                throw new ObjectDisposedException(GetType().FullName);
 
-            // if we're returning the same packet as last call, the caller probably wants the same instance...
+            // if we're returning the same packet as last call, caller probably wants the same instance
             if (_lastPacket != null && _lastPacket.Index == packetIndex)
-            {
                 return _lastPacket;
-            }
 
             // figure out which page the requested packet starts on, and which packet it is in the sequence
             var pageIndex = 0;
@@ -233,11 +237,12 @@ namespace NVorbis.Ogg
             if (_pageContinuations[pageIndex])
                 ++pktIdx;
 
-            var pktList = new List<(long, int)>();
-
             // get all the packets in the page (including continued / continuations)
-            var pkts = GetPagePackets(pageIndex, out var lastContinues, out var isResync, out var pageSeqNo);
-            pktList.Add(pkts[pktIdx]);
+            var packets = GetPagePackets(
+                pageIndex, out var lastContinues, out var isResync, out var pageSeqNo);
+
+            var packetList = new List<(long, int)>();
+            packetList.Add(packets[pktIdx]);
 
             // if our packet is continued, read in the rest of it from the next page(s)
             var startPageIdx = pageIndex;
@@ -247,10 +252,9 @@ namespace NVorbis.Ogg
                 if (++pageIndex == _pagePacketCounts.Count)
                 {
                     if (_isEndOfStream)
-                    {
                         // per the spec, a continued packet at the end of the stream should be dropped
                         return null;
-                    }
+
                     if (!GetNextPage())
                     {
                         // no more pages
@@ -260,17 +264,18 @@ namespace NVorbis.Ogg
                 }
 
                 pktIdx = 0;
-                pkts = GetPagePackets(pageIndex, out keepReading, out var contResync, out pageSeqNo);
+                packets = GetPagePackets(
+                    pageIndex, out keepReading, out var contResync, out pageSeqNo);
+
                 if (contResync)
-                {
                     // if we're in a resync, just return what we could get.
                     break;
-                }
-                pktList.Add(pkts[0]);
+
+                packetList.Add(packets[0]);
             }
 
             // create the packet instance and populate it with the appropriate initial data
-            var packet = new LightPacket(_reader, this, packetIndex, pktList)
+            var packet = new LightOggPacket(_reader, this, packetIndex, packetList)
             {
                 PageGranulePosition = _pageGranules[startPageIdx],
                 PageSequenceNumber = pageSeqNo,
@@ -278,7 +283,7 @@ namespace NVorbis.Ogg
             };
 
             // if we're the last packet completed in the page, set the .GranulePosition
-            if (pktIdx == pkts.Count - 1 || pktIdx == 0 && lastContinues)
+            if (pktIdx == packets.Count - 1 || pktIdx == 0 && lastContinues)
             {
                 packet.GranulePosition = packet.PageGranulePosition;
 
@@ -287,14 +292,13 @@ namespace NVorbis.Ogg
                 if (pageIndex == _pageOffsets.Count - 1 && _isEndOfStream)
                     packet.IsEndOfStream = true;
             }
+
             if (_packetGranuleCounts.TryGetValue(packetIndex, out var granuleCount))
             {
                 packet.GranuleCount = granuleCount;
 
                 if (_packetGranulePositions.TryGetValue(packetIndex, out var granulePos))
-                {
                     packet.GranulePosition = granulePos;
-                }
             }
 
             _lastPacket = packet;
@@ -308,7 +312,6 @@ namespace NVorbis.Ogg
             {
                 while (_reader.ReadNextPage() && _packetIndex == _packetCount)
                 {
-                    // no-op
                 }
             }
             finally
@@ -329,17 +332,15 @@ namespace NVorbis.Ogg
                 return _cachedSegments;
             }
 
-            var pageOffset = _pageOffsets[pageIndex];
+            long pageOffset = _pageOffsets[pageIndex];
 
             isResync = pageOffset < 0;
             if (isResync)
-            {
                 pageOffset *= -1;
-            }
 
-            List<(long, int)> pkts = null;
             lastContinues = false;
-            var seqNo = -1;
+            int seqNo = -1;
+            List<(long, int)> packets = null;
 
             _reader.Lock();
             try
@@ -347,7 +348,7 @@ namespace NVorbis.Ogg
                 if (_reader.ReadPageAt(pageOffset))
                 {
                     seqNo = _reader.SequenceNumber;
-                    pkts = _reader.GetPackets(out lastContinues);
+                    packets = _reader.GetPackets(out lastContinues);
                 }
             }
             finally
@@ -355,16 +356,16 @@ namespace NVorbis.Ogg
                 _reader.Release();
             }
 
-            if (pkts != null)
+            if (packets != null)
             {
                 if (isResync && _pageContinuations[pageIndex])
-                    pkts.RemoveAt(0);
+                    packets.RemoveAt(0);
 
                 _cachedPageSeqNo = pageSeqNo = seqNo;
                 _cachedIsResync = isResync;
                 _cachedPageIndex = pageIndex;
                 _cachedLastContinues = lastContinues;
-                return _cachedSegments = pkts;
+                return _cachedSegments = packets;
             }
 
             pageSeqNo = -1;
@@ -379,11 +380,11 @@ namespace NVorbis.Ogg
 
         public void Dispose()
         {
-            _pageOffsets.Clear();
-            _pageGranules.Clear();
-            _pagePacketCounts.Clear();
-            _pageContinuations.Clear();
-            _packetGranuleCounts.Clear();
+            _pageOffsets = null;
+            _pageGranules = null;
+            _pagePacketCounts = null;
+            _pageContinuations = null;
+            _packetGranuleCounts = null;
             _cachedPageIndex = null;
             _cachedSegments = null;
             _lastPacket = null;

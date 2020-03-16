@@ -8,12 +8,12 @@
 
 namespace NVorbis.Ogg
 {
-    struct OggCrc
+    struct Crc32
     {
         const uint CRC32_POLY = 0x04c11db7;
         static readonly uint[] _crcTable = new uint[256];
 
-        static OggCrc()
+        static Crc32()
         {
             for (uint i = 0; i < _crcTable.Length; i++)
             {

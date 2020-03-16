@@ -6,64 +6,16 @@
  *                                                                          *
  ***************************************************************************/
 using System;
-using System.Collections.Generic;
 using System.IO;
 
 namespace NVorbis.Ogg
 {
     [System.Diagnostics.DebuggerTypeProxy(typeof(DebugView))]
-    class OggPacketReader : IPacketProvider
+    partial class OggPacketReader : IVorbisPacketProvider
     {
-        class DebugView
-        {
-            OggPacketReader _reader;
-            OggPacket _last, _first;
-            
-            public ContainerReader Container => _reader._container;
-            public int StreamSerial => _reader._streamSerial;
-            public bool EndOfStreamFound => _reader._eosFound;
+        public event ParameterChangeEvent ParameterChange;
 
-            public int CurrentPacketIndex
-            {
-                get
-                {
-                    if (_reader._current == null)
-                        return -1;
-                    return Packets.IndexOf(_reader._current);
-                }
-            }
-
-            public DebugView(OggPacketReader reader)
-            {
-                _reader = reader ?? throw new ArgumentNullException(nameof(reader));
-            }
-
-            public List<OggPacket> Packets
-            {
-                get
-                {
-                    var packets = new List<OggPacket>();
-                    if (_reader._last == _last && 
-                        _reader._first == _first)
-                        return packets;
-                    
-                    _last = _reader._last;
-                    _first = _reader._first;
-
-                    var node = _first;
-                    while (node != null)
-                    {
-                        packets.Add(node);
-                        node = node.Next;
-                    }
-                    return packets;
-                }
-            }
-        }
-
-        public event EventHandler<ParameterChangeEventArgs> ParameterChange;
-
-        ContainerReader _container;
+        OggContainerReader _container;
         int _streamSerial;
         bool _eosFound;
 
@@ -71,7 +23,7 @@ namespace NVorbis.Ogg
 
         readonly object _packetLock = new object();
 
-        internal OggPacketReader(ContainerReader container, int streamSerial)
+        internal OggPacketReader(OggContainerReader container, int streamSerial)
         {
             _container = container;
             _streamSerial = streamSerial;
@@ -182,12 +134,12 @@ namespace NVorbis.Ogg
         public bool CanSeek => true;
 
         // This is fast path... don't make the caller wait if we can help it...
-        public DataPacket GetNextPacket()
+        public VorbisDataPacket GetNextPacket()
         {
             return (_current = PeekNextPacketInternal());
         }
 
-        public DataPacket PeekNextPacket()
+        public VorbisDataPacket PeekNextPacket()
         {
             return PeekNextPacketInternal();
         }
@@ -237,7 +189,7 @@ namespace NVorbis.Ogg
             }
         }
 
-        internal DataPacket GetLastPacket()
+        internal VorbisDataPacket GetLastPacket()
         {
             ReadAllPages();
 
@@ -264,7 +216,7 @@ namespace NVorbis.Ogg
             return cnt;
         }
 
-        public DataPacket GetPacket(int packetIndex)
+        public VorbisDataPacket GetPacket(int packetIndex)
         {
             if (packetIndex < 0) 
                 throw new ArgumentOutOfRangeException(nameof(packetIndex));
@@ -313,7 +265,7 @@ namespace NVorbis.Ogg
 
         OggPacket FindPacketInPage(
             OggPacket pagePacket, long targetGranulePos, 
-            Func<DataPacket, DataPacket, int> packetGranuleCountCallback)
+            Func<VorbisDataPacket, VorbisDataPacket, int> packetGranuleCountCallback)
         {
             var lastPacketInPage = GetLastPacketInPage(pagePacket);
             if (lastPacketInPage == null)
@@ -386,8 +338,8 @@ namespace NVorbis.Ogg
             return null;
         }
 
-        public DataPacket FindPacket(
-            long granulePos, Func<DataPacket, DataPacket, int> packetGranuleCountCallback)
+        public VorbisDataPacket FindPacket(
+            long granulePos, Func<VorbisDataPacket, VorbisDataPacket, int> packetGranuleCountCallback)
         {
             // This will find which packet contains the granule position being requested. 
             // It is basically a linear search. Please note, the spec actually calls for 
@@ -438,7 +390,7 @@ namespace NVorbis.Ogg
             return foundPacket;
         }
 
-        public void SeekToPacket(DataPacket packet, int preRoll)
+        public void SeekToPacket(VorbisDataPacket packet, int preRoll)
         {
             if (packet == null)
                 throw new ArgumentNullException(nameof(packet));

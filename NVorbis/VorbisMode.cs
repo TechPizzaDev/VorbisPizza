@@ -12,7 +12,7 @@ namespace NVorbis
 {
     class VorbisMode
     {
-        internal static VorbisMode Init(VorbisStreamDecoder vorbis, DataPacket packet)
+        internal static VorbisMode Init(VorbisStreamDecoder vorbis, VorbisDataPacket packet)
         {
             var mode = new VorbisMode(vorbis);
             mode.BlockFlag = packet.ReadBit();

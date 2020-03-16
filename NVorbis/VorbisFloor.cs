@@ -13,7 +13,7 @@ namespace NVorbis
 {
     abstract class VorbisFloor
     {
-        internal static VorbisFloor Init(VorbisStreamDecoder vorbis, DataPacket packet)
+        internal static VorbisFloor Init(VorbisStreamDecoder vorbis, VorbisDataPacket packet)
         {
             var type = (int)packet.ReadBits(16);
 
@@ -36,9 +36,9 @@ namespace NVorbis
             _vorbis = vorbis;
         }
 
-        abstract protected void Init(DataPacket packet);
+        abstract protected void Init(VorbisDataPacket packet);
 
-        abstract internal PacketData UnpackPacket(DataPacket packet, int blockSize, int channel);
+        abstract internal PacketData UnpackPacket(VorbisDataPacket packet, int blockSize, int channel);
 
         abstract internal void Apply(PacketData packetData, float[] residue);
 
@@ -62,7 +62,7 @@ namespace NVorbis
             Dictionary<int, float[]> _wMap;
             Dictionary<int, int[]> _barkMaps;
 
-            protected override void Init(DataPacket packet)
+            protected override void Init(VorbisDataPacket packet)
             {
                 // this is pretty well stolen directly from libvorbis...  BSD license
                 _order = (int)packet.ReadBits(8);
@@ -147,7 +147,7 @@ namespace NVorbis
 
             PacketData0[] _reusablePacketData;
 
-            internal override PacketData UnpackPacket(DataPacket packet, int blockSize, int channel)
+            internal override PacketData UnpackPacket(VorbisDataPacket packet, int blockSize, int channel)
             {
                 var data = _reusablePacketData[channel];
                 data.BlockSize = blockSize;
@@ -279,7 +279,7 @@ namespace NVorbis
             static int[] _rangeLookup = { 256, 128, 86, 64 };
             static int[] _yBitsLookup = { 8, 7, 7, 6 };
 
-            protected override void Init(DataPacket packet)
+            protected override void Init(VorbisDataPacket packet)
             {
                 var maximum_class = -1;
                 _partitionClass = new int[(int)packet.ReadBits(5)];
@@ -401,7 +401,7 @@ namespace NVorbis
 
             PacketData1[] _reusablePacketData;
 
-            internal override PacketData UnpackPacket(DataPacket packet, int blockSize, int channel)
+            internal override PacketData UnpackPacket(VorbisDataPacket packet, int blockSize, int channel)
             {
                 var data = _reusablePacketData[channel];
                 data.BlockSize = blockSize;

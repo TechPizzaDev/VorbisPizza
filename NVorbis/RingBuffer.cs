@@ -6,9 +6,6 @@
  *                                                                          *
  ***************************************************************************/
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 
 namespace NVorbis
 {
@@ -28,21 +25,21 @@ namespace NVorbis
 
         internal void EnsureSize(int size)
         {
-            // because _end == _start signifies no data, and _end is always 1 more than the data we have, we must make the buffer {channels} entries bigger than requested
+            // because _end == _start signifies no data, and _end is always 1 more than the data we have, 
+            // we must make the buffer {channels} entries bigger than requested
             size += Channels;
 
             if (_bufLen < size)
             {
-                var temp = new float[size];
-                Array.Copy(_buffer, _start, temp, 0, _bufLen - _start);
+                var newBuffer = new float[size];
+                Array.Copy(_buffer, _start, newBuffer, 0, _bufLen - _start);
                 if (_end < _start)
-                {
-                    Array.Copy(_buffer, 0, temp, _bufLen - _start, _end);
-                }
+                    Array.Copy(_buffer, 0, newBuffer, _bufLen - _start, _end);
+                
                 var end = Length;
                 _start = 0;
                 _end = end;
-                _buffer = temp;
+                _buffer = newBuffer;
 
                 _bufLen = size;
             }
@@ -52,21 +49,19 @@ namespace NVorbis
 
         internal void CopyTo(Span<float> buffer)
         {
-            int count = buffer.Length;
             var start = _start;
-            RemoveItems(count);
+            RemoveItems(buffer.Length);
 
-            // this is used to pull data out of the buffer, so we'll update the start position too...
-            var len = (_end - start + _bufLen) % _bufLen;
-            if (count > len) throw new ArgumentOutOfRangeException("count");
+            // this is used to pull data out of the buffer, so we'll update the start position too
+            int length = (_end - start + _bufLen) % _bufLen;
+            if (buffer.Length > length)
+                throw new ArgumentOutOfRangeException("Destination buffer requested too much.");
 
-            var cnt = Math.Min(count, _bufLen - start);
+            var cnt = Math.Min(buffer.Length, _bufLen - start);
             _buffer.AsSpan(start, cnt).CopyTo(buffer);
             
-            if (cnt < count)
-            {
-                _buffer.AsSpan(0, (count - cnt)).CopyTo(buffer.Slice(cnt));
-            }
+            if (cnt < buffer.Length)
+                _buffer.AsSpan(0, buffer.Length - cnt).CopyTo(buffer.Slice(cnt));
         }
 
         internal void RemoveItems(int count)
@@ -74,12 +69,14 @@ namespace NVorbis
             var cnt = (count + _start) % _bufLen;
             if (_end > _start)
             {
-                if (cnt > _end || cnt < _start) throw new ArgumentOutOfRangeException();
+                if (cnt > _end || cnt < _start) 
+                    throw new ArgumentOutOfRangeException();
             }
             else
             {
                 // wrap-around
-                if (cnt < _start && cnt > _end) throw new ArgumentOutOfRangeException();
+                if (cnt < _start && cnt > _end) 
+                    throw new ArgumentOutOfRangeException();
             }
 
             _start = cnt;
@@ -94,21 +91,21 @@ namespace NVorbis
         {
             get
             {
-                var temp = _end - _start;
-                if (temp < 0) temp += _bufLen;
-                return temp;
+                var tmp = _end - _start;
+                if (tmp < 0) 
+                    tmp += _bufLen;
+                return tmp;
             }
         }
 
-        internal void Write(int channel, int index, int start, int switchPoint, int end, float[] pcm, float[] window)
+        internal void Write(
+            int channel, int index, int start, int switchPoint, int end, float[] pcm, float[] window)
         {
             // this is the index of the first sample to merge
-            var idx = (index + start) * Channels + channel + _start;
+            int idx = (index + start) * Channels + channel + _start;
             while (idx >= _bufLen)
-            {
                 idx -= _bufLen;
-            }
-
+            
             // blech...  gotta fix the first packet's pointers
             if (idx < 0)
             {
@@ -118,30 +115,24 @@ namespace NVorbis
 
             // go through and do the overlap
             for (; idx < _bufLen && start < switchPoint; idx += Channels, ++start)
-            {
                 _buffer[idx] += pcm[start] * window[start];
-            }
+            
             if (idx >= _bufLen)
             {
                 idx -= _bufLen;
                 for (; start < switchPoint; idx += Channels, ++start)
-                {
                     _buffer[idx] += pcm[start] * window[start];
-                }
             }
 
             // go through and write the rest
             for (; idx < _bufLen && start < end; idx += Channels, ++start)
-            {
                 _buffer[idx] = pcm[start] * window[start];
-            }
+            
             if (idx >= _bufLen)
             {
                 idx -= _bufLen;
                 for (; start < end; idx += Channels, ++start)
-                {
                     _buffer[idx] = pcm[start] * window[start];
-                }
             }
 
             // finally, make sure the buffer end is set correctly

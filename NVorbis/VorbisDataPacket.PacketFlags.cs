@@ -9,7 +9,7 @@ using System;
 
 namespace NVorbis
 {
-    public abstract partial class DataPacket
+    public abstract partial class VorbisDataPacket
     {
         /// <summary>
         /// Defines flags to apply to the current packet

@@ -12,7 +12,7 @@ namespace NVorbis
     /// <summary>
     /// Provides a interface for a Vorbis logical stream container.
     /// </summary>
-    public interface IContainerReader : IDisposable
+    public interface IVorbisContainerReader : IDisposable
     {
         /// <summary>
         /// Gets the list of stream serials found in the container so far.

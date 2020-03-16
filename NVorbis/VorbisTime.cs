@@ -11,7 +11,7 @@ namespace NVorbis
 {
     abstract class VorbisTime
     {
-        internal static VorbisTime Init(VorbisStreamDecoder vorbis, DataPacket packet)
+        internal static VorbisTime Init(VorbisStreamDecoder vorbis, VorbisDataPacket packet)
         {
             var type = (int)packet.ReadBits(16);
 
@@ -33,13 +33,13 @@ namespace NVorbis
             _vorbis = vorbis;
         }
 
-        abstract protected void Init(DataPacket packet);
+        abstract protected void Init(VorbisDataPacket packet);
 
         class Time0 : VorbisTime
         {
             internal Time0(VorbisStreamDecoder vorbis) : base(vorbis) { }
 
-            protected override void Init(DataPacket packet)
+            protected override void Init(VorbisDataPacket packet)
             {
                 
             }

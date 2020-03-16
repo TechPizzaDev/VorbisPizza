@@ -61,8 +61,8 @@ namespace NVorbis
 
         #endregion
 
-        IPacketProvider _packetProvider;
-        DataPacket _parameterChangePacket;
+        IVorbisPacketProvider _packetProvider;
+        VorbisDataPacket _parameterChangePacket;
 
         HashSet<int> _pagesSeen;
 
@@ -70,7 +70,7 @@ namespace NVorbis
 
         object _seekLock = new object();
 
-        internal VorbisStreamDecoder(IPacketProvider packetProvider)
+        internal VorbisStreamDecoder(IVorbisPacketProvider packetProvider)
         {
             _packetProvider = packetProvider;
             _packetProvider.ParameterChange += SetParametersChanging;
@@ -106,7 +106,7 @@ namespace NVorbis
             return true;
         }
 
-        void SetParametersChanging(object sender, ParameterChangeEventArgs e)
+        void SetParametersChanging(object s, ParameterChangeEventArgs e)
         {
             _parameterChangePacket = e.FirstPacket;
         }
@@ -124,7 +124,7 @@ namespace NVorbis
 
         #region Header Decode
 
-        void ProcessParameterChange(DataPacket packet)
+        void ProcessParameterChange(VorbisDataPacket packet)
         {
             _parameterChangePacket = null;
 
@@ -136,8 +136,9 @@ namespace NVorbis
                 packet.Done();
                 wasPeek = true;
                 doFullReset = true;
+
                 packet = _packetProvider.PeekNextPacket();
-                if (packet == null) 
+                if (packet == null)
                     throw new InvalidDataException("Couldn't get next packet!");
             }
 
@@ -145,39 +146,38 @@ namespace NVorbis
             if (LoadComments(packet))
             {
                 if (wasPeek)
-                {
                     _packetProvider.GetNextPacket().Done();
-                }
                 else
-                {
                     packet.Done();
-                }
+
                 wasPeek = true;
                 packet = _packetProvider.PeekNextPacket();
-                if (packet == null) throw new InvalidDataException("Couldn't get next packet!");
+                if (packet == null)
+                    throw new InvalidDataException("Couldn't get next packet!");
             }
 
             // try to do a book header...
             if (LoadBooks(packet))
             {
                 if (wasPeek)
-                {
                     _packetProvider.GetNextPacket().Done();
-                }
                 else
-                {
                     packet.Done();
-                }
             }
 
             ResetDecoder(doFullReset);
         }
 
-        static readonly byte[] PacketSignatureStream = { 0x01, 0x76, 0x6f, 0x72, 0x62, 0x69, 0x73 };
-        static readonly byte[] PacketSignatureComments = { 0x03, 0x76, 0x6f, 0x72, 0x62, 0x69, 0x73 };
-        static readonly byte[] PacketSignatureBooks = { 0x05, 0x76, 0x6f, 0x72, 0x62, 0x69, 0x73 };
+        static readonly ReadOnlyMemory<byte> PacketSignatureStream =
+            new byte[] { 0x01, 0x76, 0x6f, 0x72, 0x62, 0x69, 0x73 };
 
-        static bool ValidateHeader(DataPacket packet, ReadOnlySpan<byte> expected)
+        static readonly ReadOnlyMemory<byte> PacketSignatureComments =
+            new byte[] { 0x03, 0x76, 0x6f, 0x72, 0x62, 0x69, 0x73 };
+
+        static readonly ReadOnlyMemory<byte> PacketSignatureBooks =
+            new byte[] { 0x05, 0x76, 0x6f, 0x72, 0x62, 0x69, 0x73 };
+
+        static bool ValidateHeader(VorbisDataPacket packet, ReadOnlySpan<byte> expected)
         {
             for (var i = 0; i < expected.Length; i++)
                 if (expected[i] != packet.ReadByte())
@@ -185,9 +185,9 @@ namespace NVorbis
             return true;
         }
 
-        bool ProcessStreamHeader(DataPacket packet)
+        bool ProcessStreamHeader(VorbisDataPacket packet)
         {
-            if (!ValidateHeader(packet, PacketSignatureStream))
+            if (!ValidateHeader(packet, PacketSignatureStream.Span))
             {
                 // don't mark the packet as done... it might be used elsewhere
                 _glueBits += packet.Length * 8;
@@ -215,7 +215,7 @@ namespace NVorbis
             if (_nominalBitrate == 0)
                 if (_upperBitrate > 0 && _lowerBitrate > 0)
                     _nominalBitrate = (_upperBitrate + _lowerBitrate) / 2;
-            
+
             _metaBits += packet.BitsRead - startPos + 8;
 
             _wasteHdrBits += 8 * packet.Length - packet.BitsRead;
@@ -223,9 +223,9 @@ namespace NVorbis
             return true;
         }
 
-        bool LoadComments(DataPacket packet)
+        bool LoadComments(VorbisDataPacket packet)
         {
-            if (!ValidateHeader(packet, PacketSignatureComments))
+            if (!ValidateHeader(packet, PacketSignatureComments.Span))
             {
                 _glueBits += packet.Length * 8;
                 return false;
@@ -240,16 +240,16 @@ namespace NVorbis
             _comments = new string[packet.ReadInt32()];
             for (int i = 0; i < _comments.Length; i++)
                 _comments[i] = Encoding.UTF8.GetString(packet.ReadBytes(packet.ReadInt32()));
-            
+
             _metaBits += packet.BitsRead - 56;
             _wasteHdrBits += 8 * packet.Length - packet.BitsRead;
 
             return true;
         }
 
-        bool LoadBooks(DataPacket packet)
+        bool LoadBooks(VorbisDataPacket packet)
         {
-            if (!ValidateHeader(packet, PacketSignatureBooks))
+            if (!ValidateHeader(packet, PacketSignatureBooks.Span))
             {
                 _glueBits += packet.Length * 8;
                 return false;
@@ -261,31 +261,27 @@ namespace NVorbis
 
             _glueBits += packet.BitsRead;
 
-            // get books
             Books = new VorbisCodebook[packet.ReadByte() + 1];
             for (int i = 0; i < Books.Length; i++)
-                Books[i] = VorbisCodebook.Init(this, packet, i);
-            
+                Books[i] = new VorbisCodebook(packet, i);
+
             _bookBits += packet.BitsRead - bits;
             bits = packet.BitsRead;
 
-            // get times
             Times = new VorbisTime[(int)packet.ReadBits(6) + 1];
             for (int i = 0; i < Times.Length; i++)
                 Times[i] = VorbisTime.Init(this, packet);
-            
+
             _timeHdrBits += packet.BitsRead - bits;
             bits = packet.BitsRead;
 
-            // get floor
             Floors = new VorbisFloor[(int)packet.ReadBits(6) + 1];
             for (int i = 0; i < Floors.Length; i++)
                 Floors[i] = VorbisFloor.Init(this, packet);
-            
+
             _floorHdrBits += packet.BitsRead - bits;
             bits = packet.BitsRead;
 
-            // get residue
             Residues = new VorbisResidue[(int)packet.ReadBits(6) + 1];
             for (int i = 0; i < Residues.Length; i++)
             {
@@ -295,7 +291,6 @@ namespace NVorbis
             _resHdrBits += packet.BitsRead - bits;
             bits = packet.BitsRead;
 
-            // get map
             Maps = new VorbisMapping[(int)packet.ReadBits(6) + 1];
             for (int i = 0; i < Maps.Length; i++)
                 Maps[i] = VorbisMapping.Init(this, packet);
@@ -303,15 +298,13 @@ namespace NVorbis
             _mapHdrBits += packet.BitsRead - bits;
             bits = packet.BitsRead;
 
-            // get mode settings
             Modes = new VorbisMode[(int)packet.ReadBits(6) + 1];
             for (int i = 0; i < Modes.Length; i++)
                 Modes[i] = VorbisMode.Init(this, packet);
-            
+
             _modeHdrBits += packet.BitsRead - bits;
 
-            // check the framing bit
-            if (!packet.ReadBit()) 
+            if (!packet.ReadBit()) // check the framing bit
                 throw new InvalidDataException();
 
             ++_glueBits;
@@ -334,7 +327,7 @@ namespace NVorbis
         int _preparedLength;
         internal bool _clipped = false;
 
-        Stack<DataPacket> _resyncQueue;
+        Stack<VorbisDataPacket> _resyncQueue;
 
         long _currentPosition;
         long _reportedPosition;
@@ -350,7 +343,7 @@ namespace NVorbis
         {
             _currentPosition = 0L;
 
-            _resyncQueue = new Stack<DataPacket>();
+            _resyncQueue = new Stack<VorbisDataPacket>();
 
             _bitsPerPacketHistory = new Queue<int>();
             _sampleCountHistory = new Queue<int>();
@@ -400,7 +393,7 @@ namespace NVorbis
             _prevBuffer = buf;
         }
 
-        bool UnpackPacket(DataPacket packet)
+        bool UnpackPacket(VorbisDataPacket packet)
         {
             // make sure we're on an audio packet
             if (packet.ReadBit())
@@ -601,7 +594,7 @@ namespace NVorbis
             return samplesDecoded;
         }
 
-        void UpdatePosition(int samplesDecoded, DataPacket packet)
+        void UpdatePosition(int samplesDecoded, VorbisDataPacket packet)
         {
             _samples += samplesDecoded;
 
@@ -664,7 +657,7 @@ namespace NVorbis
         {
             _sw.Start();
 
-            DataPacket packet = null;
+            VorbisDataPacket packet = null;
             try
             {
                 // get the next packet
@@ -747,7 +740,7 @@ namespace NVorbis
             }
         }
 
-        internal int GetPacketLength(DataPacket curPacket, DataPacket lastPacket)
+        internal int GetPacketLength(VorbisDataPacket curPacket, VorbisDataPacket lastPacket)
         {
             // if we don't have a previous packet, or we're re-syncing, this packet has no audio data to return
             if (lastPacket == null || curPacket.IsResync) return 0;
@@ -786,12 +779,13 @@ namespace NVorbis
                     // get samples from the previous buffer's data
                     var cnt = Math.Min(count, _prevBuffer.Length);
                     _prevBuffer.AsSpan(0, cnt).CopyTo(buffer);
-                    
+
                     // if we have samples left over, rebuild the previous buffer array...
                     if (cnt < _prevBuffer.Length)
                     {
                         var buf = new float[_prevBuffer.Length - cnt];
-                        Buffer.BlockCopy(_prevBuffer, cnt * sizeof(float), buf, 0, (_prevBuffer.Length - cnt) * sizeof(float));
+                        Buffer.BlockCopy(
+                            _prevBuffer, cnt * sizeof(float), buf, 0, (_prevBuffer.Length - cnt) * sizeof(float));
                         _prevBuffer = buf;
                     }
                     else
@@ -807,7 +801,9 @@ namespace NVorbis
                 }
                 else if (_isParameterChange)
                 {
-                    throw new InvalidOperationException("Currently pending a parameter change.  Read new parameters before requesting further samples!");
+                    throw new InvalidOperationException(
+                        "Currently pending a parameter change. " +
+                        "Read new parameters before requesting further samples!");
                 }
 
                 int minSize = count + Block1Size * _channels;
@@ -844,7 +840,8 @@ namespace NVorbis
             get => _isParameterChange;
             set
             {
-                if (value) throw new InvalidOperationException("Only clearing is supported!");
+                if (value)
+                    throw new InvalidOperationException("Only clearing is supported!");
                 _isParameterChange = value;
             }
         }
@@ -853,15 +850,17 @@ namespace NVorbis
 
         internal void SeekTo(long granulePos)
         {
-            if (!_packetProvider.CanSeek) throw new NotSupportedException();
+            if (!_packetProvider.CanSeek)
+                throw new NotSupportedException();
+            if (granulePos < 0)
+                throw new ArgumentOutOfRangeException(nameof(granulePos));
 
-            if (granulePos < 0) throw new ArgumentOutOfRangeException("granulePos");
-
-            DataPacket packet;
+            VorbisDataPacket packet;
             if (granulePos > 0)
             {
                 packet = _packetProvider.FindPacket(granulePos, GetPacketLength);
-                if (packet == null) throw new ArgumentOutOfRangeException("granulePos");
+                if (packet == null)
+                    throw new ArgumentOutOfRangeException(nameof(granulePos));
             }
             else
             {
@@ -874,23 +873,26 @@ namespace NVorbis
                 _packetProvider.SeekToPacket(packet, 1);
 
                 // now figure out where we are and how many samples we need to discard...
-                // note that we use the granule position of the "current" packet, since it will be discarded no matter what
+                // note that we use the granule position of the "current" packet, 
+                // since it will be discarded no matter what
 
                 // get the packet that we'll decode next
                 var dataPacket = _packetProvider.PeekNextPacket();
 
                 // now read samples until we are exactly at the granule position requested
                 CurrentPosition = dataPacket.GranulePosition;
-                var cnt = (int)((granulePos - CurrentPosition) * _channels);
-                if (cnt > 0)
+                int count = (int)((granulePos - CurrentPosition) * _channels);
+                if (count <= 0)
+                    return;
+
+                Span<float> tmp = stackalloc float[256];
+                while (count > 0)
                 {
-                    var seekBuffer = new float[cnt];
-                    while (cnt > 0)
-                    {
-                        var temp = ReadSamples(seekBuffer);
-                        if (temp == 0) break;   // we're at the end...
-                        cnt -= temp;
-                    }
+                    var slice = tmp.Slice(0, Math.Min(tmp.Length, count));
+                    int read = ReadSamples(slice);
+                    if (read == 0)
+                        break; // we're at the end
+                    count -= read;
                 }
             }
         }

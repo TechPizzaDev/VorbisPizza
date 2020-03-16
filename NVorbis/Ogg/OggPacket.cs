@@ -9,13 +9,13 @@ using System;
 
 namespace NVorbis.Ogg
 {
-    class OggPacket : DataPacket
+    class OggPacket : VorbisDataPacket
     {
         long _offset;                         // 8
         int _length;                          // 4
         int _curOfs;                          // 4
         OggPacket _mergedPacket;              // IntPtr.Size
-        ContainerReader _containerReader;     // IntPtr.Size
+        OggContainerReader _containerReader;     // IntPtr.Size
         ReadOnlyMemory<byte> _data;           // sizeof(ReadOnlyMemory<byte>) + data
 
         internal OggPacket Next { get; set; } // IntPtr.Size
@@ -33,7 +33,7 @@ namespace NVorbis.Ogg
             set => SetFlag(PacketFlags.User2, value);
         }
 
-        internal OggPacket(ContainerReader containerReader, long streamOffset, int length) 
+        internal OggPacket(OggContainerReader containerReader, long streamOffset, int length) 
             : base(length)
         {
             _containerReader = containerReader;
@@ -43,7 +43,7 @@ namespace NVorbis.Ogg
             _curOfs = 0;
         }
 
-        internal void MergeWith(DataPacket continuation)
+        internal void MergeWith(VorbisDataPacket continuation)
         {
             if (!(continuation is OggPacket op))
                 throw new ArgumentException("Incorrect packet type!", nameof(continuation));

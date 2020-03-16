@@ -12,9 +12,9 @@ using System.IO;
 namespace NVorbis.Ogg
 {
     /// <summary>
-    /// Provides an <see cref="IContainerReader"/> implementation for basic Ogg files.
+    /// Provides an <see cref="IVorbisContainerReader"/> implementation for basic Ogg files.
     /// </summary>
-    public class ContainerReader : IContainerReader
+    public class OggContainerReader : IVorbisContainerReader
     {
         private Stream _stream;
         private bool _leaveOpen;
@@ -40,7 +40,7 @@ namespace NVorbis.Ogg
         /// Creates a new instance with the specified file.
         /// </summary>
         /// <param name="path">The full path to the file.</param>
-        public ContainerReader(string path)
+        public OggContainerReader(string path)
             : this(File.Open(path, FileMode.Open, FileAccess.Read, FileShare.Read), leaveOpen: false)
         {
         }
@@ -52,7 +52,7 @@ namespace NVorbis.Ogg
         /// <param name="leaveOpen">
         /// <c>false</c> to close the stream when <see cref="Dispose"/> is called.
         /// </param>
-        public ContainerReader(Stream stream, bool leaveOpen)
+        public OggContainerReader(Stream stream, bool leaveOpen)
         {
             _packetReaders = new Dictionary<int, OggPacketReader>();
             _disposedStreamSerials = new List<int>();
@@ -74,12 +74,12 @@ namespace NVorbis.Ogg
         }
 
         /// <summary>
-        /// Gets the <see cref="IPacketProvider"/> instance for the specified stream serial.
+        /// Gets the <see cref="IVorbisPacketProvider"/> instance for the specified stream serial.
         /// </summary>
         /// <param name="streamSerial">The stream serial to look for.</param>
-        /// <returns>An <see cref="IPacketProvider"/> instance.</returns>
+        /// <returns>An <see cref="IVorbisPacketProvider"/> instance.</returns>
         /// <exception cref="ArgumentOutOfRangeException">The specified stream serial was not found.</exception>
-        public IPacketProvider GetStream(int streamSerial)
+        public IVorbisPacketProvider GetStream(int streamSerial)
         {
             if (!_packetReaders.TryGetValue(streamSerial, out OggPacketReader provider))
                 throw new ArgumentOutOfRangeException(nameof(streamSerial));
@@ -187,7 +187,7 @@ namespace NVorbis.Ogg
             var pageCrc = BitConverter.ToUInt32(_readBuffer, 22);
 
             // start calculating the CRC value for this page
-            var _crc = new OggCrc();
+            var _crc = new Crc32();
             for (int i = 0; i < 22; i++)
                 _crc.Update(_readBuffer[i]);
             

@@ -6,10 +6,13 @@ using System.Threading;
 
 namespace NVorbis.Ogg
 {
-    internal class LightPageReader : IDisposable
+    internal class LightOggPageReader : IDisposable
     {
-        private readonly Dictionary<int, LightPacketProvider> _packetProviders = new Dictionary<int, LightPacketProvider>();
+        private readonly Dictionary<int, LightOggPacketProvider> _packetProviders =
+            new Dictionary<int, LightOggPacketProvider>();
+
         private readonly HashSet<int> _ignoredSerials = new HashSet<int>();
+
         private readonly object _readLock = new object();
         private readonly byte[] _headerBuf = new byte[282];
         private readonly byte[] _dataBuf = new byte[65052];
@@ -17,10 +20,10 @@ namespace NVorbis.Ogg
         private Stream _stream;
         private bool _leaveOpen;
         private long _nextPageOffset;
-        private readonly Func<LightPacketProvider, bool> _newStreamCallback;
+        private readonly Func<LightOggPacketProvider, bool> _newStreamCallback;
 
-        public LightPageReader(
-            Stream stream, bool leaveOpen, Func<LightPacketProvider, bool> newStreamCallback)
+        public LightOggPageReader(
+            Stream stream, bool leaveOpen, Func<LightOggPacketProvider, bool> newStreamCallback)
         {
             _stream = stream;
             _leaveOpen = leaveOpen;
@@ -157,9 +160,7 @@ namespace NVorbis.Ogg
             {
                 // we're EOF
                 foreach (var pp in _packetProviders)
-                {
                     pp.Value.SetEndOfStream();
-                }
             }
 
             return false;
@@ -173,7 +174,7 @@ namespace NVorbis.Ogg
                 uint pageCrc = BitConverter.ToUInt32(_headerBuf, 22);
                 byte segCount = _headerBuf[26];
 
-                var crc = new OggCrc();
+                var crc = new Crc32();
                 for (var j = 0; j < 22; j++)
                     crc.Update(_headerBuf[j]);
                 crc.Update(0);
@@ -239,9 +240,10 @@ namespace NVorbis.Ogg
                     // nevermind... we're supposed to ignore these
                     return false;
                 
-                var packetProvider = new LightPacketProvider(this);
+                var packetProvider = new LightOggPacketProvider(this);
                 _packetProviders.Add(StreamSerial, packetProvider);
-                if (!_newStreamCallback(packetProvider))
+
+                if (!_newStreamCallback.Invoke(packetProvider))
                 {
                     _packetProviders.Remove(StreamSerial);
                     _ignoredSerials.Add(StreamSerial);
@@ -317,6 +319,7 @@ namespace NVorbis.Ogg
                         size = 0;
                     }
                 }
+
                 if (size > 0)
                 {
                     packets.Add((dataOffset, size));

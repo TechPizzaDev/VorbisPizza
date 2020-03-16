@@ -4,11 +4,11 @@ using System.IO;
 namespace NVorbis.Ogg
 {
     /// <summary>
-    /// Implements <see cref="IContainerReader"/> for Ogg format files for low memory cost.
+    /// Implements <see cref="IVorbisContainerReader"/> for Ogg format files for low memory cost.
     /// </summary>
-    public sealed class LightContainerReader : IContainerReader
+    public sealed class LightOggContainerReader : IVorbisContainerReader
     {
-        private LightPageReader _reader;
+        private LightOggPageReader _reader;
 
         /// <summary>
         /// Gets the list of stream serials found in the container so far.
@@ -36,18 +36,18 @@ namespace NVorbis.Ogg
         public event EventHandler<NewStreamEventArgs> NewStream;
 
         /// <summary>
-        /// Creates a new instance of <see cref="LightContainerReader"/>.
+        /// Creates a new instance of <see cref="LightOggContainerReader"/>.
         /// </summary>
         /// <param name="stream">The <see cref="Stream"/> to read.</param>
         /// <param name="leaveOpen"><c>false</c> to close the stream when disposed.</param>
         /// <exception cref="ArgumentException">
         /// <paramref name="stream"/>'s <see cref="Stream.CanSeek"/> is <c>false</c>.
         /// </exception>
-        public LightContainerReader(Stream stream, bool leaveOpen)
+        public LightOggContainerReader(Stream stream, bool leaveOpen)
         {
             if (!(stream ?? throw new ArgumentNullException(nameof(stream))).CanSeek)
                 throw new ArgumentException("Stream must be seek-able!", nameof(stream));
-            _reader = new LightPageReader(stream, leaveOpen, NewStreamCallback);
+            _reader = new LightOggPageReader(stream, leaveOpen, NewStreamCallback);
         }
 
         /// <summary>
@@ -85,7 +85,7 @@ namespace NVorbis.Ogg
             }
         }
 
-        private bool NewStreamCallback(LightPacketProvider packetProvider)
+        private bool NewStreamCallback(LightOggPacketProvider packetProvider)
         {
             var relock = _reader.Release();
             var ea = new NewStreamEventArgs(packetProvider);

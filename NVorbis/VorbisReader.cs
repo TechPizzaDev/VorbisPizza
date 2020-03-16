@@ -14,7 +14,7 @@ namespace NVorbis
 {
     public class VorbisReader : IDisposable
     {
-        private IContainerReader _containerReader;
+        private IVorbisContainerReader _containerReader;
         private List<VorbisStreamDecoder> _decoders;
         private List<int> _serials;
 
@@ -34,7 +34,7 @@ namespace NVorbis
 
         public VorbisReader(Stream stream, bool leaveOpen) : this()
         {
-            var oggContainer = new Ogg.ContainerReader(stream, leaveOpen);
+            var oggContainer = new Ogg.OggContainerReader(stream, leaveOpen);
             if (!LoadContainer(oggContainer))
             {
                 // oops, not Ogg!
@@ -48,7 +48,7 @@ namespace NVorbis
                 throw new InvalidDataException("No Vorbis data found!");
         }
 
-        public VorbisReader(IContainerReader containerReader) : this()
+        public VorbisReader(IVorbisContainerReader containerReader) : this()
         {
             if (!LoadContainer(containerReader))
                 throw new InvalidDataException("Container did not initialize!");
@@ -59,7 +59,7 @@ namespace NVorbis
                 throw new InvalidDataException("No Vorbis data found!");
         }
 
-        public VorbisReader(IPacketProvider packetProvider) : this()
+        public VorbisReader(IVorbisPacketProvider packetProvider) : this()
         {
             var ea = new NewStreamEventArgs(packetProvider);
             NewStream(this, ea);
@@ -67,7 +67,7 @@ namespace NVorbis
                 throw new InvalidDataException("No Vorbis data found!");
         }
 
-        private bool LoadContainer(IContainerReader containerReader)
+        private bool LoadContainer(IVorbisContainerReader containerReader)
         {
             containerReader.NewStream += NewStream;
             if (!containerReader.Init())
