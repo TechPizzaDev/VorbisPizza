@@ -200,8 +200,8 @@ namespace NVorbis
 
             internal override void Apply(PacketData packetData, float[] residue)
             {
-                var data = packetData as PacketData0;
-                if (data == null) throw new ArgumentException("Incorrect packet data!");
+                if (!(packetData is PacketData0 data))
+                    throw new ArgumentException("Incorrect packet data!", nameof(PacketData));
 
                 var n = data.BlockSize / 2;
 
@@ -245,10 +245,10 @@ namespace NVorbis
                         }
 
                         // calc the dB of this bark section
-                        q = data.Amp / (float)Math.Sqrt(p + q) - _ampOfs;
+                        q = data.Amp / MathF.Sqrt(p + q) - _ampOfs;
 
                         // now convert to a linear sample multiplier
-                        q = (float)Math.Exp(q * 0.11512925f);
+                        q = MathF.Exp(q * 0.11512925f);
 
                         residue[i] *= q;
 
@@ -266,7 +266,8 @@ namespace NVorbis
         {
             internal Floor1(VorbisStreamDecoder vorbis) : base(vorbis) { }
 
-            int[] _partitionClass, _classDimensions, _classSubclasses, _xList, _classMasterBookIndex, _hNeigh, _lNeigh, _sortIdx;
+            int[] _partitionClass, _classDimensions, _classSubclasses;
+            int[] _xList, _classMasterBookIndex, _hNeigh, _lNeigh, _sortIdx;
             int _multiplier, _range, _yBits;
             VorbisCodebook[] _classMasterbooks;
             VorbisCodebook[][] _subclassBooks;
