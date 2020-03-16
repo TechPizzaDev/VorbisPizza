@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 
 namespace NVorbis.Ogg
@@ -8,13 +7,19 @@ namespace NVorbis.Ogg
     {
         LightPageReader _reader;
         LightPacketProvider _packetProvider;
-        IList<Tuple<long, int>> _dataSrc;
+        IList<(long, int)> _dataSrc;
         int _dataIndex;
         int _dataOfs;
         byte[] _dataBuf;
 
-        internal LightPacket(LightPageReader reader, LightPacketProvider packetProvider, int index, IList<Tuple<long, int>> data)
-            : base(data.Sum(p => p.Item2))
+        public int Index { get; }
+
+        public LightPacket(
+            LightPageReader reader, 
+            LightPacketProvider packetProvider, 
+            int index, 
+            IList<(long, int)> data)
+            : base(GetSizeSum(data))
         {
             _reader = reader;
             _packetProvider = packetProvider;
@@ -22,20 +27,25 @@ namespace NVorbis.Ogg
             _dataSrc = data;
         }
 
+        private static int GetSizeSum(IList<(long, int)> data)
+        {
+            int sum = 0;
+            for (int i = 0; i < data.Count; i++)
+                sum += data[i].Item2;
+            return sum;
+        }
+
         public override void Done()
         {
             if (GranuleCount.HasValue)
-            {
                 _packetProvider.SetPacketGranuleInfo(Index, GranuleCount.Value, GranulePosition);
-            }
             _dataBuf = null;
         }
 
-        internal int Index { get; }
-
         protected override int ReadNextByte()
         {
-            if (_dataIndex == _dataSrc.Count) return -1;
+            if (_dataIndex == _dataSrc.Count)
+                return -1;
             
             if (_dataOfs == 0)
             {
@@ -44,10 +54,13 @@ namespace NVorbis.Ogg
 
                 var idx = 0;
                 int cnt;
-                while (idx < _dataBuf.Length && (cnt = _reader.Read(ofs + idx, _dataBuf, idx, _dataBuf.Length - idx)) > 0)
+                while (
+                    idx < _dataBuf.Length &&
+                    (cnt = _reader.Read(ofs + idx, _dataBuf, idx, _dataBuf.Length - idx)) > 0)
                 {
                     idx += cnt;
                 }
+
                 if (idx < _dataBuf.Length)
                 {
                     // uh-oh...  bad packet
@@ -63,9 +76,7 @@ namespace NVorbis.Ogg
             {
                 _dataOfs = 0;
                 if (++_dataIndex == _dataSrc.Count)
-                {
                     _dataBuf = null;
-                }
             }
             
             return b;

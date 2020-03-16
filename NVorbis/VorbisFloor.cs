@@ -105,21 +105,24 @@ namespace NVorbis
 
             int[] SynthesizeBarkCurve(int n)
             {
-                var scale = _bark_map_size / toBARK(_rate / 2);
+                var scale = _bark_map_size / ToBARK(_rate / 2);
 
                 var map = new int[n + 1];
 
                 for (int i = 0; i < n - 1; i++)
                 {
-                    map[i] = Math.Min(_bark_map_size - 1, (int)Math.Floor(toBARK((_rate / 2f) / n * i) * scale));
+                    map[i] = Math.Min(_bark_map_size - 1, (int)Math.Floor(ToBARK((_rate / 2f) / n * i) * scale));
                 }
                 map[n] = -1;
                 return map;
             }
 
-            static float toBARK(double lsp)
+            static float ToBARK(double lsp)
             {
-                return (float)(13.1 * Math.Atan(0.00074 * lsp) + 2.24 * Math.Atan(0.0000000185 * lsp * lsp) + .0001 * lsp);
+                return (float)(
+                    13.1 * Math.Atan(0.00074 * lsp) +
+                    2.24 * Math.Atan(0.0000000185 * lsp * lsp) +
+                    0.0001 * lsp);
             }
 
             float[] SynthesizeWDelMap(int n)
@@ -129,7 +132,7 @@ namespace NVorbis
                 var map = new float[n];
                 for (int i = 0; i < n; i++)
                 {
-                    map[i] = 2f * (float)Math.Cos(wdel * i);
+                    map[i] = 2f * MathF.Cos(wdel * i);
                 }
                 return map;
             }
@@ -214,7 +217,7 @@ namespace NVorbis
                     int i = 0;
                     for (i = 0; i < _order; i++)
                     {
-                        data.Coeff[i] = 2f * (float)Math.Cos(data.Coeff[i]);
+                        data.Coeff[i] = 2f * MathF.Cos(data.Coeff[i]);
                     }
 
                     i = 0;

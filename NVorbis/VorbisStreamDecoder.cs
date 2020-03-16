@@ -137,7 +137,8 @@ namespace NVorbis
                 wasPeek = true;
                 doFullReset = true;
                 packet = _packetProvider.PeekNextPacket();
-                if (packet == null) throw new InvalidDataException("Couldn't get next packet!");
+                if (packet == null) 
+                    throw new InvalidDataException("Couldn't get next packet!");
             }
 
             // try to do a comment header...
@@ -554,18 +555,17 @@ namespace NVorbis
 
         int OverlapSamples()
         {
-            // window
-            var window = _mode.GetWindow(_prevFlag, _nextFlag);
+            float[] window = _mode.GetWindow(_prevFlag, _nextFlag);
             // this is applied as part of the lapping operation
 
             // now lap the data into the buffer...
 
-            var sizeW = _mode.BlockSize;
-            var right = sizeW;
-            var center = right >> 1;
-            var left = 0;
-            var begin = -center;
-            var end = center;
+            int sizeW = _mode.BlockSize;
+            int right = sizeW;
+            int center = right >> 1;
+            int left = 0;
+            int begin = -center;
+            int end = center;
 
             if (_mode.BlockFlag)
             {

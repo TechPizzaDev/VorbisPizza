@@ -12,9 +12,6 @@ namespace NVorbis
 {
     class VorbisMode
     {
-        const float M_PI = 3.1415926539f; //(float)Math.PI;
-        const float M_PI2 = M_PI / 2;
-
         internal static VorbisMode Init(VorbisStreamDecoder vorbis, DataPacket packet)
         {
             var mode = new VorbisMode(vorbis);
@@ -23,7 +20,10 @@ namespace NVorbis
             mode.TransformType = (int)packet.ReadBits(16);
             var mapping = (int)packet.ReadBits(8);
 
-            if (mode.WindowType != 0 || mode.TransformType != 0 || mapping >= vorbis.Maps.Length) throw new InvalidDataException();
+            if (mode.WindowType != 0 ||
+                mode.TransformType != 0 ||
+                mapping >= vorbis.Maps.Length) 
+                throw new InvalidDataException();
 
             mode.Mapping = vorbis.Maps[mapping];
             mode.BlockSize = mode.BlockFlag ? vorbis.Block1Size : vorbis.Block0Size;
@@ -78,21 +78,19 @@ namespace NVorbis
 
                 for (int i = 0; i < left; i++)
                 {
-                    var x = (float)Math.Sin((i + .5) / left * M_PI2);
+                    var x = MathF.Sin((i + 0.5f) / left * MathF.PI / 2);
                     x *= x;
-                    array[leftbegin + i] = (float)Math.Sin(x * M_PI2);
+                    array[leftbegin + i] = MathF.Sin(x * MathF.PI / 2);
                 }
 
                 for (int i = leftbegin + left; i < rightbegin; i++)
-                {
                     array[i] = 1.0f;
-                }
-
+                
                 for (int i = 0; i < right; i++)
                 {
-                    var x = (float)Math.Sin((right - i - .5) / right * M_PI2);
+                    var x = MathF.Sin((right - i - 0.5f) / right * MathF.PI / 2);
                     x *= x;
-                    array[rightbegin + i] = (float)Math.Sin(x * M_PI2);
+                    array[rightbegin + i] = MathF.Sin(x * MathF.PI / 2);
                 }
             }
         }

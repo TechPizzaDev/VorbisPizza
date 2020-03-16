@@ -6,46 +6,34 @@
  *                                                                          *
  ***************************************************************************/
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.IO;
 
 namespace NVorbis.Ogg
 {
-    class Packet : DataPacket
+    class OggPacket : DataPacket
     {
-        long _offset;                       // 8
-        int _length;                        // 4
-        int _curOfs;                        // 4
-        Packet _mergedPacket;               // IntPtr.Size
-        Packet _next;                       // IntPtr.Size
-        Packet _prev;                       // IntPtr.Size
-        ContainerReader _containerReader;   // IntPtr.Size
-        ReadOnlyMemory<byte> _data;         // sizeof(ReadOnlyMemory<byte>) + data
+        long _offset;                         // 8
+        int _length;                          // 4
+        int _curOfs;                          // 4
+        OggPacket _mergedPacket;              // IntPtr.Size
+        ContainerReader _containerReader;     // IntPtr.Size
+        ReadOnlyMemory<byte> _data;           // sizeof(ReadOnlyMemory<byte>) + data
 
-        internal Packet Next
-        {
-            get => _next;
-            set => _next = value;
-        }
-        internal Packet Prev
-        {
-            get => _prev;
-            set => _prev = value;
-        }
+        internal OggPacket Next { get; set; } // IntPtr.Size
+        internal OggPacket Prev { get; set; } // IntPtr.Size
+
         internal bool IsContinued
         {
             get => GetFlag(PacketFlags.User1);
             set => SetFlag(PacketFlags.User1, value);
         }
+
         internal bool IsContinuation
         {
             get => GetFlag(PacketFlags.User2);
             set => SetFlag(PacketFlags.User2, value);
         }
 
-        internal Packet(ContainerReader containerReader, long streamOffset, int length)
+        internal OggPacket(ContainerReader containerReader, long streamOffset, int length) 
             : base(length)
         {
             _containerReader = containerReader;
@@ -57,22 +45,18 @@ namespace NVorbis.Ogg
 
         internal void MergeWith(DataPacket continuation)
         {
-            var op = continuation as Packet;
-
-            if (op == null) throw new ArgumentException("Incorrect packet type!");
+            if (!(continuation is OggPacket op))
+                throw new ArgumentException("Incorrect packet type!", nameof(continuation));
 
             Length += continuation.Length;
 
             if (_mergedPacket == null)
-            {
                 _mergedPacket = op;
-            }
             else
-            {
                 _mergedPacket.MergeWith(continuation);
-            }
-
-            // per the spec, a partial packet goes with the next page's granulepos.  we'll go ahead and assign it to the next page as well
+            
+            // per the spec, a partial packet goes with the next page's granulepos. 
+            // we'll go ahead and assign it to the next page as well
             PageGranulePosition = continuation.PageGranulePosition;
             PageSequenceNumber = continuation.PageSequenceNumber;
         }
@@ -83,29 +67,24 @@ namespace NVorbis.Ogg
             ResetBitReader();
 
             if (_mergedPacket != null)
-            {
                 _mergedPacket.Reset();
-            }
         }
 
         protected override int ReadNextByte()
         {
             if (_curOfs == _length)
             {
-                if (_mergedPacket == null) return -1;
-
+                if (_mergedPacket == null) 
+                    return -1;
                 return _mergedPacket.ReadNextByte();
             }
 
             if (_data.IsEmpty)
-            {
                 _data = _containerReader.ReadPacketData(_offset, _length);
-            }
-
+            
             if (_curOfs < _data.Length)
-            {
                 return _data.Span[_curOfs++];
-            }
+
             return -1;
         }
     }

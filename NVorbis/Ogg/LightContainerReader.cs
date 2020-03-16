@@ -8,7 +8,7 @@ namespace NVorbis.Ogg
     /// </summary>
     public sealed class LightContainerReader : IContainerReader
     {
-        LightPageReader _reader;
+        private LightPageReader _reader;
 
         /// <summary>
         /// Gets the list of stream serials found in the container so far.
@@ -39,21 +39,21 @@ namespace NVorbis.Ogg
         /// Creates a new instance of <see cref="LightContainerReader"/>.
         /// </summary>
         /// <param name="stream">The <see cref="Stream"/> to read.</param>
-        /// <param name="closeOnDispose"><c>True</c> to close the stream when disposed, otherwise <c>false</c>.</param>
-        /// <exception cref="ArgumentException"><paramref name="stream"/>'s <see cref="Stream.CanSeek"/> is <c>False</c>.</exception>
-        public LightContainerReader(Stream stream, bool closeOnDispose)
+        /// <param name="leaveOpen"><c>false</c> to close the stream when disposed.</param>
+        /// <exception cref="ArgumentException">
+        /// <paramref name="stream"/>'s <see cref="Stream.CanSeek"/> is <c>false</c>.
+        /// </exception>
+        public LightContainerReader(Stream stream, bool leaveOpen)
         {
             if (!(stream ?? throw new ArgumentNullException(nameof(stream))).CanSeek)
-            {
                 throw new ArgumentException("Stream must be seek-able!", nameof(stream));
-            }
-            _reader = new LightPageReader(stream, closeOnDispose, NewStreamCallback);
+            _reader = new LightPageReader(stream, leaveOpen, NewStreamCallback);
         }
 
         /// <summary>
         /// Initializes the container and finds the first stream.
         /// </summary>
-        /// <returns><c>True</c> if a valid logical stream is found, otherwise <c>False</c>.</returns>
+        /// <returns><c>true</c> if a valid logical stream is found, otherwise <c>false</c>.</returns>
         public bool Init()
         {
             // if we find a stream at all, init was successful

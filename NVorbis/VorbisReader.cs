@@ -14,7 +14,6 @@ namespace NVorbis
 {
     public class VorbisReader : IDisposable
     {
-        private int _streamIndex;
         private IContainerReader _containerReader;
         private List<VorbisStreamDecoder> _decoders;
         private List<int> _serials;
@@ -28,8 +27,8 @@ namespace NVorbis
 
         }
 
-        public VorbisReader(string fileName)
-            : this(File.Open(fileName, FileMode.Open, FileAccess.Read, FileShare.Read), true)
+        public VorbisReader(string filePath)
+            : this(File.Open(filePath, FileMode.Open, FileAccess.Read, FileShare.Read), leaveOpen: false)
         {
         }
 
@@ -40,10 +39,7 @@ namespace NVorbis
             {
                 // oops, not Ogg!
                 // we don't support any other container types here, so error out
-                if (leaveOpen)
-                {
-                    stream.Close();
-                }
+                oggContainer.Dispose();
                 throw new InvalidDataException("Could not determine container type!");
             }
             _containerReader = oggContainer;
@@ -103,9 +99,8 @@ namespace NVorbis
             if (_decoders != null)
             {
                 foreach (var decoder in _decoders)
-                {
                     decoder.Dispose();
-                }
+                
                 _decoders.Clear();
                 _decoders = null;
             }
@@ -124,7 +119,7 @@ namespace NVorbis
             {
                 if (_decoders == null)
                     throw new ObjectDisposedException(GetType().FullName);
-                return _decoders[_streamIndex];
+                return _decoders[StreamIndex];
             }
         }
 
@@ -183,7 +178,7 @@ namespace NVorbis
         /// <summary>
         /// Gets the currently selected stream's index.
         /// </summary>
-        public int StreamIndex => _streamIndex;
+        public int StreamIndex { get; private set; }
 
         /// <summary>
         /// Gets stats from each available decoder stream.
@@ -207,11 +202,9 @@ namespace NVorbis
 
             if (ClipSamples)
             {
-                var decoder = _decoders[_streamIndex];
+                var decoder = _decoders[StreamIndex];
                 for (int i = 0; i < count; i++)
-                {
                     buffer[i] = Utils.ClipValue(buffer[i], ref decoder._clipped);
-                }
             }
 
             return count;
@@ -257,14 +250,15 @@ namespace NVorbis
             if (_decoders == null)
                 throw new ObjectDisposedException(GetType().FullName);
 
-            if (_streamIndex == index)
+            if (StreamIndex == index)
                 return false;
 
-            var curentDecoder = _decoders[_streamIndex];
-            _streamIndex = index;
-            var newDecoder = _decoders[_streamIndex];
+            var curentDecoder = _decoders[StreamIndex];
+            StreamIndex = index;
+            var newDecoder = _decoders[StreamIndex];
 
-            return curentDecoder._channels != newDecoder._channels || curentDecoder._sampleRate != newDecoder._sampleRate;
+            return curentDecoder._channels != newDecoder._channels 
+                || curentDecoder._sampleRate != newDecoder._sampleRate;
         }
 
         /// <summary>

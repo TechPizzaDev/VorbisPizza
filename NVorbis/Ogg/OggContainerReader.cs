@@ -16,10 +16,9 @@ namespace NVorbis.Ogg
     /// </summary>
     public class ContainerReader : IContainerReader
     {
-        private Crc _crc = new Crc();
         private Stream _stream;
-        private bool _closeOnDispose;
-        private Dictionary<int, PacketReader> _packetReaders;
+        private bool _leaveOpen;
+        private Dictionary<int, OggPacketReader> _packetReaders;
         private List<int> _disposedStreamSerials;
         private long _nextPageOffset;
         private int _pageCount;
@@ -42,7 +41,7 @@ namespace NVorbis.Ogg
         /// </summary>
         /// <param name="path">The full path to the file.</param>
         public ContainerReader(string path)
-            : this(File.Open(path, FileMode.Open, FileAccess.Read, FileShare.Read), true)
+            : this(File.Open(path, FileMode.Open, FileAccess.Read, FileShare.Read), leaveOpen: false)
         {
         }
 
@@ -50,14 +49,16 @@ namespace NVorbis.Ogg
         /// Creates a new instance with the specified stream.  Optionally sets to close the stream when disposed.
         /// </summary>
         /// <param name="stream">The stream to read.</param>
-        /// <param name="closeOnDispose"><c>True</c> to close the stream when <see cref="Dispose"/> is called, otherwise <c>False</c>.</param>
-        public ContainerReader(Stream stream, bool closeOnDispose)
+        /// <param name="leaveOpen">
+        /// <c>false</c> to close the stream when <see cref="Dispose"/> is called.
+        /// </param>
+        public ContainerReader(Stream stream, bool leaveOpen)
         {
-            _packetReaders = new Dictionary<int, PacketReader>();
+            _packetReaders = new Dictionary<int, OggPacketReader>();
             _disposedStreamSerials = new List<int>();
 
             _stream = stream ?? throw new ArgumentNullException(nameof(stream));
-            _closeOnDispose = closeOnDispose;
+            _leaveOpen = leaveOpen;
 
             if (!_stream.CanSeek)
                 throw new ArgumentException("The specified stream must be seek-able!", nameof(stream));
@@ -66,27 +67,10 @@ namespace NVorbis.Ogg
         /// <summary>
         /// Initializes the container and finds the first stream.
         /// </summary>
-        /// <returns><c>True</c> if a valid logical stream is found, otherwise <c>False</c>.</returns>
+        /// <returns><c>true</c> if a valid logical stream is found, otherwise <c>false</c>.</returns>
         public bool Init()
         {
             return GatherNextPage() != -1;
-        }
-
-        /// <summary>
-        /// Disposes this instance.
-        /// </summary>
-        public void Dispose()
-        {
-            // don't use _packetReaders directly since that'll change the enumeration...
-            foreach (var streamSerial in StreamSerials)
-                _packetReaders[streamSerial].Dispose();
-
-            _nextPageOffset = 0L;
-            _containerBits = 0L;
-            _wasteBits = 0L;
-
-            if (_closeOnDispose)
-                _stream.Dispose();
         }
 
         /// <summary>
@@ -97,10 +81,8 @@ namespace NVorbis.Ogg
         /// <exception cref="ArgumentOutOfRangeException">The specified stream serial was not found.</exception>
         public IPacketProvider GetStream(int streamSerial)
         {
-            if (!_packetReaders.TryGetValue(streamSerial, out PacketReader provider))
-            {
-                throw new ArgumentOutOfRangeException("streamSerial");
-            }
+            if (!_packetReaders.TryGetValue(streamSerial, out OggPacketReader provider))
+                throw new ArgumentOutOfRangeException(nameof(streamSerial));
             return provider;
         }
 
@@ -111,15 +93,13 @@ namespace NVorbis.Ogg
         public bool FindNextStream()
         {
             // goes through all the pages until the serial count increases
-            var cnt = this._packetReaders.Count;
-            while (this._packetReaders.Count == cnt)
+            int count = _packetReaders.Count;
+            while (_packetReaders.Count == count)
             {
                 if (GatherNextPage() == -1)
-                {
                     break;
-                }
             }
-            return cnt > this._packetReaders.Count;
+            return count > _packetReaders.Count;
         }
 
         /// <summary>
@@ -137,9 +117,7 @@ namespace NVorbis.Ogg
             while (true)
             {
                 if (GatherNextPage() == -1)
-                {
                     break;
-                }
             }
 
             return _pageCount;
@@ -155,12 +133,11 @@ namespace NVorbis.Ogg
         /// </summary>
         public long WasteBits => _wasteBits;
 
-
         // private implmentation bits
         private struct PageHeader
         {
             public int StreamSerial { get; set; }
-            public PageFlags Flags { get; set; }
+            public OggPageFlags Flags { get; set; }
             public long GranulePosition { get; set; }
             public int SequenceNumber { get; set; }
             public long DataOffset { get; set; }
@@ -175,7 +152,8 @@ namespace NVorbis.Ogg
             _stream.Seek(position, SeekOrigin.Begin);
 
             // header
-            // NB: if the stream didn't have an EOS flag, this is the most likely spot for the EOF to be found...
+            // NB: if the stream didn't have an EOS flag, 
+            // this is the most likely spot for the EOF to be found...
             if (_stream.Read(_readBuffer, 0, 27) != 27)
                 return null;
 
@@ -194,7 +172,7 @@ namespace NVorbis.Ogg
             var hdr = new PageHeader();
 
             // bit flags
-            hdr.Flags = (PageFlags)_readBuffer[5];
+            hdr.Flags = (OggPageFlags)_readBuffer[5];
 
             // granulePosition
             hdr.GranulePosition = BitConverter.ToInt64(_readBuffer, 6);
@@ -206,14 +184,13 @@ namespace NVorbis.Ogg
             hdr.SequenceNumber = BitConverter.ToInt32(_readBuffer, 18);
 
             // save off the CRC
-            var crc = BitConverter.ToUInt32(_readBuffer, 22);
+            var pageCrc = BitConverter.ToUInt32(_readBuffer, 22);
 
             // start calculating the CRC value for this page
-            _crc.Reset();
+            var _crc = new OggCrc();
             for (int i = 0; i < 22; i++)
-            {
                 _crc.Update(_readBuffer[i]);
-            }
+            
             _crc.Update(0);
             _crc.Update(0);
             _crc.Update(0);
@@ -233,7 +210,8 @@ namespace NVorbis.Ogg
                 var temp = _readBuffer[i];
                 _crc.Update(temp);
 
-                if (idx == packetSizes.Count) packetSizes.Add(0);
+                if (idx == packetSizes.Count)
+                    packetSizes.Add(0);
                 packetSizes[idx] += temp;
                 if (temp < 255)
                 {
@@ -257,7 +235,7 @@ namespace NVorbis.Ogg
                 _crc.Update(_readBuffer[i]);
             }
 
-            if (_crc.Test(crc))
+            if (_crc.Test(pageCrc))
             {
                 _containerBits += 8 * (27 + segCnt);
                 ++_pageCount;
@@ -327,8 +305,8 @@ namespace NVorbis.Ogg
         private bool AddPage(in PageHeader hdr)
         {
             // get our packet reader (create one if we have to)
-            if (!_packetReaders.TryGetValue(hdr.StreamSerial, out PacketReader packetReader))
-                packetReader = new PacketReader(this, hdr.StreamSerial);
+            if (!_packetReaders.TryGetValue(hdr.StreamSerial, out OggPacketReader packetReader))
+                packetReader = new OggPacketReader(this, hdr.StreamSerial);
 
             // save off the container bits
             packetReader.ContainerBits += _containerBits;
@@ -336,7 +314,7 @@ namespace NVorbis.Ogg
 
             // get our flags prepped
             var isContinued = hdr.PacketSizes.Length == 1 && hdr.LastPacketContinues;
-            var isContinuation = (hdr.Flags & PageFlags.ContinuesPacket) == PageFlags.ContinuesPacket;
+            var isContinuation = (hdr.Flags & OggPageFlags.ContinuesPacket) == OggPageFlags.ContinuesPacket;
             var isEOS = false;
             var isResync = hdr.IsResync;
 
@@ -345,7 +323,7 @@ namespace NVorbis.Ogg
             var cnt = hdr.PacketSizes.Length;
             foreach (var size in hdr.PacketSizes)
             {
-                var packet = new Packet(this, dataOffset, size)
+                var packet = new OggPacket(this, dataOffset, size)
                 {
                     PageGranulePosition = hdr.GranulePosition,
                     IsEndOfStream = isEOS,
@@ -367,11 +345,12 @@ namespace NVorbis.Ogg
                 if (--cnt == 1)
                 {
                     isContinued = hdr.LastPacketContinues;
-                    isEOS = (hdr.Flags & PageFlags.EndOfStream) == PageFlags.EndOfStream;
+                    isEOS = (hdr.Flags & OggPageFlags.EndOfStream) == OggPageFlags.EndOfStream;
                 }
             }
 
-            // if the packet reader list doesn't include the serial in question, add it to the list and indicate a new stream to the caller
+            // if the packet reader list doesn't include the serial in question, 
+            // add it to the list and indicate a new stream to the caller
             if (!_packetReaders.ContainsKey(hdr.StreamSerial))
             {
                 _packetReaders.Add(hdr.StreamSerial, packetReader);
@@ -396,7 +375,8 @@ namespace NVorbis.Ogg
                 var readHdr = hdr.GetValueOrDefault();
 
                 // if it's in a disposed stream, grab the next page instead
-                if (_disposedStreamSerials.Contains(readHdr.StreamSerial)) continue;
+                if (_disposedStreamSerials.Contains(readHdr.StreamSerial))
+                    continue;
 
                 // otherwise, add it
                 if (AddPage(readHdr))
@@ -405,7 +385,7 @@ namespace NVorbis.Ogg
                     if (callback != null)
                     {
                         var ea = new NewStreamEventArgs(_packetReaders[readHdr.StreamSerial]);
-                        callback(this, ea);
+                        callback.Invoke(this, ea);
                         if (ea.IgnoreStream)
                         {
                             _packetReaders[readHdr.StreamSerial].Dispose();
@@ -418,7 +398,7 @@ namespace NVorbis.Ogg
         }
 
         // packet reader bits...
-        internal void DisposePacketReader(PacketReader packetReader)
+        internal void DisposePacketReader(OggPacketReader packetReader)
         {
             _disposedStreamSerials.Add(packetReader.StreamSerial);
             _packetReaders.Remove(packetReader.StreamSerial);
@@ -436,12 +416,13 @@ namespace NVorbis.Ogg
         internal void GatherNextPage(int streamSerial)
         {
             if (!_packetReaders.ContainsKey(streamSerial))
-                throw new ArgumentOutOfRangeException("streamSerial");
+                throw new ArgumentOutOfRangeException(nameof(streamSerial));
 
             int nextSerial;
             do
             {
-                if (_packetReaders[streamSerial].HasEndOfStream) break;
+                if (_packetReaders[streamSerial].HasEndOfStream) 
+                    break;
 
                 nextSerial = GatherNextPage();
                 if (nextSerial == -1)
@@ -449,13 +430,28 @@ namespace NVorbis.Ogg
                     foreach (var reader in _packetReaders)
                     {
                         if (!reader.Value.HasEndOfStream)
-                        {
                             reader.Value.SetEndOfStream();
-                        }
                     }
                     break;
                 }
             } while (nextSerial != streamSerial);
+        }
+
+        /// <summary>
+        /// Disposes this reader and underlying packet readers.
+        /// </summary>
+        public void Dispose()
+        {
+            // don't use _packetReaders directly since that'll change the enumeration...
+            foreach (var streamSerial in StreamSerials)
+                _packetReaders[streamSerial].Dispose();
+
+            _nextPageOffset = 0L;
+            _containerBits = 0L;
+            _wasteBits = 0L;
+
+            if (!_leaveOpen)
+                _stream.Dispose();
         }
     }
 }

@@ -5,51 +5,40 @@
  * See COPYING for license terms (Ms-PL).                                   *
  *                                                                          *
  ***************************************************************************/
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 
 namespace NVorbis.Ogg
 {
-    class Crc
+    struct OggCrc
     {
         const uint CRC32_POLY = 0x04c11db7;
-        static uint[] crcTable = new uint[256];
+        static readonly uint[] _crcTable = new uint[256];
 
-        static Crc()
+        static OggCrc()
         {
-            for (uint i = 0; i < 256; i++)
+            for (uint i = 0; i < _crcTable.Length; i++)
             {
                 uint s = i << 24;
                 for (int j = 0; j < 8; ++j)
-                {
                     s = (s << 1) ^ (s >= (1U << 31) ? CRC32_POLY : 0);
-                }
-                crcTable[i] = s;
+                _crcTable[i] = s;
             }
         }
 
-        uint _crc;
-
-        public Crc()
-        {
-            Reset();
-        }
+        public uint Hash;
 
         public void Reset()
         {
-            _crc = 0U;
+            Hash = 0U;
         }
 
         public void Update(int nextVal)
         {
-            _crc = (_crc << 8) ^ crcTable[nextVal ^ (_crc >> 24)];
+            Hash = (Hash << 8) ^ _crcTable[nextVal ^ (Hash >> 24)];
         }
 
         public bool Test(uint checkCrc)
         {
-            return _crc == checkCrc;
+            return Hash == checkCrc;
         }
     }
 }

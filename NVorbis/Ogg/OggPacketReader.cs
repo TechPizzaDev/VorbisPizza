@@ -7,24 +7,18 @@
  ***************************************************************************/
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.IO;
 
 namespace NVorbis.Ogg
 {
     [System.Diagnostics.DebuggerTypeProxy(typeof(DebugView))]
-    class PacketReader : IPacketProvider
+    class OggPacketReader : IPacketProvider
     {
         class DebugView
         {
-            PacketReader _reader;
-
-            public DebugView(PacketReader reader)
-            {
-                if (reader == null) throw new ArgumentNullException("reader");
-                _reader = reader;
-            }
-
+            OggPacketReader _reader;
+            OggPacket _last, _first;
+            
             public ContainerReader Container => _reader._container;
             public int StreamSerial => _reader._streamSerial;
             public bool EndOfStreamFound => _reader._eosFound;
@@ -33,52 +27,51 @@ namespace NVorbis.Ogg
             {
                 get
                 {
-                    if (_reader._current == null) return -1;
-                    return Array.IndexOf(Packets, _reader._current);
+                    if (_reader._current == null)
+                        return -1;
+                    return Packets.IndexOf(_reader._current);
                 }
             }
 
-            Packet _last, _first;
-            Packet[] _packetList = new Packet[0];
-            public Packet[] Packets
+            public DebugView(OggPacketReader reader)
+            {
+                _reader = reader ?? throw new ArgumentNullException(nameof(reader));
+            }
+
+            public List<OggPacket> Packets
             {
                 get
                 {
-                    if (_reader._last == _last && _reader._first == _first)
-                    {
-                        return _packetList;
-                    }
-
+                    var packets = new List<OggPacket>();
+                    if (_reader._last == _last && 
+                        _reader._first == _first)
+                        return packets;
+                    
                     _last = _reader._last;
                     _first = _reader._first;
 
-                    var packets = new List<Packet>();
                     var node = _first;
                     while (node != null)
                     {
                         packets.Add(node);
                         node = node.Next;
                     }
-                    _packetList = packets.ToArray();
-                    return _packetList;
+                    return packets;
                 }
             }
         }
 
-        // IPacketProvider requires this, but we aren't using it
-#pragma warning disable 67  // disable the "unused" warning
         public event EventHandler<ParameterChangeEventArgs> ParameterChange;
-#pragma warning restore 67
 
         ContainerReader _container;
         int _streamSerial;
         bool _eosFound;
 
-        Packet _first, _current, _last;
+        OggPacket _first, _current, _last;
 
-        object _packetLock = new object();
+        readonly object _packetLock = new object();
 
-        internal PacketReader(ContainerReader container, int streamSerial)
+        internal OggPacketReader(ContainerReader container, int streamSerial)
         {
             _container = container;
             _streamSerial = streamSerial;
@@ -100,9 +93,9 @@ namespace NVorbis.Ogg
                 _first = null;
                 while (node.Next != null)
                 {
-                    var temp = node.Next;
+                    var tmp = node.Next;
                     node.Next = null;
-                    node = temp;
+                    node = tmp;
                     node.Prev = null;
                 }
             }
@@ -110,7 +103,7 @@ namespace NVorbis.Ogg
             _last = null;
         }
 
-        internal void AddPacket(Packet packet)
+        internal void AddPacket(OggPacket packet)
         {
             lock (_packetLock)
             {
@@ -121,42 +114,40 @@ namespace NVorbis.Ogg
                 if (packet.IsResync)
                 {
                     packet.IsContinuation = false;
-                    if (_last != null) _last.IsContinued = false;
+                    if (_last != null) 
+                        _last.IsContinued = false;
                 }
 
                 if (packet.IsContinuation)
                 {
                     // if we get here, the stream is invalid if there isn't a previous packet
-                    if (_last == null) throw new InvalidDataException();
+                    if (_last == null)
+                        throw new InvalidDataException();
 
                     // if the last packet isn't continued, something is wrong
-                    if (!_last.IsContinued) throw new InvalidDataException();
+                    if (!_last.IsContinued)
+                        throw new InvalidDataException();
 
                     _last.MergeWith(packet);
                     _last.IsContinued = packet.IsContinued;
                 }
                 else
                 {
-                    var p = packet as Packet;
-                    if (p == null) throw new ArgumentException("Wrong packet datatype", "packet");
-
                     if (_first == null)
                     {
                         // this is the first packet to add, so just set first & last to point at it
-                        _first = p;
-                        _last = p;
+                        _first = packet;
+                        _last = packet;
                     }
                     else
                     {
                         // swap the new packet in to the last position (remember, we're doubly-linked)
-                        _last = ((p.Prev = _last).Next = p);
+                        _last = ((packet.Prev = _last).Next = packet);
                     }
                 }
 
                 if (packet.IsEndOfStream)
-                {
                     SetEndOfStream();
-                }
             }
         }
 
@@ -201,10 +192,10 @@ namespace NVorbis.Ogg
             return PeekNextPacketInternal();
         }
 
-        Packet PeekNextPacketInternal()
+        OggPacket PeekNextPacketInternal()
         {
             // try to get the next packet in the sequence
-            Packet curPacket;
+            OggPacket curPacket;
             if (_current == null)
             {
                 curPacket = _first;
@@ -217,8 +208,9 @@ namespace NVorbis.Ogg
                     {
                         curPacket = _current.Next;
 
-                        // if we have a valid packet or we can't get any more, bail out of the loop
-                        if ((curPacket != null && !curPacket.IsContinued) || _eosFound) break;
+                        // break if we have a valid packet or we can't get any more
+                        if ((curPacket != null && !curPacket.IsContinued) || _eosFound) 
+                            break;
                     }
 
                     // we need another packet and we've not found the end of the stream...
@@ -229,7 +221,8 @@ namespace NVorbis.Ogg
             // if we're returning a packet, prep is for use
             if (curPacket != null)
             {
-                if (curPacket.IsContinued) throw new InvalidDataException("Packet is incomplete!");
+                if (curPacket.IsContinued) 
+                    throw new InvalidDataException("Packet is incomplete!");
                 curPacket.Reset();
             }
 
@@ -273,10 +266,12 @@ namespace NVorbis.Ogg
 
         public DataPacket GetPacket(int packetIndex)
         {
-            if (packetIndex < 0) throw new ArgumentOutOfRangeException("index");
+            if (packetIndex < 0) 
+                throw new ArgumentOutOfRangeException(nameof(packetIndex));
 
             // if _first is null, something is borked
-            if (_first == null) throw new InvalidOperationException("Packet reader has no packets!");
+            if (_first == null) 
+                throw new InvalidOperationException("Packet reader has no packets!");
 
             // starting from the beginning, count packets until we have the one we want...
             var packet = _first;
@@ -285,9 +280,7 @@ namespace NVorbis.Ogg
                 while (packet.Next == null)
                 {
                     if (_eosFound)
-                    {
-                        throw new ArgumentOutOfRangeException("index");
-                    }
+                        throw new ArgumentOutOfRangeException(nameof(packetIndex));
                     _container.GatherNextPage(_streamSerial);
                 }
 
@@ -298,7 +291,7 @@ namespace NVorbis.Ogg
             return packet;
         }
 
-        Packet GetLastPacketInPage(Packet packet)
+        OggPacket GetLastPacketInPage(OggPacket packet)
         {
             if (packet != null)
             {
@@ -310,21 +303,22 @@ namespace NVorbis.Ogg
 
                 if (packet != null && packet.IsContinued)
                 {
-                    // move to the *actual* last packet of the page... If .Prev is null, something is wrong and we can't seek anyway
+                    // move to the *actual* last packet of the page... 
+                    // If .Prev is null, something is wrong and we can't seek anyway
                     packet = packet.Prev;
                 }
             }
             return packet;
         }
 
-        Packet FindPacketInPage(Packet pagePacket, long targetGranulePos, Func<DataPacket, DataPacket, int> packetGranuleCountCallback)
+        OggPacket FindPacketInPage(
+            OggPacket pagePacket, long targetGranulePos, 
+            Func<DataPacket, DataPacket, int> packetGranuleCountCallback)
         {
             var lastPacketInPage = GetLastPacketInPage(pagePacket);
             if (lastPacketInPage == null)
-            {
                 return null;
-            }
-
+            
             // return the packet the granule position is in
             var packet = lastPacketInPage;
             do
@@ -333,18 +327,19 @@ namespace NVorbis.Ogg
                 {
                     // we don't know its length or position...
 
-                    // if it's the last packet in the page, it gets the page's granule position. Otherwise, calc it.
+                    // if it's the last packet in the page, 
+                    // it gets the page's granule position. Otherwise, calc it.
                     if (packet == lastPacketInPage)
-                    {
                         packet.GranulePosition = packet.PageGranulePosition;
-                    }
                     else
-                    {
                         packet.GranulePosition = packet.Next.GranulePosition - packet.Next.GranuleCount.Value;
-                    }
-
-                    // if it's the last packet in the stream, it might be a partial.  The spec says the last packet has to be on its own page, so if it is not assume the stream was truncated.
-                    if (packet == _last && _eosFound && packet.Prev.PageSequenceNumber < packet.PageSequenceNumber)
+                    
+                    // if it's the last packet in the stream, it might be a partial. 
+                    // The spec says the last packet has to be on its own page, 
+                    // so if it is not assume the stream was truncated.
+                    if (packet == _last &&
+                        _eosFound && 
+                        packet.Prev.PageSequenceNumber < packet.PageSequenceNumber)
                     {
                         packet.GranuleCount = (int)(packet.GranulePosition - packet.Prev.PageGranulePosition);
                     }
@@ -359,15 +354,15 @@ namespace NVorbis.Ogg
                     {
                         // probably the first data packet...
                         if (packet.GranulePosition > packet.Next.GranulePosition - packet.Next.GranuleCount)
-                        {
                             throw new InvalidOperationException("First data packet size mismatch");
-                        }
                         packet.GranuleCount = (int)packet.GranulePosition;
                     }
                 }
 
-                // we now know the granule position and count of the packet... is the target within that range?
-                if (targetGranulePos <= packet.GranulePosition && targetGranulePos > packet.GranulePosition - packet.GranuleCount)
+                // we now know the granule position and count of the packet... 
+                // is the target within that range?
+                if (targetGranulePos <= packet.GranulePosition &&
+                    targetGranulePos > packet.GranulePosition - packet.GranuleCount)
                 {
                     // make sure the previous packet has a position too
                     if (packet.Prev != null && !packet.Prev.GranuleCount.HasValue)
@@ -381,7 +376,8 @@ namespace NVorbis.Ogg
             } while (packet != null && packet.PageSequenceNumber == lastPacketInPage.PageSequenceNumber);
 
             // couldn't find it, but maybe that's because something glitched in the file...
-            // we're doing this in case there's a dicontinuity in the file...  It's not perfect, but it'll work
+            // we're doing this in case there's a dicontinuity in the file... 
+            // It's not perfect, but it'll work
             if (packet != null && packet.PageGranulePosition < targetGranulePos)
             {
                 packet.GranulePosition = packet.PageGranulePosition;
@@ -390,15 +386,18 @@ namespace NVorbis.Ogg
             return null;
         }
 
-        public DataPacket FindPacket(long granulePos, Func<DataPacket, DataPacket, int> packetGranuleCountCallback)
+        public DataPacket FindPacket(
+            long granulePos, Func<DataPacket, DataPacket, int> packetGranuleCountCallback)
         {
-            // This will find which packet contains the granule position being requested.  It is basically a linear search.
-            // Please note, the spec actually calls for a bisection search, but the result here should be the same.
+            // This will find which packet contains the granule position being requested. 
+            // It is basically a linear search. Please note, the spec actually calls for 
+            // a bisection search, but the result here should be the same.
 
             // don't look for any position before 0!
-            if (granulePos < 0) throw new ArgumentOutOfRangeException("granulePos");
+            if (granulePos < 0) 
+                throw new ArgumentOutOfRangeException(nameof(granulePos));
 
-            Packet foundPacket = null;
+            OggPacket foundPacket = null;
 
             // determine which direction to search from...
             var packet = _current ?? _first;
@@ -426,7 +425,9 @@ namespace NVorbis.Ogg
             else
             {
                 // reverse search (or we're looking at the same page)
-                while (packet.Prev != null && (granulePos <= packet.Prev.PageGranulePosition || packet.Prev.PageGranulePosition == -1))
+                while (packet.Prev != null && 
+                    (granulePos <= packet.Prev.PageGranulePosition ||
+                    packet.Prev.PageGranulePosition == -1))
                 {
                     packet = packet.Prev;
                 }
@@ -439,16 +440,19 @@ namespace NVorbis.Ogg
 
         public void SeekToPacket(DataPacket packet, int preRoll)
         {
-            if (preRoll < 0) throw new ArgumentOutOfRangeException("preRoll");
-            if (packet == null) throw new ArgumentNullException("granulePos");
-
-            var op = packet as Packet;
-            if (op == null) throw new ArgumentException("Incorrect packet type!", "packet");
+            if (packet == null)
+                throw new ArgumentNullException(nameof(packet));
+            if (preRoll < 0) 
+                throw new ArgumentOutOfRangeException(nameof(preRoll));
+            
+            if (!(packet is OggPacket op))
+                throw new ArgumentException("Incorrect packet type!", nameof(packet));
 
             while (--preRoll >= 0)
             {
                 op = op.Prev;
-                if (op == null) throw new ArgumentOutOfRangeException("preRoll");
+                if (op == null) 
+                    throw new ArgumentOutOfRangeException(nameof(preRoll));
             }
 
             // _current always points to the last packet returned by PeekNextPacketInternal

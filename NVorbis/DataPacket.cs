@@ -6,15 +6,13 @@
 *                                                                          *
 ***************************************************************************/
 using System;
-using System.Collections.Generic;
-using System.IO;
 
 namespace NVorbis
 {
     /// <summary>
     /// A single data packet from a logical Vorbis stream.
     /// </summary>
-    public abstract class DataPacket
+    public abstract partial class DataPacket
     {
         ulong _bitBucket;           // 8
         int _bitCount;              // 4
@@ -26,48 +24,6 @@ namespace NVorbis
         int _length;                // 4
         int _granuleCount;          // 4
         int _pageSequenceNumber;    // 4
-
-        /// <summary>
-        /// Defines flags to apply to the current packet
-        /// </summary>
-        [Flags]
-        // for now, let's use a byte... if we find we need more space, we can always expand it...
-        protected enum PacketFlags : byte
-        {
-            /// <summary>
-            /// Packet is first since reader had to resync with stream.
-            /// </summary>
-            IsResync = 0x01,
-            /// <summary>
-            /// Packet is the last in the logical stream.
-            /// </summary>
-            IsEndOfStream = 0x02,
-            /// <summary>
-            /// Packet does not have all its data available.
-            /// </summary>
-            IsShort = 0x04,
-            /// <summary>
-            /// Packet has a granule count defined.
-            /// </summary>
-            HasGranuleCount = 0x08,
-
-            /// <summary>
-            /// Flag for use by inheritors.
-            /// </summary>
-            User1 = 0x10,
-            /// <summary>
-            /// Flag for use by inheritors.
-            /// </summary>
-            User2 = 0x20,
-            /// <summary>
-            /// Flag for use by inheritors.
-            /// </summary>
-            User3 = 0x40,
-            /// <summary>
-            /// Flag for use by inheritors.
-            /// </summary>
-            User4 = 0x80,
-        }
 
         /// <summary>
         /// Gets the value of the specified flag.
@@ -111,15 +67,18 @@ namespace NVorbis
         }
 
         /// <summary>
-        /// Attempts to read the specified number of bits from the packet, but may return fewer.  Does not advance the position counter.
+        /// Attempts to read the specified number of bits from the packet, but may return fewer.  
+        /// Does not advance the position counter.
         /// </summary>
         /// <param name="count">The number of bits to attempt to read.</param>
         /// <param name="bitsRead">The number of bits actually read.</param>
         /// <returns>The value of the bits read.</returns>
-        /// <exception cref="ArgumentOutOfRangeException"><paramref name="count"/> is not between 0 and 64.</exception>
+        /// <exception cref="ArgumentOutOfRangeException">
+        /// <paramref name="count"/> is not between 0 and 64.
+        /// </exception>
         public ulong TryPeekBits(int count, out int bitsRead)
         {
-            if (count < 0 || count > 64) 
+            if (count < 0 || count > 64)
                 throw new ArgumentOutOfRangeException(nameof(count));
 
             if (count == 0)
@@ -325,14 +284,16 @@ namespace NVorbis
         /// </summary>
         /// <param name="count">The number of bits to read.</param>
         /// <returns>The value of the bits read.</returns>
-        /// <exception cref="ArgumentOutOfRangeException">The number of bits specified is not between 0 and 64.</exception>
+        /// <exception cref="ArgumentOutOfRangeException">
+        /// The number of bits specified is not between 0 and 64.
+        /// </exception>
         public ulong ReadBits(int count)
         {
             // short-circuit 0
             if (count == 0)
                 return 0UL;
-            
-            var value = TryPeekBits(count, out _);
+
+            ulong value = TryPeekBits(count, out _);
 
             SkipBits(count);
 
@@ -368,33 +329,30 @@ namespace NVorbis
 
             for (var i = 0; i < count; i++)
                 buf[i] = ReadByte();
-            
+
             return buf;
         }
 
         /// <summary>
-        /// Reads the specified number of bytes from the packet into the buffer specified and advances the position counter.
+        /// Reads the specified number of bytes from the packet into 
+        /// the buffer specified and advances the position counter.
         /// </summary>
         /// <param name="buffer">The buffer to read into.</param>
-        /// <param name="index">The index into the buffer to start placing the read data.</param>
-        /// <param name="count">The number of bytes to read.</param>
-        /// <returns>The number of bytes read.</returns>
-        /// <exception cref="ArgumentOutOfRangeException"><paramref name="index"/> is less than 0 or <paramref name="index"/> + <paramref name="count"/> is past the end of <paramref name="buffer"/>.</exception>
-        public int Read(byte[] buffer, int index, int count)
+        public int Read(Span<byte> buffer)
         {
-            if (index < 0 || index >= buffer.Length) throw new ArgumentOutOfRangeException("index");
-            if (count < 0 || index + count > buffer.Length) throw new ArgumentOutOfRangeException("count");
-            for (int i = 0; i < count; i++)
+            int index = 0;
+
+            // TODO: optimize by reading more at a time
+            for (int i = 0; i < buffer.Length; i++)
             {
-                byte val = (byte)TryPeekBits(8, out int cnt);
-                if (cnt == 0)
-                {
+                byte value = (byte)TryPeekBits(8, out int read);
+                if (read == 0)
                     return i;
-                }
-                buffer[index++] = val;
+                
+                buffer[index++] = value;
                 SkipBits(8);
             }
-            return count;
+            return buffer.Length;
         }
 
         /// <summary>

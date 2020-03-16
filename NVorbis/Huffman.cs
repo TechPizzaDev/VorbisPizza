@@ -13,7 +13,9 @@ namespace NVorbis
     {
         const int MAX_TABLE_BITS = 10;
 
-        static internal System.Collections.Generic.List<HuffmanListNode> BuildPrefixedLinkedList(System.Collections.Generic.IReadOnlyList<int> values, int[] lengthList, int[] codeList, out int tableBits, out HuffmanListNode firstOverflowNode)
+        static internal System.Collections.Generic.List<HuffmanListNode> BuildPrefixedLinkedList(
+            System.Collections.Generic.IReadOnlyList<int> values, int[] lengthList, int[] codeList, 
+            out int tableBits, out HuffmanListNode firstOverflowNode)
         {
             HuffmanListNode[] list = new HuffmanListNode[lengthList.Length];
 
@@ -27,10 +29,9 @@ namespace NVorbis
                     Bits = codeList[i],
                     Mask = (1 << lengthList[i]) - 1,
                 };
+
                 if (lengthList[i] > 0 && maxLen < lengthList[i])
-                {
                     maxLen = lengthList[i];
-                }
             }
 
             Array.Sort(list, 0, list.Length);
@@ -56,9 +57,8 @@ namespace NVorbis
                         {
                             var idx = (j << itemBits) | item.Bits;
                             while (prefixList.Count <= idx)
-                            {
                                 prefixList.Add(null);
-                            }
+                            
                             prefixList[idx] = item;
                         }
                     }
@@ -70,10 +70,8 @@ namespace NVorbis
             }
 
             while (prefixList.Count < 1 << tableBits)
-            {
                 prefixList.Add(null);
-            }
-
+            
             return prefixList;
         }
     }
@@ -90,12 +88,10 @@ namespace NVorbis
 
         int IComparable<HuffmanListNode>.CompareTo(HuffmanListNode other)
         {
-            var len = Length - other.Length;
-            if (len == 0)
-            {
+            int length = Length - other.Length;
+            if (length == 0)
                 return Bits - other.Bits;
-            }
-            return len;
+            return length;
         }
     }
 }
