@@ -190,7 +190,7 @@ namespace NVorbis.Ogg
             var _crc = new Crc32();
             for (int i = 0; i < 22; i++)
                 _crc.Update(_readBuffer[i]);
-            
+
             _crc.Update(0);
             _crc.Update(0);
             _crc.Update(0);
@@ -229,11 +229,11 @@ namespace NVorbis.Ogg
             hdr.DataOffset = position + 27 + segCnt;
 
             // now we have to go through every byte in the page
-            if (_stream.Read(_readBuffer, 0, size) != size) return null;
+            if (_stream.Read(_readBuffer, 0, size) != size)
+                return null;
+
             for (int i = 0; i < size; i++)
-            {
                 _crc.Update(_readBuffer[i]);
-            }
 
             if (_crc.Test(pageCrc))
             {
@@ -246,9 +246,8 @@ namespace NVorbis.Ogg
 
         private PageHeader? FindNextPageHeader()
         {
-            var startPos = _nextPageOffset;
-
-            var isResync = false;
+            long startPos = _nextPageOffset;
+            bool isResync = false;
             PageHeader? hdr;
             while ((hdr = ReadPageHeader(startPos)) == null)
             {
@@ -256,43 +255,49 @@ namespace NVorbis.Ogg
                 _wasteBits += 8;
                 _stream.Position = ++startPos;
 
-                var cnt = 0;
+                Span<byte> buf = stackalloc byte[4];
+                int read = _stream.Read(buf);
+                if (read != 4)
+                    return null;
+
+                int cnt = 0;
                 do
                 {
-                    var b = _stream.ReadByte();
-                    if (b == 0x4f)
+                    if (buf[0] == 0x4f)
                     {
-                        if (_stream.ReadByte() == 0x67)
+                        if (buf[1] == 0x67 &&
+                            buf[2] == 0x67 &&
+                            buf[3] == 0x53)
                         {
-                            if (_stream.ReadByte() == 0x67)
-                            {
-                                if (_stream.ReadByte() == 0x53)
-                                {
-                                    // found it!
-                                    startPos += cnt;
-                                    break;
-                                }
-                                _stream.Seek(-1, SeekOrigin.Current);
-                            }
-                            _stream.Seek(-1, SeekOrigin.Current);
+                            // found it!
+                            startPos += cnt;
+                            break;
                         }
-                        _stream.Seek(-1, SeekOrigin.Current);
                     }
-                    else if (b == -1)
+                    else
                     {
-                        return null;
+                        _wasteBits += 8;
                     }
-                    _wasteBits += 8;
 
-                    // we will only search through 64KB of data to find the next sync marker. 
-                    // if it can't be found, we have a badly corrupted stream.
-                } while (++cnt < 65536);
+                    int b = _stream.ReadByte();
+                    if (b == -1)
+                        return null;
 
-                if (cnt == 65536)
+                    // shift bytes back and add the fresh byte
+                    buf[0] = buf[1];
+                    buf[1] = buf[2];
+                    buf[2] = buf[3];
+                    buf[3] = (byte)b;
+                }
+                // we will only search through 64KB of data to find the next sync marker. 
+                // if it can't be found, we have a badly corrupted stream.
+                while (++cnt < 65536);
+
+                if (cnt >= 65536)
                     return null;
             }
 
-            var readHdr = hdr.GetValueOrDefault();
+            var readHdr = hdr.Value;
             readHdr.IsResync = isResync;
 
             _nextPageOffset = readHdr.DataOffset;
@@ -313,14 +318,14 @@ namespace NVorbis.Ogg
             _containerBits = 0;
 
             // get our flags prepped
-            var isContinued = hdr.PacketSizes.Length == 1 && hdr.LastPacketContinues;
-            var isContinuation = (hdr.Flags & OggPageFlags.ContinuesPacket) == OggPageFlags.ContinuesPacket;
-            var isEOS = false;
-            var isResync = hdr.IsResync;
+            bool isContinued = hdr.PacketSizes.Length == 1 && hdr.LastPacketContinues;
+            bool isContinuation = (hdr.Flags & OggPageFlags.ContinuesPacket) == OggPageFlags.ContinuesPacket;
+            bool isEOS = false;
+            bool isResync = hdr.IsResync;
 
             // add all the packets, making sure to update flags as needed
-            var dataOffset = hdr.DataOffset;
-            var cnt = hdr.PacketSizes.Length;
+            long dataOffset = hdr.DataOffset;
+            int cnt = hdr.PacketSizes.Length;
             foreach (var size in hdr.PacketSizes)
             {
                 var packet = new OggPacket(this, dataOffset, size)
@@ -372,7 +377,7 @@ namespace NVorbis.Ogg
                 if (hdr == null)
                     return -1;
 
-                var readHdr = hdr.GetValueOrDefault();
+                var readHdr = hdr.Value;
 
                 // if it's in a disposed stream, grab the next page instead
                 if (_disposedStreamSerials.Contains(readHdr.StreamSerial))
@@ -406,7 +411,7 @@ namespace NVorbis.Ogg
 
         internal Memory<byte> ReadPacketData(long offset, int size)
         {
-            _stream.Seek(offset, SeekOrigin.Begin);
+            _stream.Position = offset;
 
             var buffer = new byte[size];
             int read = _stream.Read(buffer);
@@ -421,7 +426,7 @@ namespace NVorbis.Ogg
             int nextSerial;
             do
             {
-                if (_packetReaders[streamSerial].HasEndOfStream) 
+                if (_packetReaders[streamSerial].HasEndOfStream)
                     break;
 
                 nextSerial = GatherNextPage();

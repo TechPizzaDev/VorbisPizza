@@ -7,7 +7,6 @@
  ***************************************************************************/
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Text;
 using System.IO;
 
@@ -68,7 +67,7 @@ namespace NVorbis
 
         bool _eosFound;
 
-        object _seekLock = new object();
+        readonly object _seekLock = new object();
 
         internal VorbisStreamDecoder(IVorbisPacketProvider packetProvider)
         {
@@ -115,11 +114,10 @@ namespace NVorbis
         {
             if (_packetProvider != null)
             {
-                var temp = _packetProvider;
-                _packetProvider = null;
-                temp.ParameterChange -= SetParametersChanging;
-                temp.Dispose();
+                _packetProvider.ParameterChange -= SetParametersChanging;
+                _packetProvider.Dispose();
             }
+            _packetProvider = null;
         }
 
         #region Header Decode
@@ -372,9 +370,7 @@ namespace NVorbis
 
                 _residue = new float[_channels][];
                 for (int i = 0; i < _channels; i++)
-                {
                     _residue[i] = new float[Block1Size];
-                }
 
                 _outputBuffer = new RingBuffer(Block1Size * 2 * _channels);
                 _outputBuffer.Channels = _channels;
@@ -416,7 +412,8 @@ namespace NVorbis
                 _prevFlag = _nextFlag = false;
             }
 
-            if (packet.IsShort) return false;
+            if (packet.IsShort)
+                return false;
 
             var startBits = packet.BitsRead;
 
@@ -450,9 +447,7 @@ namespace NVorbis
                 for (int j = 0; j < _channels; j++)
                 {
                     if (_mode.Mapping.ChannelSubmap[j] != subMap)
-                    {
                         _floorData[j].ForceNoEnergy = true;
-                    }
                 }
 
                 var rTemp = subMap.Residue.Decode(packet, _noExecuteChannel, _channels, _mode.BlockSize);
@@ -461,9 +456,7 @@ namespace NVorbis
                     var r = _residue[c];
                     var rt = rTemp[c];
                     for (int i = 0; i < halfBlockSize; i++)
-                    {
                         r[i] += rt[i];
-                    }
                 }
             }
 
@@ -485,7 +478,8 @@ namespace NVorbis
             var halfSizeW = _mode.BlockSize / 2;
             for (int i = steps.Length - 1; i >= 0; i--)
             {
-                if (_floorData[steps[i].Angle].ExecuteChannel || _floorData[steps[i].Magnitude].ExecuteChannel)
+                if (_floorData[steps[i].Angle].ExecuteChannel ||
+                    _floorData[steps[i].Magnitude].ExecuteChannel)
                 {
                     var magnitude = _residue[steps[i].Magnitude];
                     var angle = _residue[steps[i].Angle];
@@ -533,6 +527,7 @@ namespace NVorbis
             {
                 var floorData = _floorData[c];
                 var res = _residue[c];
+
                 if (floorData.ExecuteChannel)
                 {
                     _mode.Mapping.ChannelSubmap[c].Floor.Apply(floorData, res);
@@ -581,14 +576,12 @@ namespace NVorbis
             }
             // short blocks don't need any adjustments
 
-            var idx = _outputBuffer.Length / _channels + begin;
-            for (var c = 0; c < _channels; c++)
-            {
+            int idx = _outputBuffer.Length / _channels + begin;
+            for (int c = 0; c < _channels; c++)
                 _outputBuffer.Write(c, idx, left, center, right, _residue[c], window);
-            }
 
-            var newPrepLen = _outputBuffer.Length / _channels - end;
-            var samplesDecoded = newPrepLen - _preparedLength;
+            int newPrepLen = _outputBuffer.Length / _channels - end;
+            int samplesDecoded = newPrepLen - _preparedLength;
             _preparedLength = newPrepLen;
 
             return samplesDecoded;
@@ -602,7 +595,8 @@ namespace NVorbis
             {
                 // during a resync, we have to go through and watch for the next "marker"
                 _currentPosition = -packet.PageGranulePosition;
-                // _currentPosition will now be end of the page...  wait for the value to change, then go back and repopulate the granule positions accordingly...
+                // _currentPosition will now be end of the page...  
+                // wait for the value to change, then go back and repopulate the granule positions accordingly...
                 _resyncQueue.Push(packet);
             }
             else
@@ -617,14 +611,14 @@ namespace NVorbis
                         if (packet.PageGranulePosition > -_currentPosition)
                         {
                             // we now have a valid granuleposition...  populate the queued packets' GranulePositions
-                            var gp = _currentPosition - samplesDecoded;
+                            long gp = _currentPosition - samplesDecoded;
                             while (_resyncQueue.Count > 0)
                             {
                                 var pkt = _resyncQueue.Pop();
 
-                                var temp = pkt.GranulePosition + gp;
+                                long tmp = pkt.GranulePosition + gp;
                                 pkt.GranulePosition = gp;
-                                gp = temp;
+                                gp = tmp;
                             }
                         }
                         else
@@ -663,9 +657,7 @@ namespace NVorbis
                 // get the next packet
                 var packetProvider = _packetProvider;
                 if (packetProvider != null)
-                {
                     packet = packetProvider.GetNextPacket();
-                }
 
                 // if the packet is null, we've hit the end or the packet reader has been disposed...
                 if (packet == null)
@@ -679,9 +671,7 @@ namespace NVorbis
 
                 // check for resync
                 if (packet.IsResync)
-                {
                     ResetDecoder(false); // if we're a resync, our current decoder state is invalid...
-                }
 
                 // check for parameter change
                 if (packet == _parameterChangePacket)
@@ -702,20 +692,17 @@ namespace NVorbis
                 // we can now safely decode all the data without having to worry about a corrupt or partial packet
 
                 DecodePacket();
-                var samplesDecoded = OverlapSamples();
+                int samplesDecoded = OverlapSamples();
 
-                // we can do something cool here...  mark down how many samples were decoded in this packet
-                if (packet.GranuleCount.HasValue == false)
-                {
+                // we can do something cool here... mark down how many samples were decoded in this packet
+                if (!packet.GranuleCount.HasValue)
                     packet.GranuleCount = samplesDecoded;
-                }
 
                 // update our position
-
                 UpdatePosition(samplesDecoded, packet);
 
                 // a little statistical housekeeping...
-                var sc = Utils.Sum(_sampleCountHistory) + samplesDecoded;
+                int sc = Utils.Sum(_sampleCountHistory) + samplesDecoded;
 
                 _bitsPerPacketHistory.Enqueue((int)packet.BitsRead);
                 _sampleCountHistory.Enqueue(samplesDecoded);
@@ -728,10 +715,7 @@ namespace NVorbis
             }
             catch
             {
-                if (packet != null)
-                {
-                    packet.Done();
-                }
+                packet?.Done();
                 throw;
             }
             finally
@@ -742,21 +726,27 @@ namespace NVorbis
 
         internal int GetPacketLength(VorbisDataPacket curPacket, VorbisDataPacket lastPacket)
         {
-            // if we don't have a previous packet, or we're re-syncing, this packet has no audio data to return
-            if (lastPacket == null || curPacket.IsResync) return 0;
+            // if we don't have a previous packet, or we're re-syncing,
+            // this packet has no audio data to return
+            if (lastPacket == null || curPacket.IsResync)
+                return 0;
 
             // make sure they are audio packets
-            if (curPacket.ReadBit()) return 0;
-            if (lastPacket.ReadBit()) return 0;
+            if (curPacket.ReadBit())
+                return 0;
+            if (lastPacket.ReadBit())
+                return 0;
 
             // get the current packet's information
-            var modeIdx = (int)curPacket.ReadBits(_modeFieldBits);
-            if (modeIdx < 0 || modeIdx >= Modes.Length) return 0;
+            int modeIdx = (int)curPacket.ReadBits(_modeFieldBits);
+            if (modeIdx < 0 || modeIdx >= Modes.Length)
+                return 0;
             var mode = Modes[modeIdx];
 
             // get the last packet's information
             modeIdx = (int)lastPacket.ReadBits(_modeFieldBits);
-            if (modeIdx < 0 || modeIdx >= Modes.Length) return 0;
+            if (modeIdx < 0 || modeIdx >= Modes.Length)
+                return 0;
             var prevMode = Modes[modeIdx];
 
             // now calculate the totals...
@@ -768,7 +758,6 @@ namespace NVorbis
         internal int ReadSamples(Span<float> buffer)
         {
             int samplesRead = 0;
-
             int count = buffer.Length;
 
             lock (_seekLock)
@@ -777,7 +766,7 @@ namespace NVorbis
                 if (_prevBuffer != null)
                 {
                     // get samples from the previous buffer's data
-                    var cnt = Math.Min(count, _prevBuffer.Length);
+                    int cnt = Math.Min(count, _prevBuffer.Length);
                     _prevBuffer.AsSpan(0, cnt).CopyTo(buffer);
 
                     // if we have samples left over, rebuild the previous buffer array...
@@ -921,7 +910,8 @@ namespace NVorbis
 
         public void ResetStats()
         {
-            // only reset the stream info...  don't mess with the container, book, and hdr bits...
+            // only reset the stream info... 
+            // don't mess with the container, book, and hdr bits...
 
             _clipped = false;
             _packetCount = 0;
@@ -938,10 +928,10 @@ namespace NVorbis
         {
             get
             {
-                if (_samples == 0L) return 0;
+                if (_samples == 0L) 
+                    return 0;
 
-                var decodedSeconds = (double)(_currentPosition - _preparedLength) / _sampleRate;
-
+                double decodedSeconds = (double)(_currentPosition - _preparedLength) / _sampleRate;
                 return (int)(AudioBits / decodedSeconds);
             }
         }
@@ -950,15 +940,11 @@ namespace NVorbis
         {
             get
             {
-                var samples = _sampleCountHistory.Sum();
+                int samples = Utils.Sum(_sampleCountHistory);
                 if (samples > 0)
-                {
-                    return (int)((long)_bitsPerPacketHistory.Sum() * _sampleRate / samples);
-                }
+                    return (int)((long)Utils.Sum(_bitsPerPacketHistory) * _sampleRate / samples);
                 else
-                {
                     return -1;
-                }
             }
         }
 

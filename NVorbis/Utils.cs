@@ -85,7 +85,9 @@ namespace NVorbis
             return mantissa * System.MathF.Pow(2f, exponent);
         }
 
-        // this is a no-allocation way to sum an int queue
+        /// <summary>
+        /// No-allocation way to sum an int queue.
+        /// </summary>
         public static int Sum(System.Collections.Generic.Queue<int> queue)
         {
             int sum = 0;
