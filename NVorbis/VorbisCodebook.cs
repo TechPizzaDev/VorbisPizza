@@ -110,14 +110,14 @@ namespace NVorbis
 
                 if (values != null)
                 {
-                    PrefixList = Huffman.BuildPrefixedLinkedList(
-                        values, lengths, codewords, out PrefixBitLength, out PrefixOverflowTree);
+                    (InitialPrefixList, PrefixList) = Huffman.BuildPrefixedLinkedList(
+                        values, lengths, codewords, out PrefixBitLength, out PrefixOverflowTreeIndex);
                 }
                 else
                 {
-                    PrefixList = Huffman.BuildPrefixedLinkedList(
+                    (InitialPrefixList, PrefixList) = Huffman.BuildPrefixedLinkedList(
                         new Int32Range(0, codewords.Length),
-                        lengths, codewords, out PrefixBitLength, out PrefixOverflowTree);
+                        lengths, codewords, out PrefixBitLength, out PrefixOverflowTreeIndex);
                 }
             }
         }
@@ -191,31 +191,31 @@ namespace NVorbis
             if (MapType == 0)
                 return;
 
-            var minValue = Utils.ConvertFromVorbisFloat32(packet.ReadUInt32());
-            var deltaValue = Utils.ConvertFromVorbisFloat32(packet.ReadUInt32());
-            var valueBits = (int)packet.ReadBits(4) + 1;
-            var sequence_p = packet.ReadBit();
+            float minValue = Utils.ConvertFromVorbisFloat32(packet.ReadUInt32());
+            float deltaValue = Utils.ConvertFromVorbisFloat32(packet.ReadUInt32());
+            int valueBits = (int)packet.ReadBits(4) + 1;
+            bool sequence_p = packet.ReadBit();
 
-            var lookupValueCount = Entries * Dimensions;
+            int lookupValueCount = Entries * Dimensions;
             var lookupTable = new float[lookupValueCount];
             if (MapType == 1)
                 lookupValueCount = Lookup1_values();
             
             var multiplicands = new uint[lookupValueCount];
-            for (var i = 0; i < lookupValueCount; i++)
+            for (int i = 0; i < lookupValueCount; i++)
                 multiplicands[i] = (uint)packet.ReadBits(valueBits);
             
             // now that we have the initial data read in, calculate the entry tree
             if (MapType == 1)
             {
-                for (var idx = 0; idx < Entries; idx++)
+                for (int idx = 0; idx < Entries; idx++)
                 {
-                    var last = 0.0;
-                    var idxDiv = 1;
-                    for (var i = 0; i < Dimensions; i++)
+                    double last = 0.0;
+                    int idxDiv = 1;
+                    for (int i = 0; i < Dimensions; i++)
                     {
-                        var moff = (idx / idxDiv) % lookupValueCount;
-                        var value = multiplicands[moff] * deltaValue + minValue + last;
+                        int moff = (idx / idxDiv) % lookupValueCount;
+                        double value = multiplicands[moff] * deltaValue + minValue + last;
                         lookupTable[idx * Dimensions + i] = (float)value;
 
                         if (sequence_p) 
@@ -227,13 +227,13 @@ namespace NVorbis
             }
             else
             {
-                for (var idx = 0; idx < Entries; idx++)
+                for (int idx = 0; idx < Entries; idx++)
                 {
-                    var last = 0.0;
-                    var moff = idx * Dimensions;
+                    double last = 0.0;
+                    int moff = idx * Dimensions;
                     for (var i = 0; i < Dimensions; i++)
                     {
-                        var value = multiplicands[moff] * deltaValue + minValue + last;
+                        double value = multiplicands[moff] * deltaValue + minValue + last;
                         lookupTable[idx * Dimensions + i] = (float)value;
 
                         if (sequence_p) 
@@ -258,30 +258,20 @@ namespace NVorbis
         }
 
         internal int BookNum;
-
         internal int Dimensions;
-
         internal int Entries;
 
         int[] Lengths;
-
         float[] LookupTable;
-
         internal int MapType;
 
-        HuffmanListNode PrefixOverflowTree;
-        List<HuffmanListNode> PrefixList;
+        int? PrefixOverflowTreeIndex;
+        HuffmanListNode[] InitialPrefixList;
+        HuffmanListNode[] PrefixList;
         int PrefixBitLength;
         int MaxBits;
 
-
-        internal float this[int entry, int dim]
-        {
-            get
-            {
-                return LookupTable[entry * Dimensions + dim];
-            }
-        }
+        internal float this[int entry, int dim] => LookupTable[entry * Dimensions + dim];
 
         internal int DecodeScalar(VorbisDataPacket packet)
         {
@@ -291,7 +281,7 @@ namespace NVorbis
 
             // try to get the value from the prefix list...
             var node = PrefixList[bits];
-            if (node != null)
+            if (node.IsValid)
             {
                 packet.SkipBits(node.Length);
                 return node.Value;
@@ -300,15 +290,19 @@ namespace NVorbis
             // nope, not possible... run the tree
             bits = (int)packet.TryPeekBits(MaxBits, out _);
 
-            node = PrefixOverflowTree;
+            node = InitialPrefixList[PrefixOverflowTreeIndex.Value];
+            int nodeIndex = -1;
             do
             {
+                if (nodeIndex != -1)
+                    node = InitialPrefixList[nodeIndex];
+
                 if (node.Bits == (bits & node.Mask))
                 {
                     packet.SkipBits(node.Length);
                     return node.Value;
                 }
-            } while ((node = node.Next) != null);
+            } while ((nodeIndex = node.NextIndex) != -1);
             return -1;
         }
     }

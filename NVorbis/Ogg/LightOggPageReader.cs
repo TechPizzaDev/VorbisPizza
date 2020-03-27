@@ -69,23 +69,21 @@ namespace NVorbis.Ogg
         internal bool ReadNextPage()
         {
             // make sure we're locked; no sense reading if we aren't
-            if (!CheckLock()) 
+            if (!CheckLock())
                 throw new InvalidOperationException("Must be locked prior to reading!");
 
             IsResync = false;
             _stream.Position = _nextPageOffset;
-            var ofs = 0;
+            int ofs = 0;
             int cnt;
             while ((cnt = _stream.Read(_headerBuf, ofs, _headerBuf.Length - ofs)) > 0)
             {
                 cnt += ofs;
-                for (var i = 0; i < cnt - 4; i++)
+                for (int i = 0; i < cnt - 4; i++)
                 {
                     // look for the capture sequence
-                    if (_headerBuf[i] == 0x4f &&
-                        _headerBuf[i + 1] == 0x67 && 
-                        _headerBuf[i + 2] == 0x67 &&
-                        _headerBuf[i + 3] == 0x53)
+                    var sigSpan = _headerBuf.AsSpan(i, 4);
+                    if (sigSpan.SequenceEqual(OggContainerReader.OggsHeader.Span))
                     {
                         // cool, found it...
 
@@ -102,13 +100,13 @@ namespace NVorbis.Ogg
                         }
 
                         // note the file offset
-                        var pageOffset = _stream.Position - cnt;
+                        long pageOffset = _stream.Position - cnt;
 
                         // try to make sure we have enough in the buffer
                         cnt += _stream.Read(_headerBuf, cnt, _headerBuf.Length - cnt);
 
                         // try to load the page
-                        if (CheckPage(pageOffset, out var packetCount, out var nextPageOffset))
+                        if (CheckPage(pageOffset, out short packetCount, out long nextPageOffset))
                         {
                             // good packet!
                             PacketCount = packetCount;
@@ -141,6 +139,10 @@ namespace NVorbis.Ogg
 
                         // meh, just reset the stream position to where it was before we tried that page
                         _stream.Position = pageOffset + cnt;
+                    }
+                    else if (sigSpan.SequenceEqual(OggContainerReader.RiffHeader.Span))
+                    {
+                        throw new NotImplementedException("RIFF is currently not supported.");
                     }
                 }
 
@@ -175,8 +177,7 @@ namespace NVorbis.Ogg
                 byte segCount = _headerBuf[26];
 
                 var crc = new Crc32();
-                for (var j = 0; j < 22; j++)
-                    crc.Update(_headerBuf[j]);
+                crc.Update(_headerBuf.AsSpan(0, 22));
                 crc.Update(0);
                 crc.Update(0);
                 crc.Update(0);
@@ -188,10 +189,9 @@ namespace NVorbis.Ogg
                 var pktLen = 0;
                 packetCount = 0;
 
-                for (var j = 0; j < segCount; j++)
+                for (int j = 0; j < segCount; j++)
                 {
-                    var segLen = _headerBuf[27 + j];
-                    crc.Update(segLen);
+                    byte segLen = _headerBuf[27 + j];
                     pktLen += segLen;
                     dataLen += segLen;
                     if (segLen < 255 || j == segCount - 1)
@@ -203,6 +203,7 @@ namespace NVorbis.Ogg
                         }
                     }
                 }
+                crc.Update(_headerBuf.AsSpan(27, segCount));
 
                 // finish calculating the CRC
                 _stream.Position = pageOffset + 27 + segCount;
@@ -212,10 +213,9 @@ namespace NVorbis.Ogg
                     nextPageOffset = 0;
                     return false;
                 }
-                
-                for (var j = 0; j < dataLen; j++)
-                    crc.Update(_dataBuf[j]);
-                
+
+                crc.Update(_dataBuf.AsSpan(0, dataLen));
+
                 if (crc.Test(pageCrc))
                 {
                     // cool, we have a valid page!
@@ -239,7 +239,7 @@ namespace NVorbis.Ogg
                 if (_ignoredSerials.Contains(StreamSerial))
                     // nevermind... we're supposed to ignore these
                     return false;
-                
+
                 var packetProvider = new LightOggPacketProvider(this);
                 _packetProviders.Add(StreamSerial, packetProvider);
 
@@ -282,7 +282,7 @@ namespace NVorbis.Ogg
         private bool DecodeHeader()
         {
             if (_headerBuf[0] == 0x4f &&
-                _headerBuf[1] == 0x67 && 
+                _headerBuf[1] == 0x67 &&
                 _headerBuf[2] == 0x67 &&
                 _headerBuf[3] == 0x53 &&
                 _headerBuf[4] == 0)
@@ -340,11 +340,11 @@ namespace NVorbis.Ogg
 
         internal void ReadAllPages()
         {
-            if (!CheckLock()) 
+            if (!CheckLock())
                 throw new InvalidOperationException("Must be locked!");
 
-            while (ReadNextPage()) 
-            { 
+            while (ReadNextPage())
+            {
             }
         }
 

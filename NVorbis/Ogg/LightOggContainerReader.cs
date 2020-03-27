@@ -69,13 +69,11 @@ namespace NVorbis.Ogg
             _reader.Lock();
             try
             {
-                var cnt = _reader.FoundStreams;
+                int cnt = _reader.FoundStreams;
                 while (_reader.ReadNextPage())
                 {
                     if (cnt < _reader.FoundStreams)
-                    {
                         return true;
-                    }
                 }
                 return false;
             }
@@ -96,9 +94,7 @@ namespace NVorbis.Ogg
             finally
             {
                 if (relock)
-                {
                     _reader.Lock();
-                }
             }
             return !ea.IgnoreStream;
         }

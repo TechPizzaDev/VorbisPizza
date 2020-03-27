@@ -16,6 +16,9 @@ namespace NVorbis.Ogg
     /// </summary>
     public class OggContainerReader : IVorbisContainerReader
     {
+        internal static ReadOnlyMemory<byte> OggsHeader { get; } = new byte[4] { 0x4f, 0x67, 0x67, 0x53 };
+        internal static ReadOnlyMemory<byte> RiffHeader { get; } = new byte[4] { 82, 73, 70, 70 };
+
         private Stream _stream;
         private bool _leaveOpen;
         private Dictionary<int, OggPacketReader> _packetReaders;
@@ -141,7 +144,7 @@ namespace NVorbis.Ogg
             public long GranulePosition { get; set; }
             public int SequenceNumber { get; set; }
             public long DataOffset { get; set; }
-            public int[] PacketSizes { get; set; }
+            public Memory<int> PacketSizes { get; set; }
             public bool LastPacketContinues { get; set; }
             public bool IsResync { get; set; }
         }
@@ -158,11 +161,14 @@ namespace NVorbis.Ogg
                 return null;
 
             // capture signature
-            if (_readBuffer[0] != 0x4f ||
-                _readBuffer[1] != 0x67 ||
-                _readBuffer[2] != 0x67 ||
-                _readBuffer[3] != 0x53)
+            var sigSpan = _readBuffer.AsSpan(0, 4);
+            if (!sigSpan.SequenceEqual(OggsHeader.Span))
+            {
+                if (sigSpan.SequenceEqual(RiffHeader.Span))
+                    throw new NotImplementedException("RIFF is currently not supported.");
+
                 return null;
+            }
 
             // check the stream version
             if (_readBuffer[4] != 0)
@@ -188,9 +194,7 @@ namespace NVorbis.Ogg
 
             // start calculating the CRC value for this page
             var _crc = new Crc32();
-            for (int i = 0; i < 22; i++)
-                _crc.Update(_readBuffer[i]);
-
+            _crc.Update(_readBuffer.AsSpan(0, 22));
             _crc.Update(0);
             _crc.Update(0);
             _crc.Update(0);
@@ -198,42 +202,43 @@ namespace NVorbis.Ogg
             _crc.Update(_readBuffer[26]);
 
             // figure out the length of the page
-            var segCnt = (int)_readBuffer[26];
+            int segCnt = (int)_readBuffer[26];
             if (_stream.Read(_readBuffer, 0, segCnt) != segCnt)
                 return null;
 
-            var packetSizes = new List<int>(segCnt);
+            var packetSizes = new int[segCnt];
+            int packetSizeCount = 0;
 
             int size = 0, idx = 0;
             for (int i = 0; i < segCnt; i++)
             {
-                var temp = _readBuffer[i];
-                _crc.Update(temp);
+                if (packetSizeCount == idx)
+                    packetSizeCount++;
 
-                if (idx == packetSizes.Count)
-                    packetSizes.Add(0);
-                packetSizes[idx] += temp;
-                if (temp < 255)
+                byte tmp = _readBuffer[i];
+                packetSizes[idx] += tmp;
+                size += tmp;
+
+                if (tmp < 255)
                 {
-                    ++idx;
+                    idx++;
                     hdr.LastPacketContinues = false;
                 }
                 else
                 {
                     hdr.LastPacketContinues = true;
                 }
-
-                size += temp;
             }
-            hdr.PacketSizes = packetSizes.ToArray();
+            _crc.Update(_readBuffer.AsSpan(0, segCnt));
+
+            hdr.PacketSizes = packetSizes.AsMemory(0, packetSizeCount);
             hdr.DataOffset = position + 27 + segCnt;
 
             // now we have to go through every byte in the page
             if (_stream.Read(_readBuffer, 0, size) != size)
                 return null;
 
-            for (int i = 0; i < size; i++)
-                _crc.Update(_readBuffer[i]);
+            _crc.Update(_readBuffer.AsSpan(0, size));
 
             if (_crc.Test(pageCrc))
             {
@@ -301,8 +306,8 @@ namespace NVorbis.Ogg
             readHdr.IsResync = isResync;
 
             _nextPageOffset = readHdr.DataOffset;
-            for (int i = 0; i < readHdr.PacketSizes.Length; i++)
-                _nextPageOffset += readHdr.PacketSizes[i];
+            foreach (int packetSize in readHdr.PacketSizes.Span)
+                _nextPageOffset += packetSize;
 
             return readHdr;
         }
@@ -326,7 +331,7 @@ namespace NVorbis.Ogg
             // add all the packets, making sure to update flags as needed
             long dataOffset = hdr.DataOffset;
             int cnt = hdr.PacketSizes.Length;
-            foreach (var size in hdr.PacketSizes)
+            foreach (int size in hdr.PacketSizes.Span)
             {
                 var packet = new OggPacket(this, dataOffset, size)
                 {
