@@ -15,8 +15,8 @@ namespace NVorbis.Ogg
         int _length;                          // 4
         int _curOfs;                          // 4
         OggPacket _mergedPacket;              // IntPtr.Size
-        OggContainerReader _containerReader;     // IntPtr.Size
-        ReadOnlyMemory<byte> _data;           // sizeof(ReadOnlyMemory<byte>) + data
+        OggContainerReader _containerReader;  // IntPtr.Size
+        ReadOnlyMemory<byte> _data;           // sizeof(ReadOnlyMemory<byte>)
 
         internal OggPacket Next { get; set; } // IntPtr.Size
         internal OggPacket Prev { get; set; } // IntPtr.Size

@@ -13,14 +13,16 @@ namespace NVorbis
     {
         internal static VorbisTime Init(VorbisStreamDecoder vorbis, VorbisDataPacket packet)
         {
-            var type = (int)packet.ReadBits(16);
+            ulong type = packet.ReadBits(16);
 
             VorbisTime time = null;
             switch (type)
             {
                 case 0: time = new Time0(vorbis); break;
             }
-            if (time == null) throw new InvalidDataException();
+
+            if (time == null) 
+                throw new InvalidDataException();
 
             time.Init(packet);
             return time;
@@ -37,11 +39,12 @@ namespace NVorbis
 
         class Time0 : VorbisTime
         {
-            internal Time0(VorbisStreamDecoder vorbis) : base(vorbis) { }
+            internal Time0(VorbisStreamDecoder vorbis) : base(vorbis) 
+            {
+            }
 
             protected override void Init(VorbisDataPacket packet)
             {
-                
             }
         }
     }

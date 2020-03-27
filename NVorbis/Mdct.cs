@@ -141,13 +141,13 @@ namespace NVorbis
                 // step 2
 
                 {
-                    var AA = _n2 - 8;    // A
+                    int AA = _n2 - 8;    // A
 
-                    var e0 = _n4;        // v
-                    var e1 = 0;         // v
+                    int e0 = _n4;        // v
+                    int e1 = 0;         // v
 
-                    var d0 = _n4;        // u
-                    var d1 = 0;         // u
+                    int d0 = _n4;        // u
+                    int d1 = 0;         // u
 
                     while (AA >= 0)
                     {
@@ -189,28 +189,27 @@ namespace NVorbis
                 Step3_inner_r_loop(_n >> 5, u, _n2 - 1 - _n8 * 3, -(_n >> 4), 16);
 
                 // iterations 2 ... x
-                var l = 2;
+                int l = 2;
                 for (; l < (_ld - 3) / 2; ++l)
                 {
-                    var k0 = _n >> (l + 2);
-                    var k0_2 = k0 / 2;
-                    var lim = 1 << (l + 1);
+                    int k0 = _n >> (l + 2);
+                    int k0_2 = k0 / 2;
+                    int lim = 1 << (l + 1);
+
                     for (int i = 0; i < lim; ++i)
-                    {
                         Step3_inner_r_loop(_n >> (l + 4), u, _n2 - 1 - k0 * i, -k0_2, 1 << (l + 3));
-                    }
                 }
 
                 // iterations x ... end
                 for (; l < _ld - 6; ++l)
                 {
-                    var k0 = _n >> (l + 2);
-                    var k1 = 1 << (l + 3);
-                    var k0_2 = k0 / 2;
-                    var rlim = _n >> (l + 6);
-                    var lim = 1 << l + 1;
-                    var i_off = _n2 - 1;
-                    var A0 = 0;
+                    int k0 = _n >> (l + 2);
+                    int k1 = 1 << (l + 3);
+                    int k0_2 = k0 / 2;
+                    int rlim = _n >> (l + 6);
+                    int lim = 1 << l + 1;
+                    int i_off = _n2 - 1;
+                    int A0 = 0;
 
                     for (int r = rlim; r > 0; --r)
                     {
@@ -225,10 +224,10 @@ namespace NVorbis
 
                 // steps 4, 5, and 6
                 {
-                    var bit = 0;
+                    int bit = 0;
+                    int d0 = _n4 - 4;    // v
+                    int d1 = _n2 - 4;    // v
 
-                    var d0 = _n4 - 4;    // v
-                    var d1 = _n2 - 4;    // v
                     while (d0 >= 0)
                     {
                         int k4;
@@ -253,9 +252,9 @@ namespace NVorbis
 
                 // step 7
                 {
-                    var c = 0;      // C
-                    var d = 0;      // v
-                    var e = _n2 - 4; // v
+                    int c = 0;      // C
+                    int d = 0;      // v
+                    int e = _n2 - 4; // v
 
                     while (d < e)
                     {
@@ -297,12 +296,13 @@ namespace NVorbis
 
                 // step 8 + decode
                 {
-                    var b = _n2 - 8; // B
-                    var e = _n2 - 8; // buf2
-                    var d0 = 0;     // buffer
-                    var d1 = _n2 - 4;// buffer
-                    var d2 = _n2;    // buffer
-                    var d3 = _n - 4; // buffer
+                    int b = _n2 - 8; // B
+                    int e = _n2 - 8; // buf2
+                    int d0 = 0;      // buffer
+                    int d1 = _n2 - 4;// buffer
+                    int d2 = _n2;    // buffer
+                    int d3 = _n - 4; // buffer
+
                     while (e >= 0)
                     {
                         float p0, p1, p2, p3;
@@ -357,9 +357,10 @@ namespace NVorbis
 
         void Step3_iter0_loop(int n, float[] e, int i_off, int k_off)
         {
-            var ee0 = i_off;        // e
-            var ee2 = ee0 + k_off;  // e
-            var a = 0;
+            int ee0 = i_off;        // e
+            int ee2 = ee0 + k_off;  // e
+            int a = 0;
+
             for (int i = n >> 2; i > 0; --i)
             {
                 float k00_20, k01_21;
@@ -405,8 +406,8 @@ namespace NVorbis
         {
             float k00_20, k01_21;
 
-            var e0 = d0;            // e
-            var e2 = e0 + k_off;    // e
+            int e0 = d0;            // e
+            int e2 = e0 + k_off;    // e
             int a = 0;
 
             for (int i = lim >> 2; i > 0; --i)
@@ -454,19 +455,19 @@ namespace NVorbis
 
         void Step3_inner_s_loop(int n, float[] e, int i_off, int k_off, int a, int a_off, int k0)
         {
-            var A0 = _A[a];
-            var A1 = _A[a + 1];
-            var A2 = _A[a + a_off];
-            var A3 = _A[a + a_off + 1];
-            var A4 = _A[a + a_off * 2];
-            var A5 = _A[a + a_off * 2 + 1];
-            var A6 = _A[a + a_off * 3];
-            var A7 = _A[a + a_off * 3 + 1];
+            float A0 = _A[a];
+            float A1 = _A[a + 1];
+            float A2 = _A[a + a_off];
+            float A3 = _A[a + a_off + 1];
+            float A4 = _A[a + a_off * 2];
+            float A5 = _A[a + a_off * 2 + 1];
+            float A6 = _A[a + a_off * 3];
+            float A7 = _A[a + a_off * 3 + 1];
 
             float k00, k11;
 
-            var ee0 = i_off;        // e
-            var ee2 = ee0 + k_off;  // e
+            int ee0 = i_off;        // e
+            int ee2 = ee0 + k_off;  // e
 
             for (int i = n; i > 0; --i)
             {
@@ -505,10 +506,10 @@ namespace NVorbis
 
         void Step3_inner_s_loop_ld654(int n, float[] e, int i_off, int base_n)
         {
-            var a_off = base_n >> 3;
-            var A2 = _A[a_off];
-            var z = i_off;          // e
-            var @base = z - 16 * n; // e
+            int a_off = base_n >> 3;
+            float A2 = _A[a_off];
+            int z = i_off;          // e
+            int @base = z - 16 * n; // e
 
             while (z > @base)
             {

@@ -8,7 +8,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 
 namespace NVorbis
 {
@@ -24,7 +23,6 @@ namespace NVorbis
 
             _decoders = new List<VorbisStreamDecoder>();
             _serials = new List<int>();
-
         }
 
         public VorbisReader(string filePath)

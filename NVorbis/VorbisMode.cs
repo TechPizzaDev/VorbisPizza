@@ -69,16 +69,16 @@ namespace NVorbis
             {
                 var array = _windows[idx];
 
-                var left = ((idx & 1) == 0 ? _vorbis.Block0Size : _vorbis.Block1Size) / 2;
-                var wnd = BlockSize;
-                var right = ((idx & 2) == 0 ? _vorbis.Block0Size : _vorbis.Block1Size) / 2;
+                int left = ((idx & 1) == 0 ? _vorbis.Block0Size : _vorbis.Block1Size) / 2;
+                int wnd = BlockSize;
+                int right = ((idx & 2) == 0 ? _vorbis.Block0Size : _vorbis.Block1Size) / 2;
 
-                var leftbegin = wnd / 4 - left / 2;
-                var rightbegin = wnd - wnd / 4 - right / 2;
+                int leftbegin = wnd / 4 - left / 2;
+                int rightbegin = wnd - wnd / 4 - right / 2;
 
                 for (int i = 0; i < left; i++)
                 {
-                    var x = MathF.Sin((i + 0.5f) / left * MathF.PI / 2);
+                    float x = MathF.Sin((i + 0.5f) / left * MathF.PI / 2);
                     x *= x;
                     array[leftbegin + i] = MathF.Sin(x * MathF.PI / 2);
                 }
@@ -88,7 +88,7 @@ namespace NVorbis
                 
                 for (int i = 0; i < right; i++)
                 {
-                    var x = MathF.Sin((right - i - 0.5f) / right * MathF.PI / 2);
+                    float x = MathF.Sin((right - i - 0.5f) / right * MathF.PI / 2);
                     x *= x;
                     array[rightbegin + i] = MathF.Sin(x * MathF.PI / 2);
                 }
@@ -107,7 +107,8 @@ namespace NVorbis
             {
                 if (next)
                 {
-                    if (prev) return _windows[3];
+                    if (prev) 
+                        return _windows[3];
                     return _windows[2];
                 }
                 else if (prev)

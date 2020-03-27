@@ -20,7 +20,7 @@ namespace NVorbis
             BookNum = number;
 
             // first, check the sync pattern
-            var chkVal = packet.ReadBits(24);
+            ulong chkVal = packet.ReadBits(24);
             if (chkVal != 0x564342UL)
                 throw new InvalidDataException();
 

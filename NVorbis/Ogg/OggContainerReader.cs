@@ -202,26 +202,26 @@ namespace NVorbis.Ogg
             _crc.Update(_readBuffer[26]);
 
             // figure out the length of the page
-            int segCnt = (int)_readBuffer[26];
+            int segCnt = _readBuffer[26];
             if (_stream.Read(_readBuffer, 0, segCnt) != segCnt)
                 return null;
 
             var packetSizes = new int[segCnt];
             int packetSizeCount = 0;
 
-            int size = 0, idx = 0;
+            int size = 0, packetSizeIndex = 0;
             for (int i = 0; i < segCnt; i++)
             {
-                if (packetSizeCount == idx)
+                if (packetSizeCount == packetSizeIndex)
                     packetSizeCount++;
 
                 byte tmp = _readBuffer[i];
-                packetSizes[idx] += tmp;
+                packetSizes[packetSizeIndex] += tmp;
                 size += tmp;
 
                 if (tmp < 255)
                 {
-                    idx++;
+                    packetSizeIndex++;
                     hdr.LastPacketContinues = false;
                 }
                 else
