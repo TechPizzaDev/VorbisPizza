@@ -13,7 +13,7 @@ namespace NVorbis
 {
     static class Huffman
     {
-        const int MAX_TABLE_BITS = 10;
+        const int MaxTableBits = 10;
 
         static internal (HuffmanListNode[] Initial, HuffmanListNode[] Result) BuildPrefixedLinkedList<TList>(
             TList values,
@@ -33,7 +33,7 @@ namespace NVorbis
                     length: lengthList[i] <= 0 ? 99999 : lengthList[i],
                     bits: codeList[i],
                     mask: (1 << lengthList[i]) - 1,
-                    next: -1);
+                    nextIndex: -1);
 
                 if (lengthList[i] > 0 && maxLen < lengthList[i])
                     maxLen = lengthList[i];
@@ -41,7 +41,7 @@ namespace NVorbis
 
             Array.Sort(initialNodes, 0, initialNodes.Length);
 
-            tableBits = maxLen > MAX_TABLE_BITS ? MAX_TABLE_BITS : maxLen;
+            tableBits = maxLen > MaxTableBits ? MaxTableBits : maxLen;
 
             var resultNodes = new HuffmanListNode[1 << tableBits];
 
@@ -75,25 +75,24 @@ namespace NVorbis
         }
     }
 
-    [StructLayout(LayoutKind.Sequential, Pack = 1)]
+    [StructLayout(LayoutKind.Sequential)]
     struct HuffmanListNode : IComparable<HuffmanListNode>
     {
+        public readonly bool HasValue;
         public readonly int Value;
         public readonly int Length;
         public readonly int Bits;
         public readonly int Mask;
         public int NextIndex;
 
-        public bool IsValid { get; }
-
-        public HuffmanListNode(int value, int length, int bits, int mask, int next)
+        public HuffmanListNode(int value, int length, int bits, int mask, int nextIndex)
         {
-            IsValid = true;
+            HasValue = true;
             Value = value;
             Length = length;
             Bits = bits;
             Mask = mask;
-            NextIndex = next;
+            NextIndex = nextIndex;
         }
 
         public int CompareTo(HuffmanListNode other)

@@ -8,7 +8,6 @@
 using System;
 using System.Linq;
 using System.IO;
-using System.Collections.Generic;
 
 namespace NVorbis
 {
@@ -44,7 +43,7 @@ namespace NVorbis
             {
                 // ordered
                 int length = (int)packet.ReadBits(5) + 1;
-                for (var i = 0; i < Entries; )
+                for (int i = 0; i < Entries; )
                 {
                     int count = (int)packet.ReadBits(Utils.ILog(Entries - i));
                     while (--count >= 0)
@@ -125,8 +124,7 @@ namespace NVorbis
         bool ComputeCodewords(
             bool sparse, int[] codewords, int[] codewordLengths, int[] lengths, int n, int[] values)
         {
-            int k, m = 0;
-            
+            int k;
             for (k = 0; k < n; ++k) 
                 if (lengths[k] > 0) 
                     break;
@@ -134,18 +132,17 @@ namespace NVorbis
             if (k == n)
                 return true;
 
+            int m = 0;
             AddEntry(sparse, codewords, codewordLengths, 0, k, m++, lengths[k], values);
 
-            uint[] available = new uint[32];
-
+            Span<uint> available = stackalloc uint[32];
             int i;
             for (i = 1; i <= lengths[k]; ++i)
-                available[i] = 1U << (32 - i);
+                available[i] = 1u << (32 - i);
 
             for (i = k + 1; i < n; ++i)
             {
-                uint res;
-                int z = lengths[i], y;
+                int z = lengths[i];
                 if (z <= 0) 
                     continue;
 
@@ -154,15 +151,16 @@ namespace NVorbis
                 if (z == 0) 
                     return false;
 
-                res = available[z];
+                uint res = available[z];
                 available[z] = 0;
-                AddEntry(
-                    sparse, codewords, codewordLengths, Utils.BitReverse(res), i, m++, lengths[i], values);
+
+                int code = (int)Utils.BitReverse(res);
+                AddEntry(sparse, codewords, codewordLengths, code, i, m++, lengths[i], values);
 
                 if (z != lengths[i])
                 {
-                    for (y = lengths[i]; y > z; --y)
-                        available[y] = res + (1U << (32 - y));
+                    for (int y = lengths[i]; y > z; --y)
+                        available[y] = res + (1u << (32 - y));
                 }
             }
 
@@ -171,17 +169,17 @@ namespace NVorbis
 
         void AddEntry(
             bool sparse, int[] codewords, int[] codewordLengths,
-            uint huffCode, int symbol, int count, int len, int[] values)
+            int huffCode, int symbol, int count, int len, int[] values)
         {
             if (sparse)
             {
-                codewords[count] = (int)huffCode;
+                codewords[count] = huffCode;
                 codewordLengths[count] = len;
                 values[count] = symbol;
             }
             else
             {
-                codewords[symbol] = (int)huffCode;
+                codewords[symbol] = huffCode;
             }
         }
 
@@ -281,7 +279,7 @@ namespace NVorbis
 
             // try to get the value from the prefix list...
             var node = PrefixList[bits];
-            if (node.IsValid)
+            if (node.HasValue)
             {
                 packet.SkipBits(node.Length);
                 return node.Value;
