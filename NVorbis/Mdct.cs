@@ -116,8 +116,8 @@ namespace NVorbis
                     var e_stop = _n2;// buffer
                     while (e != e_stop)
                     {
-                        buf2[d + 1] = (buffer[e] * _A[AA] - buffer[e + 2] * _A[AA + 1]);
-                        buf2[d] = (buffer[e] * _A[AA + 1] + buffer[e + 2] * _A[AA]);
+                        buf2[d + 1] = buffer[e] * _A[AA] - buffer[e + 2] * _A[AA + 1];
+                        buf2[d] = buffer[e] * _A[AA + 1] + buffer[e + 2] * _A[AA];
                         d -= 2;
                         AA += 2;
                         e += 4;
@@ -126,8 +126,8 @@ namespace NVorbis
                     e = _n2 - 3;
                     while (d >= 0)
                     {
-                        buf2[d + 1] = (-buffer[e + 2] * _A[AA] - -buffer[e] * _A[AA + 1]);
-                        buf2[d] = (-buffer[e + 2] * _A[AA + 1] + -buffer[e] * _A[AA]);
+                        buf2[d + 1] = -buffer[e + 2] * _A[AA] - -buffer[e] * _A[AA + 1];
+                        buf2[d] = -buffer[e + 2] * _A[AA + 1] + -buffer[e] * _A[AA];
                         d -= 2;
                         AA += 2;
                         e -= 4;

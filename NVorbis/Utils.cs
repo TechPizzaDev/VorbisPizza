@@ -72,7 +72,7 @@ namespace NVorbis
         public static float ConvertFromVorbisFloat32(uint bits)
         {
             // do as much as possible with bit tricks in integer math
-            var sign = ((int)bits >> 31);   // sign-extend to the full 32-bits
+            var sign = (int)bits >> 31;   // sign-extend to the full 32-bits
             var exponent = (float)((int)((bits & 0x7fe00000) >> 21) - 788);  // grab the exponent, remove the bias
             var mantissa = (float)(((bits & 0x1fffff) ^ sign) + (sign & 1));  // grab the mantissa and apply the sign bit.
 

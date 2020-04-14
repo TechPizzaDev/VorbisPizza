@@ -952,7 +952,7 @@ namespace NVorbis
 
         public TimeSpan PacketLatency => TimeSpan.FromTicks(_sw.ElapsedTicks / _packetCount);
 
-        public TimeSpan SecondLatency => TimeSpan.FromTicks((_sw.ElapsedTicks / _samples) * _sampleRate);
+        public TimeSpan SecondLatency => TimeSpan.FromTicks(_sw.ElapsedTicks / _samples * _sampleRate);
 
         public long OverheadBits => _glueBits + _metaBits + _timeHdrBits + _wasteHdrBits + _wasteBits + _packetProvider.ContainerBits;
 

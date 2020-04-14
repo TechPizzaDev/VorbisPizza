@@ -35,7 +35,7 @@ namespace NVorbis
             var ret = 0;
             while (v != 0)
             {
-                ret += (v & 1);
+                ret += v & 1;
                 v >>= 1;
             }
             return ret;
