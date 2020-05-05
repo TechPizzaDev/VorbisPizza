@@ -16,8 +16,8 @@ namespace NVorbis.Ogg
     /// </summary>
     public class OggContainerReader : IVorbisContainerReader
     {
-        internal static ReadOnlyMemory<byte> OggsHeader { get; } = new byte[4] { 0x4f, 0x67, 0x67, 0x53 };
-        internal static ReadOnlyMemory<byte> RiffHeader { get; } = new byte[4] { 82, 73, 70, 70 };
+        internal static ReadOnlyMemory<byte> OggsHeader { get; } = new byte[] { 0x4f, 0x67, 0x67, 0x53 };
+        internal static ReadOnlyMemory<byte> RiffHeader { get; } = new byte[] { 82, 73, 70, 70 };
 
         private Stream _stream;
         private bool _leaveOpen;
@@ -166,7 +166,6 @@ namespace NVorbis.Ogg
             {
                 if (sigSpan.SequenceEqual(RiffHeader.Span))
                     throw new NotImplementedException("RIFF is currently not supported.");
-
                 return null;
             }
 
@@ -261,8 +260,7 @@ namespace NVorbis.Ogg
                 _stream.Position = ++startPos;
 
                 Span<byte> buf = stackalloc byte[4];
-                int read = _stream.Read(buf);
-                if (read != 4)
+                if (_stream.Read(buf) != 4)
                     return null;
 
                 int cnt = 0;
