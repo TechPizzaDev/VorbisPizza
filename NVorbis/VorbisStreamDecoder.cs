@@ -874,7 +874,7 @@ namespace NVorbis
                 if (count <= 0)
                     return;
 
-                Span<float> tmp = stackalloc float[256];
+                Span<float> tmp = stackalloc float[512];
                 while (count > 0)
                 {
                     var slice = tmp.Slice(0, Math.Min(tmp.Length, count));
