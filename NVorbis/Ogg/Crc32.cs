@@ -51,8 +51,8 @@ namespace NVorbis.Ogg
                 }
             }
 
-            // reversing the tables makes the slicing-by-x loop slightly 
-            // faster as it can access the tables linearly
+            // reversing the tables makes the slicing-by-x loop slightly faster 
+            //  as it can access the table data linearly
             tmpTable.AsSpan().Reverse();
 
             for (int i = 0; i < MaxSlice; i++)
@@ -69,7 +69,7 @@ namespace NVorbis.Ogg
         public void Update(byte value)
         {
             // this should look at the first table so
-            // look in the last table as the tables are reversed    
+            // look in the last (index-wise) table as the tables are reversed    
             Hash = (Hash << 8) ^ _lookupTable[(MaxSlice - 1) * 256 + ((Hash >> 24) & 0xff) ^ value];
         }
 
@@ -77,11 +77,8 @@ namespace NVorbis.Ogg
         /// Optimized CRC32 implementation, implemented in managed code.
         /// </summary>
         /// <remarks>
-        /// This implementation has been tested with unsafe pointers,
-        /// only yielding a tiny improvement. 
-        /// The method is therefore implemented fully in managed code.
+        /// Unmanaged pointers only yielded a marginal improvement in testing. 
         /// </remarks>
-        /// <param name="values"></param>
         public void Update(ReadOnlySpan<byte> values)
         {
             var table = _lookupTable; // caching into a local helps quite a lot
