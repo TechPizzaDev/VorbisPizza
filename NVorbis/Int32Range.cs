@@ -27,7 +27,7 @@ namespace NVorbis
             get
             {
                 if (index > Count)
-                    throw new ArgumentOutOfRangeException();
+                    throw new IndexOutOfRangeException();
                 return Start + index;
             }
         }

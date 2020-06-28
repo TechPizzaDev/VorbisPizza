@@ -10,6 +10,8 @@ using System;
 
 namespace NVorbis.Ogg
 {
+    // TODO: optimize with SSE4.2
+
     struct Crc32
     {
         /// <summary>
@@ -74,11 +76,8 @@ namespace NVorbis.Ogg
         }
 
         /// <summary>
-        /// Optimized CRC32 implementation, implemented in managed code.
+        /// CRC32 implemented in managed code. Optimized with slice-by-16 and multiple elookup tables.
         /// </summary>
-        /// <remarks>
-        /// Unmanaged pointers only yielded a marginal improvement in testing. 
-        /// </remarks>
         public void Update(ReadOnlySpan<byte> values)
         {
             var table = _lookupTable; // caching into a local helps quite a lot

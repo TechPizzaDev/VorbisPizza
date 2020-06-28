@@ -6,6 +6,7 @@
  *                                                                          *
  ***************************************************************************/
 using System;
+using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.IO;
 
@@ -24,7 +25,6 @@ namespace NVorbis.Ogg
         private Dictionary<int, OggPacketReader> _packetReaders;
         private List<int> _disposedStreamSerials;
         private long _nextPageOffset;
-        private int _pageCount;
         private byte[] _readBuffer = new byte[65025];   // up to a full page of data (but no more!)
 
         private long _containerBits, _wasteBits;
@@ -108,7 +108,7 @@ namespace NVorbis.Ogg
         /// <summary>
         /// Gets the number of pages that have been read in the container.
         /// </summary>
-        public int PagesRead => _pageCount;
+        public int PagesRead { get; private set; }
 
         /// <summary>
         /// Retrieves the total number of pages in the container.
@@ -123,7 +123,7 @@ namespace NVorbis.Ogg
                     break;
             }
 
-            return _pageCount;
+            return PagesRead;
         }
 
         /// <summary>
@@ -154,67 +154,79 @@ namespace NVorbis.Ogg
             // set the stream's position
             _stream.Seek(position, SeekOrigin.Begin);
 
+            var buffer = _readBuffer.AsSpan();
+            int o = 0;
+            
             // header
             // NB: if the stream didn't have an EOS flag, 
             // this is the most likely spot for the EOF to be found...
-            if (_stream.Read(_readBuffer, 0, 27) != 27)
+            if (_stream.Read(buffer.Slice(0, 27)) != 27)
                 return null;
 
             // capture signature
-            var sigSpan = _readBuffer.AsSpan(0, 4);
+            var sigSpan = buffer.Slice(o, 4);
             if (!sigSpan.SequenceEqual(OggsHeader.Span))
             {
                 if (sigSpan.SequenceEqual(RiffHeader.Span))
                     throw new NotImplementedException("RIFF is currently not supported.");
                 return null;
             }
+            o += 4; 
 
             // check the stream version
-            if (_readBuffer[4] != 0)
+            if (buffer[o] != 0)
                 return null;
+            o++;
 
             // start populating the header
             var hdr = new PageHeader();
 
             // bit flags
-            hdr.Flags = (OggPageFlags)_readBuffer[5];
-
+            hdr.Flags = (OggPageFlags)buffer[o++];
+            
             // granulePosition
-            hdr.GranulePosition = BitConverter.ToInt64(_readBuffer, 6);
+            hdr.GranulePosition = BinaryPrimitives.ReadInt64LittleEndian(buffer.Slice(o));
+            o += sizeof(long);
 
             // stream serial
-            hdr.StreamSerial = BitConverter.ToInt32(_readBuffer, 14);
+            hdr.StreamSerial = BinaryPrimitives.ReadInt32LittleEndian(buffer.Slice(o));
+            o += sizeof(int);
 
             // sequence number
-            hdr.SequenceNumber = BitConverter.ToInt32(_readBuffer, 18);
+            hdr.SequenceNumber = BinaryPrimitives.ReadInt32LittleEndian(buffer.Slice(o));
+            o += sizeof(int);
 
             // save off the CRC
-            var pageCrc = BitConverter.ToUInt32(_readBuffer, 22);
-
+            uint pageCrc = BinaryPrimitives.ReadUInt32LittleEndian(buffer.Slice(o));
+            
             // start calculating the CRC value for this page
-            var _crc = new Crc32();
-            _crc.Update(_readBuffer.AsSpan(0, 22));
-            _crc.Update(0);
-            _crc.Update(0);
-            _crc.Update(0);
-            _crc.Update(0);
-            _crc.Update(_readBuffer[26]);
+            var crc = new Crc32();
+
+            crc.Update(buffer.Slice(0, o));
+            o += sizeof(uint);
+
+            crc.Update(0);
+            crc.Update(0);
+            crc.Update(0);
+            crc.Update(0);
+            crc.Update(buffer[o]);
 
             // figure out the length of the page
-            int segCnt = _readBuffer[26];
-            if (_stream.Read(_readBuffer, 0, segCnt) != segCnt)
+            int segCnt = buffer[o];
+            var segs = buffer.Slice(0, segCnt);
+            if (_stream.Read(segs) != segCnt)
                 return null;
 
             var packetSizes = new int[segCnt];
             int packetSizeCount = 0;
 
             int size = 0, packetSizeIndex = 0;
-            for (int i = 0; i < segCnt; i++)
+            for (int i = 0; i < segs.Length; i++)
             {
                 if (packetSizeCount == packetSizeIndex)
                     packetSizeCount++;
 
-                byte tmp = _readBuffer[i];
+                byte tmp = segs[i];
                 packetSizes[packetSizeIndex] += tmp;
                 size += tmp;
 
@@ -228,21 +240,22 @@ namespace NVorbis.Ogg
                     hdr.LastPacketContinues = true;
                 }
             }
-            _crc.Update(_readBuffer.AsSpan(0, segCnt));
+            crc.Update(segs);
 
             hdr.PacketSizes = packetSizes.AsMemory(0, packetSizeCount);
             hdr.DataOffset = position + 27 + segCnt;
 
             // now we have to go through every byte in the page
-            if (_stream.Read(_readBuffer, 0, size) != size)
+            var pageBytes = buffer.Slice(0, size);
+            if (_stream.Read(pageBytes) != size)
                 return null;
 
-            _crc.Update(_readBuffer.AsSpan(0, size));
+            crc.Update(pageBytes);
 
-            if (_crc.Test(pageCrc))
+            if (crc.Test(pageCrc))
             {
                 _containerBits += 8 * (27 + segCnt);
-                ++_pageCount;
+                PagesRead++;
                 return hdr;
             }
             return null;

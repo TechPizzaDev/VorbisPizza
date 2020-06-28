@@ -6,12 +6,14 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using NVorbis.OpenTKSupport;
-using OpenTK.Audio;
+using OpenToolkit.Audio.OpenAL;
 
 namespace TestApp
 {
     static class OpenTKStreamingTest
     {
+        const float volume = 0.05f;
+
         static readonly string[] StreamFiles = new[] { "2test.ogg", "2test.ogg", "2test.ogg", "2test.ogg", "2test.ogg", "3test.ogg" };
 
         static void Main()
@@ -22,26 +24,29 @@ namespace TestApp
             Console.WindowHeight = StreamFiles.Length + 12;
 
             Console.WriteLine("Pr[e]pare, [P]lay, [S]top, Pa[u]se, [R]esume, [L]oop toggle, [Q]uit");
-            Console.WriteLine("Faders (in/out) : Low-pass filter [F]/[G], Volume [V]/[B]");
+            //sConsole.WriteLine("Faders (in/out) : Low-pass filter [F]/[G], Volume [V]/[B]");
             Console.WriteLine("[Up], [Down] : Change current sample");
             Console.WriteLine("[Shift] + Action : Do for all " + StreamFiles.Length + " streams");
 
             var logger = new ConsoleLogger();
             logger.Write(" #  FX Buffering", 0, 8);
 
-            using (new AudioContext())
+            var device = ALC.OpenDevice(null);
+            var context = ALC.CreateContext(device, new ALContextAttributes());
+
+            ALC.MakeContextCurrent(context);
+
             using (var streamer = new OggStreamer(65536))
             {
                 streamer.Logger = logger;
-                ALHelper.CheckCapabilities(logger);
-
+                
                 bool quit = false;
 
                 var streams = new OggStream[StreamFiles.Length];
 
                 for (int i = 0; i < StreamFiles.Length; i++)
                 {
-                    streams[i] = new OggStream(StreamFiles[i]) { Logger = logger };
+                    streams[i] = new OggStream(StreamFiles[i]) { Logger = logger, Volume = volume };
                     logger.SetStreamIndex(streams[i], i);
                     logger.Write((i + 1).ToString(), 1, 10 + i);
                 }
@@ -86,8 +91,8 @@ namespace TestApp
                         case 'v': FadeVolume(activeSet, true, 1, logger); break;
                         case 'b': FadeVolume(activeSet, false, 1, logger); break;
 
-                        case 'f': FadeFilter(activeSet, true, 1, logger); break;
-                        case 'g': FadeFilter(activeSet, false, 1, logger); break;
+                        //case 'f': FadeFilter(activeSet, true, 1, logger); break;
+                        //case 'g': FadeFilter(activeSet, false, 1, logger); break;
 
                         case '+':
                             logger.Write(" ", 0, 10 + sIdx);
@@ -105,7 +110,7 @@ namespace TestApp
 
                         case 'q':
                             quit = true;
-                            foreach (var cts in filterFades.Values) cts.Cancel();
+                            //foreach (var cts in filterFades.Values) cts.Cancel();
                             foreach (var cts in volumeFades.Values) cts.Cancel();
                             foreach (var s in streams) s.Stop(); // nicer and more effective
                             foreach (var s in streams) s.Dispose();
@@ -116,14 +121,15 @@ namespace TestApp
         }
 
         static readonly Dictionary<OggStream, CancellationTokenSource> volumeFades = new Dictionary<OggStream, CancellationTokenSource>();
+
         static void FadeVolume(List<OggStream> streams, bool @in, float duration, ConsoleLogger logger)
         {
             int index = 0;
             foreach (var stream in streams)
             {
                 var from = stream.Volume;
-                var to = @in ? 1f : 0;
-                var speed = @in ? 1 - @from : @from;
+                var to = @in ? volume : 0;
+                var speed = @in ? volume - @from : @from;
 
                 lock (volumeFades)
                 {
@@ -163,52 +169,52 @@ namespace TestApp
             }
         }
 
-        static readonly Dictionary<OggStream, CancellationTokenSource> filterFades = new Dictionary<OggStream, CancellationTokenSource>();
-        static void FadeFilter(List<OggStream> streams, bool @in, float duration, ConsoleLogger logger)
-        {
-            int index = 0;
-            foreach (var stream in streams)
-            {
-                var from = stream.LowPassHFGain;
-                var to = @in ? 1f : 0;
-                var speed = @in ? 1 - @from : @from;
-
-                lock (filterFades)
-                {
-                    CancellationTokenSource token;
-                    bool found = filterFades.TryGetValue(stream, out token);
-                    if (found)
-                    {
-                        token.Cancel();
-                        filterFades.Remove(stream);
-                    }
-                }
-                var sIdx = index++;
-                logger.Write(@in ? "F" : "f", 5, 10 + sIdx);
-                var cts = new CancellationTokenSource();
-                lock (filterFades) filterFades.Add(stream, cts);
-
-                var sw = Stopwatch.StartNew();
-                OggStream s = stream;
-                Task.Factory.StartNew(() =>
-                {
-                    float step;
-                    do
-                    {
-                        step = (float)Math.Min(sw.Elapsed.TotalSeconds / (duration * speed), 1);
-                        s.LowPassHFGain = (to - @from) * step + @from;
-                        Thread.Sleep(1000 / 60);
-                    } while (step < 1 && !cts.Token.IsCancellationRequested);
-                    sw.Stop();
-
-                    if (!cts.Token.IsCancellationRequested)
-                    {
-                        lock (filterFades) filterFades.Remove(s);
-                        logger.Write(" ", 5, 10 + sIdx);
-                    }
-                }, cts.Token);
-            }
-        }
+        //static readonly Dictionary<OggStream, CancellationTokenSource> filterFades = new Dictionary<OggStream, CancellationTokenSource>();
+        //static void FadeFilter(List<OggStream> streams, bool @in, float duration, ConsoleLogger logger)
+        //{
+        //    int index = 0;
+        //    foreach (var stream in streams)
+        //    {
+        //        var from = stream.LowPassHFGain;
+        //        var to = @in ? 1f : 0;
+        //        var speed = @in ? 1 - @from : @from;
+        //
+        //        lock (filterFades)
+        //        {
+        //            CancellationTokenSource token;
+        //            bool found = filterFades.TryGetValue(stream, out token);
+        //            if (found)
+        //            {
+        //                token.Cancel();
+        //                filterFades.Remove(stream);
+        //            }
+        //        }
+        //        var sIdx = index++;
+        //        logger.Write(@in ? "F" : "f", 5, 10 + sIdx);
+        //        var cts = new CancellationTokenSource();
+        //        lock (filterFades) filterFades.Add(stream, cts);
+        //
+        //        var sw = Stopwatch.StartNew();
+        //        OggStream s = stream;
+        //        Task.Factory.StartNew(() =>
+        //        {
+        //            float step;
+        //            do
+        //            {
+        //                step = (float)Math.Min(sw.Elapsed.TotalSeconds / (duration * speed), 1);
+        //                s.LowPassHFGain = (to - @from) * step + @from;
+        //                Thread.Sleep(1000 / 60);
+        //            } while (step < 1 && !cts.Token.IsCancellationRequested);
+        //            sw.Stop();
+        //
+        //            if (!cts.Token.IsCancellationRequested)
+        //            {
+        //                lock (filterFades) filterFades.Remove(s);
+        //                logger.Write(" ", 5, 10 + sIdx);
+        //            }
+        //        }, cts.Token);
+        //    }
+        //}
     }
 
     public class ConsoleLogger : LoggerBase
