@@ -323,7 +323,7 @@ namespace NVorbis
         Queue<int> _bitsPerPacketHistory;
         Queue<int> _sampleCountHistory;
         int _preparedLength;
-        internal bool _clipped = false;
+        internal bool _clipped;
 
         Stack<VorbisDataPacket> _resyncQueue;
 

@@ -16,6 +16,7 @@ namespace NVorbis
         private IVorbisContainerReader _containerReader;
         private List<VorbisStreamDecoder> _decoders;
         private List<int> _serials;
+        private bool _isDisposed;
 
         private VorbisReader()
         {
@@ -42,18 +43,21 @@ namespace NVorbis
             }
             _containerReader = oggContainer;
 
-            if (_decoders.Count == 0) 
+            if (_decoders.Count == 0)
                 throw new InvalidDataException("No Vorbis data found!");
         }
 
         public VorbisReader(IVorbisContainerReader containerReader) : this()
         {
+            if (containerReader == null)
+                throw new ArgumentNullException(nameof(containerReader));
+
             if (!LoadContainer(containerReader))
                 throw new InvalidDataException("Container did not initialize!");
-            
+
             _containerReader = containerReader;
 
-            if (_decoders.Count == 0) 
+            if (_decoders.Count == 0)
                 throw new InvalidDataException("No Vorbis data found!");
         }
 
@@ -89,25 +93,6 @@ namespace NVorbis
             {
                 // This is almost certainly not a Vorbis stream
                 ea.IgnoreStream = true;
-            }
-        }
-
-        public void Dispose()
-        {
-            if (_decoders != null)
-            {
-                foreach (var decoder in _decoders)
-                    decoder.Dispose();
-                
-                _decoders.Clear();
-                _decoders = null;
-            }
-
-            if (_containerReader != null)
-            {
-                _containerReader.NewStream -= NewStream;
-                _containerReader.Dispose();
-                _containerReader = null;
             }
         }
 
@@ -227,7 +212,7 @@ namespace NVorbis
         /// <returns>Whether if a new stream was found.</returns>
         public bool FindNextStream()
         {
-            if (_containerReader == null) 
+            if (_containerReader == null)
                 return false;
             return _containerReader.FindNextStream();
         }
@@ -255,7 +240,7 @@ namespace NVorbis
             StreamIndex = index;
             var newDecoder = _decoders[StreamIndex];
 
-            return curentDecoder._channels != newDecoder._channels 
+            return curentDecoder._channels != newDecoder._channels
                 || curentDecoder._sampleRate != newDecoder._sampleRate;
         }
 
@@ -308,5 +293,40 @@ namespace NVorbis
         }
 
         #endregion
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!_isDisposed)
+            {
+                if (disposing)
+                {
+                    if (_decoders != null)
+                    {
+                        foreach (var decoder in _decoders)
+                            decoder.Dispose();
+
+                        _decoders.Clear();
+                        _decoders = null;
+                    }
+
+                    if (_containerReader != null)
+                    {
+                        _containerReader.NewStream -= NewStream;
+                        _containerReader.Dispose();
+                        _containerReader = null;
+                    }
+                }
+
+                _isDisposed = true;
+            }
+        }
+
+        /// <inheritdoc/>
+        public void Dispose()
+        {
+            // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+            Dispose(disposing: true);
+            GC.SuppressFinalize(this);
+        }
     }
 }

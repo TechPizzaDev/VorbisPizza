@@ -12,7 +12,7 @@ namespace NVorbis.Ogg
 {
     partial class OggPacketReader
     {
-        class DebugView
+        internal class DebugView
         {
             OggPacketReader _reader;
             OggPacket _last, _first;
