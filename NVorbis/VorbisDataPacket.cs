@@ -57,7 +57,7 @@ namespace NVorbis
         /// Reads the next byte of the packet.
         /// </summary>
         /// <returns>The next byte if available, otherwise -1.</returns>
-        abstract protected int ReadNextByte();
+        protected abstract int ReadNextByte();
 
         /// <summary>
         /// Indicates that the packet has been read and its data is no longer needed.

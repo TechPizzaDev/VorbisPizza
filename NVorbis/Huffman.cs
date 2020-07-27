@@ -15,7 +15,7 @@ namespace NVorbis
     {
         const int MaxTableBits = 10;
 
-        static internal (HuffmanListNode[] Initial, HuffmanListNode[] Result) BuildPrefixedLinkedList<TList>(
+        internal static (HuffmanListNode[] Initial, HuffmanListNode[] Result) BuildPrefixedLinkedList<TList>(
             TList values,
             int[] lengthList,
             int[] codeList,

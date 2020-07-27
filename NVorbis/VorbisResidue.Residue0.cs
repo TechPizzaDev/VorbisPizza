@@ -189,7 +189,7 @@ namespace NVorbis
                 return residue;
             }
 
-            virtual protected bool WriteVectors(
+            protected virtual bool WriteVectors(
                 VorbisCodebook codebook, VorbisDataPacket packet, float[][] residue,
                 int channel, int offset, int partitionSize)
             {

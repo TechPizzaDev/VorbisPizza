@@ -36,7 +36,7 @@ namespace NVorbis
             _vorbis = vorbis;
         }
 
-        abstract protected void Init(VorbisDataPacket packet);
+        protected abstract void Init(VorbisDataPacket packet);
 
         internal Submap[] Submaps;
         internal Submap[] ChannelSubmap;

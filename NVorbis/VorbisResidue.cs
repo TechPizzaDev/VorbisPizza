@@ -70,9 +70,9 @@ namespace NVorbis
             return temp;
         }
 
-        abstract internal float[][] Decode(
+        internal abstract float[][] Decode(
             VorbisDataPacket packet, bool[] doNotDecode, int channels, int blockSize);
 
-        abstract protected void Init(VorbisDataPacket packet);
+        protected abstract void Init(VorbisDataPacket packet);
     }
 }

@@ -37,17 +37,17 @@ namespace NVorbis
             _vorbis = vorbis;
         }
 
-        abstract protected void Init(VorbisDataPacket packet);
+        protected abstract void Init(VorbisDataPacket packet);
 
-        abstract internal PacketData UnpackPacket(
+        internal abstract PacketData UnpackPacket(
             VorbisDataPacket packet, int blockSize, int channel);
 
-        abstract internal void Apply(PacketData packetData, float[] residue);
+        internal abstract void Apply(PacketData packetData, float[] residue);
 
-        abstract internal class PacketData
+        internal abstract class PacketData
         {
             internal int BlockSize;
-            abstract protected bool HasEnergy { get; }
+            protected abstract bool HasEnergy { get; }
             internal bool ForceEnergy { get; set; }
             internal bool ForceNoEnergy { get; set; }
 
