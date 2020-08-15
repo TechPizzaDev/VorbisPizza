@@ -33,7 +33,7 @@ namespace NVorbis.Ogg
         /// <summary>
         /// Event raised when a new logical stream is found in the container.
         /// </summary>
-        public event EventHandler<NewStreamEventArgs> NewStream;
+        public event EventHandler<NewStreamEventArgs>? NewStream;
 
         /// <summary>
         /// Creates a new instance of <see cref="LightOggContainerReader"/>.
@@ -123,7 +123,7 @@ namespace NVorbis.Ogg
         public void Dispose()
         {
             _reader?.Dispose();
-            _reader = null;
+            _reader = null!;
         }
     }
 }

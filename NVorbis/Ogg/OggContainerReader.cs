@@ -37,7 +37,7 @@ namespace NVorbis.Ogg
         /// <summary>
         /// Event raised when a new logical stream is found in the container.
         /// </summary>
-        public event EventHandler<NewStreamEventArgs> NewStream;
+        public event EventHandler<NewStreamEventArgs>? NewStream;
 
         /// <summary>
         /// Creates a new instance with the specified file.
@@ -51,10 +51,8 @@ namespace NVorbis.Ogg
         /// <summary>
         /// Creates a new instance with the specified stream.  Optionally sets to close the stream when disposed.
         /// </summary>
-        /// <param name="stream">The stream to read.</param>
-        /// <param name="leaveOpen">
-        /// <c>false</c> to close the stream when <see cref="Dispose"/> is called.
-        /// </param>
+        /// <param name="stream">The stream to read from.</param>
+        /// <param name="leaveOpen"><see langword="false"/> to close <paramref name="stream"/> upon disposal.</param>
         public OggContainerReader(Stream stream, bool leaveOpen)
         {
             _packetReaders = new Dictionary<int, OggPacketReader>();
@@ -84,7 +82,7 @@ namespace NVorbis.Ogg
         /// <exception cref="ArgumentOutOfRangeException">The specified stream serial was not found.</exception>
         public IVorbisPacketProvider GetStream(int streamSerial)
         {
-            if (!_packetReaders.TryGetValue(streamSerial, out OggPacketReader provider))
+            if (!_packetReaders.TryGetValue(streamSerial, out var provider))
                 throw new ArgumentOutOfRangeException(nameof(streamSerial));
             return provider;
         }
@@ -265,6 +263,8 @@ namespace NVorbis.Ogg
         {
             long startPos = _nextPageOffset;
             bool isResync = false;
+            Span<byte> buf = stackalloc byte[4];
+
             PageHeader? hdr;
             while ((hdr = ReadPageHeader(startPos)) == null)
             {
@@ -272,7 +272,6 @@ namespace NVorbis.Ogg
                 _wasteBits += 8;
                 _stream.Position = ++startPos;
 
-                Span<byte> buf = stackalloc byte[4];
                 if (_stream.Read(buf) != 4)
                     return null;
 
@@ -326,7 +325,7 @@ namespace NVorbis.Ogg
         private bool AddPage(in PageHeader hdr)
         {
             // get our packet reader (create one if we have to)
-            if (!_packetReaders.TryGetValue(hdr.StreamSerial, out OggPacketReader packetReader))
+            if (!_packetReaders.TryGetValue(hdr.StreamSerial, out var packetReader))
                 packetReader = new OggPacketReader(this, hdr.StreamSerial);
 
             // save off the container bits
@@ -461,18 +460,30 @@ namespace NVorbis.Ogg
         /// <summary>
         /// Disposes this reader and underlying packet readers.
         /// </summary>
+        protected virtual void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                // don't use _packetReaders directly since that'll change the enumeration...
+                foreach (var streamSerial in StreamSerials)
+                    _packetReaders[streamSerial].Dispose();
+
+                _nextPageOffset = 0L;
+                _containerBits = 0L;
+                _wasteBits = 0L;
+
+                if (!_leaveOpen)
+                    _stream.Dispose();
+            }
+        }
+
+        /// <summary>
+        /// Disposes this reader and underlying packet readers.
+        /// </summary>
         public void Dispose()
         {
-            // don't use _packetReaders directly since that'll change the enumeration...
-            foreach (var streamSerial in StreamSerials)
-                _packetReaders[streamSerial].Dispose();
-
-            _nextPageOffset = 0L;
-            _containerBits = 0L;
-            _wasteBits = 0L;
-
-            if (!_leaveOpen)
-                _stream.Dispose();
+            Dispose(true);
+            GC.SuppressFinalize(this);
         }
     }
 }

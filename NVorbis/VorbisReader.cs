@@ -80,7 +80,7 @@ namespace NVorbis
             return true;
         }
 
-        private void NewStream(object sender, NewStreamEventArgs ea)
+        private void NewStream(object? sender, NewStreamEventArgs ea)
         {
             var packetProvider = ea.PacketProvider;
             var decoder = new VorbisStreamDecoder(packetProvider);
@@ -306,14 +306,14 @@ namespace NVorbis
                             decoder.Dispose();
 
                         _decoders.Clear();
-                        _decoders = null;
+                        _decoders = null!;
                     }
 
                     if (_containerReader != null)
                     {
                         _containerReader.NewStream -= NewStream;
                         _containerReader.Dispose();
-                        _containerReader = null;
+                        _containerReader = null!;
                     }
                 }
 

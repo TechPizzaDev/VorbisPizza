@@ -11,31 +11,31 @@ using System.IO;
 
 namespace NVorbis
 {
-    abstract partial class VorbisFloor
+    internal abstract partial class VorbisFloor
     {
-        class Floor0 : VorbisFloor
+        private sealed class Floor0 : VorbisFloor
         {
+            private int _order, _rate, _barkMapSize, _ampBits, _ampOfs, _ampDiv;
+            private VorbisCodebook[] _books;
+            private int _bookBits;
+            private Dictionary<int, float[]> _wMap;
+            private Dictionary<int, int[]> _barkMaps;
+
             internal Floor0(VorbisStreamDecoder vorbis) : base(vorbis)
             {
             }
-
-            int _order, _rate, _bark_map_size, _ampBits, _ampOfs, _ampDiv;
-            VorbisCodebook[] _books;
-            int _bookBits;
-            Dictionary<int, float[]> _wMap;
-            Dictionary<int, int[]> _barkMaps;
 
             protected override void Init(VorbisDataPacket packet)
             {
                 // this is pretty well stolen directly from libvorbis...  BSD license
                 _order = (int)packet.ReadBits(8);
                 _rate = (int)packet.ReadBits(16);
-                _bark_map_size = (int)packet.ReadBits(16);
+                _barkMapSize = (int)packet.ReadBits(16);
                 _ampBits = (int)packet.ReadBits(6);
                 _ampOfs = (int)packet.ReadBits(8);
                 _books = new VorbisCodebook[(int)packet.ReadBits(4) + 1];
 
-                if (_order < 1 || _rate < 1 || _bark_map_size < 1 || _books.Length == 0)
+                if (_order < 1 || _rate < 1 || _barkMapSize < 1 || _books.Length == 0)
                     throw new InvalidDataException();
 
                 _ampDiv = (1 << _ampBits) - 1;
@@ -64,22 +64,22 @@ namespace NVorbis
 
                 _reusablePacketData = new PacketData0[_vorbis._channels];
                 for (int i = 0; i < _reusablePacketData.Length; i++)
-                    _reusablePacketData[i] = new PacketData0() { Coeff = new float[_order + 1] };
+                    _reusablePacketData[i] = new PacketData0(_order + 1);
             }
 
-            int[] SynthesizeBarkCurve(int n)
+            private int[] SynthesizeBarkCurve(int n)
             {
-                float scale = _bark_map_size / ToBARK(_rate / 2);
+                float scale = _barkMapSize / ToBARK(_rate / 2);
                 var map = new int[n + 1];
 
                 for (int i = 0; i < n - 1; i++)
-                    map[i] = Math.Min(_bark_map_size - 1, (int)Math.Floor(ToBARK(_rate / 2f / n * i) * scale));
+                    map[i] = Math.Min(_barkMapSize - 1, (int)Math.Floor(ToBARK(_rate / 2f / n * i) * scale));
 
                 map[n] = -1;
                 return map;
             }
 
-            static float ToBARK(double lsp)
+            private static float ToBARK(double lsp)
             {
                 return (float)(
                     13.1 * Math.Atan(0.00074 * lsp) +
@@ -87,9 +87,9 @@ namespace NVorbis
                     0.0001 * lsp);
             }
 
-            float[] SynthesizeWDelMap(int n)
+            private float[] SynthesizeWDelMap(int n)
             {
-                float wdel = (float)(Math.PI / _bark_map_size);
+                float wdel = (float)(Math.PI / _barkMapSize);
                 var map = new float[n];
 
                 for (int i = 0; i < n; i++)
@@ -98,15 +98,20 @@ namespace NVorbis
                 return map;
             }
 
-            class PacketData0 : PacketData
+            private sealed class PacketData0 : PacketData
             {
                 protected override bool HasEnergy => Amp > 0f;
 
                 internal float[] Coeff;
                 internal float Amp;
+
+                public PacketData0(int coeffLength)
+                {
+                    Coeff = new float[coeffLength];
+                }
             }
 
-            PacketData0[] _reusablePacketData;
+            private PacketData0[] _reusablePacketData;
 
             internal override PacketData UnpackPacket(
                 VorbisDataPacket packet, int blockSize, int channel)

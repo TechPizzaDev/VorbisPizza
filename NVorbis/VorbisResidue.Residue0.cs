@@ -6,31 +6,31 @@
  *                                                                          *
  ***************************************************************************/
 using System;
-using System.Linq;
 using System.IO;
+using System.Linq;
 
 namespace NVorbis
 {
-    abstract partial class VorbisResidue
+    internal abstract partial class VorbisResidue
     {
         // residue type 0... samples are grouped by channel, then stored with non-interleaved dimensions;
         // (d0, d0, d0, d0, ..., d1, d1, d1, d1, ..., d2, d2, d2, d2, etc...)
-        class Residue0 : VorbisResidue
+        private class Residue0 : VorbisResidue
         {
-            int _begin;
-            int _end;
-            int _partitionSize;
-            int _classifications;
-            int _maxStages;
+            private int _begin;
+            private int _end;
+            private int _partitionSize;
+            private int _classifications;
+            private int _maxStages;
+            private VorbisCodebook[][] _books;
+            private VorbisCodebook _classBook;
+            private int[] _cascade, _entryCache;
+            private int[][] _decodeMap;
+            private int[][][] _partWordCache;
 
-            VorbisCodebook[][] _books;
-            VorbisCodebook _classBook;
-
-            int[] _cascade, _entryCache;
-            int[][] _decodeMap;
-            int[][][] _partWordCache;
-
-            internal Residue0(VorbisStreamDecoder vorbis) : base(vorbis) { }
+            internal Residue0(VorbisStreamDecoder vorbis) : base(vorbis)
+            {
+            }
 
             protected override void Init(VorbisDataPacket packet)
             {

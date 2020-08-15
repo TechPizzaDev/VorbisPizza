@@ -9,13 +9,18 @@ using System;
 
 namespace NVorbis
 {
-    public delegate void ParameterChangeEvent(object sender, ParameterChangeEventArgs eventArgs);
+    public delegate void ParameterChangeEvent(object? sender, ParameterChangeEventArgs eventArgs);
 
     /// <summary>
     /// Provides packets on-demand for the Vorbis stream decoder.
     /// </summary>
     public interface IVorbisPacketProvider : IDisposable
     {
+        /// <summary>
+        /// Occurs when the stream is about to change parameters.
+        /// </summary>
+        event ParameterChangeEvent? ParameterChange;
+
         /// <summary>
         /// Gets the serial number associated with this stream.
         /// </summary>
@@ -42,13 +47,13 @@ namespace NVorbis
         /// Retrieves the next packet in the stream.
         /// </summary>
         /// <returns>The next packet in the stream or <c>null</c> if no more packets.</returns>
-        VorbisDataPacket GetNextPacket();
+        VorbisDataPacket? GetNextPacket();
 
         /// <summary>
         /// Retrieves the next packet in the stream but does not advance to the following packet.
         /// </summary>
         /// <returns>The next packet in the stream or <c>null</c> if no more packets.</returns>
-        VorbisDataPacket PeekNextPacket();
+        VorbisDataPacket? PeekNextPacket();
 
         /// <summary>
         /// Retrieves the packet specified from the stream.
@@ -57,7 +62,7 @@ namespace NVorbis
         /// <returns>The specified packet.</returns>
         /// <exception cref="ArgumentOutOfRangeException"><paramref name="packetIndex"/> is less than 0 or past the end of the stream.</exception>
         /// <exception cref="InvalidOperationException"><see cref="CanSeek"/> is <c>False</c>.</exception>
-        VorbisDataPacket GetPacket(int packetIndex);
+        VorbisDataPacket? GetPacket(int packetIndex);
 
         /// <summary>
         /// Retrieves the total number of granules in this Vorbis stream.
@@ -73,7 +78,7 @@ namespace NVorbis
         /// <param name="packetGranuleCountCallback">A callback method that takes the current and previous packets and returns the number of granules in the current packet.</param>
         /// <returns>The index of the packet that includes the specified granule position or -1 if none found.</returns>
         /// <exception cref="ArgumentOutOfRangeException"><paramref name="granulePos"/> is less than 0 or is after the last granule.</exception>
-        VorbisDataPacket FindPacket(
+        VorbisDataPacket? FindPacket(
             long granulePos, Func<VorbisDataPacket, VorbisDataPacket, int> packetGranuleCountCallback);
 
         /// <summary>
@@ -82,10 +87,5 @@ namespace NVorbis
         /// <param name="packet">The packet to key from.</param>
         /// <param name="preRoll">The number of packets to return before the indicated packet.</param>
         void SeekToPacket(VorbisDataPacket packet, int preRoll);
-
-        /// <summary>
-        /// Occurs when the stream is about to change parameters.
-        /// </summary>
-        event ParameterChangeEvent ParameterChange;
     }
 }

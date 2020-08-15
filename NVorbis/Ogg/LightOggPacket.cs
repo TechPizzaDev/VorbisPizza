@@ -4,19 +4,19 @@ namespace NVorbis.Ogg
 {
     internal class LightOggPacket : VorbisDataPacket
     {
-        LightOggPageReader _reader;
-        LightOggPacketProvider _packetProvider;
-        IList<(long, int)> _dataSrc;
-        int _dataIndex;
-        int _dataOfs;
-        byte[] _dataBuf;
+        private LightOggPageReader _reader;
+        private LightOggPacketProvider _packetProvider;
+        private IList<(long, int)> _dataSrc;
+        private int _dataIndex;
+        private int _dataOfs;
+        private byte[]? _dataBuf;
 
         public int Index { get; }
 
         public LightOggPacket(
-            LightOggPageReader reader, 
-            LightOggPacketProvider packetProvider, 
-            int index, 
+            LightOggPageReader reader,
+            LightOggPacketProvider packetProvider,
+            int index,
             IList<(long, int)> data)
             : base(GetSizeSum(data))
         {
@@ -45,7 +45,7 @@ namespace NVorbis.Ogg
         {
             if (_dataIndex == _dataSrc.Count)
                 return -1;
-            
+
             if (_dataOfs == 0)
             {
                 var ofs = _dataSrc[_dataIndex].Item1;
@@ -69,15 +69,15 @@ namespace NVorbis.Ogg
                 }
             }
 
-            var b = _dataBuf[_dataOfs];
-            
+            byte b = _dataBuf![_dataOfs];
+
             if (++_dataOfs == _dataSrc[_dataIndex].Item2)
             {
                 _dataOfs = 0;
                 if (++_dataIndex == _dataSrc.Count)
                     _dataBuf = null;
             }
-            
+
             return b;
         }
     }

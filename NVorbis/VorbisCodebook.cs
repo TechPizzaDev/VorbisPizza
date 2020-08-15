@@ -26,7 +26,7 @@ namespace NVorbis
             // get the counts
             Dimensions = (int)packet.ReadBits(16);
             Entries = (int)packet.ReadBits(24);
-            
+
             // init the storage
             Lengths = new int[Entries];
 
@@ -43,12 +43,12 @@ namespace NVorbis
             {
                 // ordered
                 int length = (int)packet.ReadBits(5) + 1;
-                for (int i = 0; i < Entries; )
+                for (int i = 0; i < Entries;)
                 {
                     int count = (int)packet.ReadBits(Utils.ILog(Entries - i));
                     while (--count >= 0)
                         Lengths[i++] = length;
-                    
+
                     length++;
                 }
                 total = 0;
@@ -75,7 +75,7 @@ namespace NVorbis
             // figure out the maximum bit size; if all are unused, don't do anything else
             if ((MaxBits = Lengths.Max()) > -1)
             {
-                int[] codewordLengths = null;
+                int[]? codewordLengths = null;
                 if (sparse && total >= Entries >> 2)
                 {
                     codewordLengths = new int[Entries];
@@ -88,8 +88,8 @@ namespace NVorbis
                 int sortedCount = sparse ? total : 0;
                 int sortedEntries = sortedCount;
 
-                int[] values = null;
-                int[] codewords = null;
+                int[]? values = null;
+                int[]? codewords = null;
                 if (!sparse)
                 {
                     codewords = new int[Entries];
@@ -115,18 +115,18 @@ namespace NVorbis
                 else
                 {
                     (InitialPrefixList, PrefixList) = Huffman.BuildPrefixedLinkedList(
-                        new Int32Range(0, codewords.Length),
+                        new Int32Range(0, codewords!.Length),
                         lengths, codewords, out PrefixBitLength, out PrefixOverflowTreeIndex);
                 }
             }
         }
 
-        bool ComputeCodewords(
+        private static bool ComputeCodewords(
             bool sparse, int[] codewords, int[] codewordLengths, int[] lengths, int n, int[] values)
         {
             int k;
-            for (k = 0; k < n; ++k) 
-                if (lengths[k] > 0) 
+            for (k = 0; k < n; ++k)
+                if (lengths[k] > 0)
                     break;
 
             if (k == n)
@@ -143,12 +143,12 @@ namespace NVorbis
             for (i = k + 1; i < n; ++i)
             {
                 int z = lengths[i];
-                if (z <= 0) 
+                if (z <= 0)
                     continue;
 
-                while (z > 0 && available[z] == 0) 
+                while (z > 0 && available[z] == 0)
                     --z;
-                if (z == 0) 
+                if (z == 0)
                     return false;
 
                 uint res = available[z];
@@ -167,7 +167,7 @@ namespace NVorbis
             return true;
         }
 
-        void AddEntry(
+        private static void AddEntry(
             bool sparse, int[] codewords, int[] codewordLengths,
             int huffCode, int symbol, int count, int len, int[] values)
         {
@@ -198,11 +198,11 @@ namespace NVorbis
             var lookupTable = new float[lookupValueCount];
             if (MapType == 1)
                 lookupValueCount = Lookup1_values();
-            
+
             var multiplicands = new uint[lookupValueCount];
             for (int i = 0; i < lookupValueCount; i++)
                 multiplicands[i] = (uint)packet.ReadBits(valueBits);
-            
+
             // now that we have the initial data read in, calculate the entry tree
             if (MapType == 1)
             {
@@ -216,7 +216,7 @@ namespace NVorbis
                         double value = multiplicands[moff] * deltaValue + minValue + last;
                         lookupTable[idx * Dimensions + i] = (float)value;
 
-                        if (sequence_p) 
+                        if (sequence_p)
                             last = value;
 
                         idxDiv *= lookupValueCount;
@@ -234,7 +234,7 @@ namespace NVorbis
                         double value = multiplicands[moff] * deltaValue + minValue + last;
                         lookupTable[idx * Dimensions + i] = (float)value;
 
-                        if (sequence_p) 
+                        if (sequence_p)
                             last = value;
 
                         ++moff;
@@ -248,10 +248,10 @@ namespace NVorbis
         int Lookup1_values()
         {
             int r = (int)Math.Floor(Math.Exp(Math.Log(Entries) / Dimensions));
-            
+
             if (Math.Floor(Math.Pow(r + 1, Dimensions)) <= Entries)
                 ++r;
-            
+
             return r;
         }
 
@@ -273,34 +273,35 @@ namespace NVorbis
 
         internal int DecodeScalar(VorbisDataPacket packet)
         {
-            var bits = (int)packet.TryPeekBits(PrefixBitLength, out int bitCnt);
+            ulong bits = packet.TryPeekBits(PrefixBitLength, out int bitCnt);
             if (bitCnt == 0)
                 return -1;
 
             // try to get the value from the prefix list...
-            var node = PrefixList[bits];
+            ref readonly var node = ref PrefixList[bits];
             if (node.HasValue)
             {
                 packet.SkipBits(node.Length);
                 return node.Value;
             }
 
-            // nope, not possible... run the tree
-            bits = (int)packet.TryPeekBits(MaxBits, out _);
+            if (!PrefixOverflowTreeIndex.HasValue)
+                throw new InvalidDataException("Missing prefix overflow tree index.");
 
-            node = InitialPrefixList[PrefixOverflowTreeIndex.Value];
-            int nodeIndex = -1;
+            // nope, not possible... run the tree
+            int bits32 = (int)packet.TryPeekBits(MaxBits, out _);
+
+            int nodeIndex = PrefixOverflowTreeIndex.GetValueOrDefault();
             do
             {
-                if (nodeIndex != -1)
-                    node = InitialPrefixList[nodeIndex];
-
-                if (node.Bits == (bits & node.Mask))
+                node = ref InitialPrefixList[nodeIndex];
+                if (node.Bits == (bits32 & node.Mask))
                 {
                     packet.SkipBits(node.Length);
                     return node.Value;
                 }
             } while ((nodeIndex = node.NextIndex) != -1);
+
             return -1;
         }
     }

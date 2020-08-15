@@ -8,11 +8,11 @@
 
 namespace NVorbis
 {
-    abstract partial class VorbisResidue
+    internal abstract partial class VorbisResidue
     {
         // residue type 1... samples are grouped by channel, 
         // then stored with interleaved dimensions (d0, d1, d2, d0, d1, d2, etc...)
-        class Residue1 : Residue0
+        private sealed class Residue1 : Residue0
         {
             internal Residue1(VorbisStreamDecoder vorbis) : base(vorbis) { }
 

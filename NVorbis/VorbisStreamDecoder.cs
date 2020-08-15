@@ -7,12 +7,13 @@
  ***************************************************************************/
 using System;
 using System.Collections.Generic;
-using System.Text;
+using System.Diagnostics;
 using System.IO;
+using System.Text;
 
 namespace NVorbis
 {
-    class VorbisStreamDecoder : IVorbisStreamStatus, IDisposable
+    internal class VorbisStreamDecoder : IVorbisStreamStatus, IDisposable
     {
         internal int _upperBitrate;
         internal int _nominalBitrate;
@@ -32,8 +33,7 @@ namespace NVorbis
         internal VorbisResidue[] Residues;
         internal VorbisMapping[] Maps;
         internal VorbisMode[] Modes;
-
-        int _modeFieldBits;
+        private int _modeFieldBits;
 
         #region Stat Fields
 
@@ -56,18 +56,15 @@ namespace NVorbis
 
         internal int _packetCount;
 
-        internal System.Diagnostics.Stopwatch _sw = new System.Diagnostics.Stopwatch();
+        internal Stopwatch _sw = new Stopwatch();
 
         #endregion
 
-        IVorbisPacketProvider _packetProvider;
-        VorbisDataPacket _parameterChangePacket;
-
-        HashSet<int> _pagesSeen;
-
-        bool _eosFound;
-
-        readonly object _seekLock = new object();
+        private IVorbisPacketProvider _packetProvider;
+        private VorbisDataPacket? _parameterChangePacket;
+        private HashSet<int> _pagesSeen;
+        private bool _eosFound;
+        private readonly object _seekLock = new object();
 
         internal VorbisStreamDecoder(IVorbisPacketProvider packetProvider)
         {
@@ -85,19 +82,21 @@ namespace NVorbis
 
             // seek past the stream header packet
             var packet = _packetProvider.GetNextPacket();
-            packet.Done();
+            if (packet == null)
+                throw new InvalidDataException(null, new EndOfStreamException());
+            packet!.Done();
 
             // load the comments header...
             packet = _packetProvider.GetNextPacket();
             if (!LoadComments(packet))
                 throw new InvalidDataException("Comment header was not readable!");
-            packet.Done();
+            packet!.Done();
 
             // load the book header...
             packet = _packetProvider.GetNextPacket();
             if (!LoadBooks(packet))
                 throw new InvalidDataException("Book header was not readable!");
-            packet.Done();
+            packet!.Done();
 
             // get the decoding logic bootstrapped
             InitDecoder();
@@ -105,7 +104,7 @@ namespace NVorbis
             return true;
         }
 
-        void SetParametersChanging(object s, ParameterChangeEventArgs e)
+        private void SetParametersChanging(object? s, ParameterChangeEventArgs e)
         {
             _parameterChangePacket = e.FirstPacket;
         }
@@ -117,12 +116,12 @@ namespace NVorbis
                 _packetProvider.ParameterChange -= SetParametersChanging;
                 _packetProvider.Dispose();
             }
-            _packetProvider = null;
+            _packetProvider = null!;
         }
 
         #region Header Decode
 
-        void ProcessParameterChange(VorbisDataPacket packet)
+        private void ProcessParameterChange(VorbisDataPacket? packet)
         {
             _parameterChangePacket = null;
 
@@ -131,7 +130,7 @@ namespace NVorbis
             var doFullReset = false;
             if (ProcessStreamHeader(packet))
             {
-                packet.Done();
+                packet!.Done();
                 wasPeek = true;
                 doFullReset = true;
 
@@ -144,9 +143,9 @@ namespace NVorbis
             if (LoadComments(packet))
             {
                 if (wasPeek)
-                    _packetProvider.GetNextPacket().Done();
+                    _packetProvider.GetNextPacket()!.Done();
                 else
-                    packet.Done();
+                    packet!.Done();
 
                 wasPeek = true;
                 packet = _packetProvider.PeekNextPacket();
@@ -158,24 +157,22 @@ namespace NVorbis
             if (LoadBooks(packet))
             {
                 if (wasPeek)
-                    _packetProvider.GetNextPacket().Done();
+                    _packetProvider.GetNextPacket()!.Done();
                 else
-                    packet.Done();
+                    packet!.Done();
             }
 
             ResetDecoder(doFullReset);
         }
 
-        static readonly ReadOnlyMemory<byte> PacketSignatureStream =
+        private static readonly ReadOnlyMemory<byte> PacketSignatureStream =
             new byte[] { 0x01, 0x76, 0x6f, 0x72, 0x62, 0x69, 0x73 };
-
-        static readonly ReadOnlyMemory<byte> PacketSignatureComments =
+        private static readonly ReadOnlyMemory<byte> PacketSignatureComments =
             new byte[] { 0x03, 0x76, 0x6f, 0x72, 0x62, 0x69, 0x73 };
-
-        static readonly ReadOnlyMemory<byte> PacketSignatureBooks =
+        private static readonly ReadOnlyMemory<byte> PacketSignatureBooks =
             new byte[] { 0x05, 0x76, 0x6f, 0x72, 0x62, 0x69, 0x73 };
 
-        static bool ValidateHeader(VorbisDataPacket packet, ReadOnlySpan<byte> expected)
+        private static bool ValidateHeader(VorbisDataPacket packet, ReadOnlySpan<byte> expected)
         {
             for (var i = 0; i < expected.Length; i++)
                 if (expected[i] != packet.ReadByte())
@@ -183,7 +180,7 @@ namespace NVorbis
             return true;
         }
 
-        bool ProcessStreamHeader(VorbisDataPacket packet)
+        private bool ProcessStreamHeader(VorbisDataPacket packet)
         {
             if (!ValidateHeader(packet, PacketSignatureStream.Span))
             {
@@ -221,7 +218,7 @@ namespace NVorbis
             return true;
         }
 
-        bool LoadComments(VorbisDataPacket packet)
+        private bool LoadComments(VorbisDataPacket packet)
         {
             if (!ValidateHeader(packet, PacketSignatureComments.Span))
             {
@@ -245,7 +242,7 @@ namespace NVorbis
             return true;
         }
 
-        bool LoadBooks(VorbisDataPacket packet)
+        private bool LoadBooks(VorbisDataPacket packet)
         {
             if (!ValidateHeader(packet, PacketSignatureBooks.Span))
             {
@@ -318,26 +315,23 @@ namespace NVorbis
 
         #region Data Decode
 
-        float[] _prevBuffer;
-        RingBuffer _outputBuffer;
-        Queue<int> _bitsPerPacketHistory;
-        Queue<int> _sampleCountHistory;
-        int _preparedLength;
+        private float[] _prevBuffer;
+        private RingBuffer _outputBuffer;
+        private Queue<int> _bitsPerPacketHistory;
+        private Queue<int> _sampleCountHistory;
+        private int _preparedLength;
         internal bool _clipped;
+        private Stack<VorbisDataPacket> _resyncQueue;
+        private long _currentPosition;
+        private long _reportedPosition;
+        private VorbisMode _mode;
+        private bool _prevFlag, _nextFlag;
+        private bool[] _noExecuteChannel;
+        private VorbisFloor.PacketData[] _floorData;
+        private float[][] _residue;
+        private bool _isParameterChange;
 
-        Stack<VorbisDataPacket> _resyncQueue;
-
-        long _currentPosition;
-        long _reportedPosition;
-
-        VorbisMode _mode;
-        bool _prevFlag, _nextFlag;
-        bool[] _noExecuteChannel;
-        VorbisFloor.PacketData[] _floorData;
-        float[][] _residue;
-        bool _isParameterChange;
-
-        void InitDecoder()
+        private void InitDecoder()
         {
             _currentPosition = 0L;
 
@@ -349,7 +343,7 @@ namespace NVorbis
             ResetDecoder(true);
         }
 
-        void ResetDecoder(bool isFullReset)
+        private void ResetDecoder(bool isFullReset)
         {
             // this is called when:
             //  - init (true)
@@ -382,14 +376,14 @@ namespace NVorbis
             _preparedLength = 0;
         }
 
-        void SaveBuffer()
+        private void SaveBuffer()
         {
             var buf = new float[_preparedLength * _channels];
             ReadSamples(buf);
             _prevBuffer = buf;
         }
 
-        bool UnpackPacket(VorbisDataPacket packet)
+        private bool UnpackPacket(VorbisDataPacket packet)
         {
             // make sure we're on an audio packet
             if (packet.ReadBit())
@@ -471,7 +465,7 @@ namespace NVorbis
             return true;
         }
 
-        void DecodePacket()
+        private void DecodePacket()
         {
             // inverse coupling
             var steps = _mode.Mapping.CouplingSteps;
@@ -541,7 +535,7 @@ namespace NVorbis
             }
         }
 
-        int OverlapSamples()
+        private int OverlapSamples()
         {
             float[] window = _mode.GetWindow(_prevFlag, _nextFlag);
             // this is applied as part of the lapping operation
@@ -587,7 +581,7 @@ namespace NVorbis
             return samplesDecoded;
         }
 
-        void UpdatePosition(int samplesDecoded, VorbisDataPacket packet)
+        private void UpdatePosition(int samplesDecoded, VorbisDataPacket packet)
         {
             _samples += samplesDecoded;
 
@@ -647,11 +641,11 @@ namespace NVorbis
             }
         }
 
-        void DecodeNextPacket()
+        private void DecodeNextPacket()
         {
             _sw.Start();
 
-            VorbisDataPacket packet = null;
+            VorbisDataPacket? packet = null;
             try
             {
                 // get the next packet
@@ -780,7 +774,7 @@ namespace NVorbis
                     else
                     {
                         // if no samples left over, clear the previous buffer
-                        _prevBuffer = null;
+                        _prevBuffer = null!;
                     }
 
                     // reduce the desired sample count & increase the desired sample offset
@@ -844,7 +838,7 @@ namespace NVorbis
             if (granulePos < 0)
                 throw new ArgumentOutOfRangeException(nameof(granulePos));
 
-            VorbisDataPacket packet;
+            VorbisDataPacket? packet;
             if (granulePos > 0)
             {
                 packet = _packetProvider.FindPacket(granulePos, GetPacketLength);
@@ -867,6 +861,7 @@ namespace NVorbis
 
                 // get the packet that we'll decode next
                 var dataPacket = _packetProvider.PeekNextPacket();
+                Debug.Assert(dataPacket != null);
 
                 // now read samples until we are exactly at the granule position requested
                 CurrentPosition = dataPacket.GranulePosition;
@@ -897,7 +892,7 @@ namespace NVorbis
                 _eosFound = false;
 
                 ResetDecoder(false);
-                _prevBuffer = null;
+                _prevBuffer = null!;
             }
         }
 
@@ -928,7 +923,7 @@ namespace NVorbis
         {
             get
             {
-                if (_samples == 0L) 
+                if (_samples == 0L)
                     return 0;
 
                 double decodedSeconds = (double)(_currentPosition - _preparedLength) / _sampleRate;

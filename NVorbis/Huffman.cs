@@ -11,9 +11,9 @@ using System.Runtime.InteropServices;
 
 namespace NVorbis
 {
-    static class Huffman
+    internal static class Huffman
     {
-        const int MaxTableBits = 10;
+        private const int MaxTableBits = 10;
 
         internal static (HuffmanListNode[] Initial, HuffmanListNode[] Result) BuildPrefixedLinkedList<TList>(
             TList values,
@@ -76,7 +76,7 @@ namespace NVorbis
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    struct HuffmanListNode : IComparable<HuffmanListNode>
+    internal struct HuffmanListNode : IComparable<HuffmanListNode>
     {
         public readonly bool HasValue;
         public readonly int Value;

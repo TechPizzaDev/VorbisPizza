@@ -10,16 +10,16 @@ using System.Collections.Generic;
 
 namespace NVorbis.Ogg
 {
-    partial class OggPacketReader
+    internal partial class OggPacketReader
     {
         internal class DebugView
         {
-            OggPacketReader _reader;
-            OggPacket _last, _first;
-            
+            private OggPacketReader _reader;
+            private OggPacket? _last, _first;
+
             public OggContainerReader Container => _reader._container;
-            public int StreamSerial => _reader._streamSerial;
-            public bool EndOfStreamFound => _reader._eosFound;
+            public int StreamSerial => _reader.StreamSerial;
+            public bool EndOfStreamFound => _reader.HasEndOfStream;
 
             public int CurrentPacketIndex
             {
@@ -41,10 +41,10 @@ namespace NVorbis.Ogg
                 get
                 {
                     var packets = new List<OggPacket>();
-                    if (_reader._last == _last && 
+                    if (_reader._last == _last &&
                         _reader._first == _first)
                         return packets;
-                    
+
                     _last = _reader._last;
                     _first = _reader._first;
 

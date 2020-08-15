@@ -17,7 +17,7 @@ namespace NVorbis
         {
             var type = (int)packet.ReadBits(16);
 
-            VorbisResidue residue = null;
+            VorbisResidue? residue = null;
             switch (type)
             {
                 case 0: residue = new Residue0(vorbis); break;

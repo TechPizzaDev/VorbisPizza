@@ -16,7 +16,7 @@ namespace NVorbis
         {
             var type = (int)packet.ReadBits(16);
 
-            VorbisFloor floor = null;
+            VorbisFloor? floor = null;
             switch (type)
             {
                 case 0: floor = new Floor0(vorbis); break;

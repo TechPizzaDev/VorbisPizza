@@ -11,23 +11,23 @@ using System.IO;
 
 namespace NVorbis
 {
-    abstract partial class VorbisFloor
+    internal abstract partial class VorbisFloor
     {
-        class Floor1 : VorbisFloor
+        private sealed class Floor1 : VorbisFloor
         {
+            private int[] _partitionClass, _classDimensions, _classSubclasses;
+            private int[] _xList, _classMasterBookIndex, _hNeigh, _lNeigh, _sortIdx;
+            private int _multiplier, _range, _yBits;
+            private VorbisCodebook[] _classMasterbooks;
+            private VorbisCodebook[][] _subclassBooks;
+            private int[][] _subclassBookIndex;
+
+            private static readonly int[] _rangeLookup = { 256, 128, 86, 64 };
+            private static readonly int[] _yBitsLookup = { 8, 7, 7, 6 };
+
             internal Floor1(VorbisStreamDecoder vorbis) : base(vorbis)
             {
             }
-
-            int[] _partitionClass, _classDimensions, _classSubclasses;
-            int[] _xList, _classMasterBookIndex, _hNeigh, _lNeigh, _sortIdx;
-            int _multiplier, _range, _yBits;
-            VorbisCodebook[] _classMasterbooks;
-            VorbisCodebook[][] _subclassBooks;
-            int[][] _subclassBookIndex;
-
-            static readonly int[] _rangeLookup = { 256, 128, 86, 64 };
-            static readonly int[] _yBitsLookup = { 8, 7, 7, 6 };
 
             protected override void Init(VorbisDataPacket packet)
             {
@@ -104,12 +104,12 @@ namespace NVorbis
                         int tmp = _xList[j];
                         if (tmp < _xList[i])
                         {
-                            if (tmp > _xList[_lNeigh[i]]) 
+                            if (tmp > _xList[_lNeigh[i]])
                                 _lNeigh[i] = j;
                         }
                         else
                         {
-                            if (tmp < _xList[_hNeigh[i]]) 
+                            if (tmp < _xList[_hNeigh[i]])
                                 _hNeigh[i] = j;
                         }
                     }
@@ -120,7 +120,7 @@ namespace NVorbis
                 {
                     for (int j = i + 1; j < _sortIdx.Length; j++)
                     {
-                        if (_xList[i] == _xList[j]) 
+                        if (_xList[i] == _xList[j])
                             throw new InvalidDataException();
 
                         if (_xList[_sortIdx[i]] > _xList[_sortIdx[j]])
@@ -139,7 +139,7 @@ namespace NVorbis
                     _reusablePacketData[i] = new PacketData1();
             }
 
-            class PacketData1 : PacketData
+            private class PacketData1 : PacketData
             {
                 protected override bool HasEnergy => PostCount > 0;
 
@@ -147,7 +147,7 @@ namespace NVorbis
                 public int PostCount;
             }
 
-            PacketData1[] _reusablePacketData;
+            private PacketData1[] _reusablePacketData;
 
             internal override PacketData UnpackPacket(VorbisDataPacket packet, int blockSize, int channel)
             {
@@ -228,7 +228,7 @@ namespace NVorbis
                         {
                             int hx = _xList[idx];
                             int hy = data.Posts[idx] * _multiplier;
-                            if (lx < n) 
+                            if (lx < n)
                                 RenderLineMulti(lx, ly, Math.Min(hx, n), hy, residue);
                             lx = hx;
                             ly = hy;
@@ -246,10 +246,10 @@ namespace NVorbis
                 }
             }
 
-            bool[] _stepFlags = new bool[64];
-            int[] _finalY = new int[64];
+            private bool[] _stepFlags = new bool[64];
+            private int[] _finalY = new int[64];
 
-            bool[] UnwrapPosts(PacketData1 data)
+            private bool[] UnwrapPosts(PacketData1 data)
             {
                 Array.Clear(_stepFlags, 2, 62);
                 _stepFlags[0] = true;
@@ -266,7 +266,7 @@ namespace NVorbis
 
                     int predicted = RenderPoint(
                         _xList[lowOfs], _finalY[lowOfs], _xList[highOfs], _finalY[highOfs], _xList[i]);
-                    
+
                     int val = data.Posts[i];
                     int highroom = _range - predicted;
                     int lowroom = predicted;
@@ -313,7 +313,7 @@ namespace NVorbis
                 return _stepFlags;
             }
 
-            int RenderPoint(int x0, int y0, int x1, int y1, int X)
+            private static int RenderPoint(int x0, int y0, int x1, int y1, int X)
             {
                 int dy = y1 - y0;
                 int adx = x1 - x0;
@@ -327,7 +327,7 @@ namespace NVorbis
                     return y0 + off;
             }
 
-            void RenderLineMulti(int x0, int y0, int x1, int y1, float[] v)
+            private static void RenderLineMulti(int x0, int y0, int x1, int y1, float[] v)
             {
                 int dy = y1 - y0;
                 int adx = x1 - x0;
@@ -338,7 +338,8 @@ namespace NVorbis
                 int y = y0;
                 int err = -adx;
 
-                v[x0] *= inverse_dB_table[y0];
+                var dbTable = InverseDecibelTable;
+                v[x0] *= dbTable[y0];
                 ady -= Math.Abs(b) * adx;
 
                 while (++x < x1)
@@ -350,13 +351,13 @@ namespace NVorbis
                         err -= adx;
                         y += sy;
                     }
-                    v[x] *= inverse_dB_table[y];
+                    v[x] *= dbTable[y];
                 }
             }
 
             #region dB inversion table
 
-            static readonly float[] inverse_dB_table = {
+            private static float[] InverseDecibelTable { get; } = {
                 1.0649863e-07f, 1.1341951e-07f, 1.2079015e-07f, 1.2863978e-07f,
                 1.3699951e-07f, 1.4590251e-07f, 1.5538408e-07f, 1.6548181e-07f,
                 1.7623575e-07f, 1.8768855e-07f, 1.9988561e-07f, 2.1287530e-07f,

@@ -9,17 +9,29 @@ using System.IO;
 
 namespace NVorbis
 {
-    abstract partial class VorbisMapping
+    internal abstract partial class VorbisMapping
     {
+        private VorbisStreamDecoder _vorbis;
+
+        protected VorbisMapping(VorbisStreamDecoder vorbis)
+        {
+            _vorbis = vorbis;
+        }
+
+        protected abstract void Init(VorbisDataPacket packet);
+
         internal static VorbisMapping Init(
             VorbisStreamDecoder vorbis, VorbisDataPacket packet)
         {
             var type = (int)packet.ReadBits(16);
 
-            VorbisMapping mapping = null;
+            VorbisMapping? mapping = null;
+
             switch (type)
             {
-                case 0: mapping = new Mapping0(vorbis); break;
+                case 0:
+                    mapping = new Mapping0(vorbis);
+                    break;
             }
 
             if (mapping == null)
@@ -29,20 +41,11 @@ namespace NVorbis
             return mapping;
         }
 
-        VorbisStreamDecoder _vorbis;
-
-        protected VorbisMapping(VorbisStreamDecoder vorbis)
-        {
-            _vorbis = vorbis;
-        }
-
-        protected abstract void Init(VorbisDataPacket packet);
-
         internal Submap[] Submaps;
         internal Submap[] ChannelSubmap;
         internal CouplingStep[] CouplingSteps;
 
-        internal class Submap
+        internal sealed class Submap
         {
             public VorbisFloor Floor { get; }
             public VorbisResidue Residue { get; }

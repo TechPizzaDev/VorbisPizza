@@ -8,13 +8,13 @@
 
 namespace NVorbis
 {
-    abstract partial class VorbisResidue
+    internal abstract partial class VorbisResidue
     {
         // residue type 2... basically type 0,
         // but samples are interleaved between channels (ch0, ch1, ch0, ch1, etc...)
-        class Residue2 : Residue0
+        private sealed class Residue2 : Residue0
         {
-            int _channels;
+            private int _channels;
 
             internal Residue2(VorbisStreamDecoder vorbis) : base(vorbis) { }
 
@@ -42,7 +42,7 @@ namespace NVorbis
                     int entry = codebook.DecodeScalar(packet);
                     if (entry == -1)
                         return true;
-                    
+
                     for (int d = 0; d < codebook.Dimensions; d++, c++)
                     {
                         residue[chPtr][offset] += codebook[entry, d];

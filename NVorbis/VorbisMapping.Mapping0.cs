@@ -9,9 +9,9 @@ using System.IO;
 
 namespace NVorbis
 {
-    abstract partial class VorbisMapping
+    internal abstract partial class VorbisMapping
     {
-        class Mapping0 : VorbisMapping
+        private sealed class Mapping0 : VorbisMapping
         {
             internal Mapping0(VorbisStreamDecoder vorbis) : base(vorbis)
             {

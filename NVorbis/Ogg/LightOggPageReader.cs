@@ -356,7 +356,8 @@ namespace NVorbis.Ogg
 
             if (!_leaveOpen)
                 _stream?.Dispose();
-            _stream = null;
+            
+            _stream = null!;
         }
     }
 }

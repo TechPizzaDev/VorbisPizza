@@ -35,7 +35,7 @@ namespace NVorbis
                 Array.Copy(_buffer, _start, newBuffer, 0, _bufLen - _start);
                 if (_end < _start)
                     Array.Copy(_buffer, 0, newBuffer, _bufLen - _start, _end);
-                
+
                 var end = Length;
                 _start = 0;
                 _end = end;
@@ -55,11 +55,11 @@ namespace NVorbis
             // this is used to pull data out of the buffer, so we'll update the start position too
             int length = (_end - start + _bufLen) % _bufLen;
             if (buffer.Length > length)
-                throw new ArgumentOutOfRangeException("Destination buffer requested too much.");
+                throw new ArgumentOutOfRangeException(nameof(buffer), "Destination buffer requested too much.");
 
             var cnt = Math.Min(buffer.Length, _bufLen - start);
             _buffer.AsSpan(start, cnt).CopyTo(buffer);
-            
+
             if (cnt < buffer.Length)
                 _buffer.AsSpan(0, buffer.Length - cnt).CopyTo(buffer.Slice(cnt));
         }
@@ -69,14 +69,14 @@ namespace NVorbis
             var cnt = (count + _start) % _bufLen;
             if (_end > _start)
             {
-                if (cnt > _end || cnt < _start) 
-                    throw new ArgumentOutOfRangeException();
+                if (cnt > _end || cnt < _start)
+                    throw new ArgumentOutOfRangeException(nameof(count));
             }
             else
             {
                 // wrap-around
-                if (cnt < _start && cnt > _end) 
-                    throw new ArgumentOutOfRangeException();
+                if (cnt < _start && cnt > _end)
+                    throw new ArgumentOutOfRangeException(nameof(count));
             }
 
             _start = cnt;
@@ -92,7 +92,7 @@ namespace NVorbis
             get
             {
                 var tmp = _end - _start;
-                if (tmp < 0) 
+                if (tmp < 0)
                     tmp += _bufLen;
                 return tmp;
             }
@@ -105,7 +105,7 @@ namespace NVorbis
             int idx = (index + start) * Channels + channel + _start;
             while (idx >= _bufLen)
                 idx -= _bufLen;
-            
+
             // blech...  gotta fix the first packet's pointers
             if (idx < 0)
             {
@@ -116,7 +116,7 @@ namespace NVorbis
             // go through and do the overlap
             for (; idx < _bufLen && start < switchPoint; idx += Channels, ++start)
                 _buffer[idx] += pcm[start] * window[start];
-            
+
             if (idx >= _bufLen)
             {
                 idx -= _bufLen;
@@ -127,7 +127,7 @@ namespace NVorbis
             // go through and write the rest
             for (; idx < _bufLen && start < end; idx += Channels, ++start)
                 _buffer[idx] = pcm[start] * window[start];
-            
+
             if (idx >= _bufLen)
             {
                 idx -= _bufLen;
