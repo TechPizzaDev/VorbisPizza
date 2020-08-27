@@ -154,7 +154,7 @@ namespace NVorbis.Ogg
 
             var buffer = _readBuffer.AsSpan();
             int o = 0;
-            
+
             // header
             // NB: if the stream didn't have an EOS flag, 
             // this is the most likely spot for the EOF to be found...
@@ -169,7 +169,7 @@ namespace NVorbis.Ogg
                     throw new NotImplementedException("RIFF is currently not supported.");
                 return null;
             }
-            o += 4; 
+            o += 4;
 
             // check the stream version
             if (buffer[o] != 0)
@@ -181,7 +181,7 @@ namespace NVorbis.Ogg
 
             // bit flags
             hdr.Flags = (OggPageFlags)buffer[o++];
-            
+
             // granulePosition
             hdr.GranulePosition = BinaryPrimitives.ReadInt64LittleEndian(buffer.Slice(o));
             o += sizeof(long);
@@ -196,7 +196,7 @@ namespace NVorbis.Ogg
 
             // save off the CRC
             uint pageCrc = BinaryPrimitives.ReadUInt32LittleEndian(buffer.Slice(o));
-            
+
             // start calculating the CRC value for this page
             var crc = new Crc32();
 
@@ -454,11 +454,12 @@ namespace NVorbis.Ogg
                     }
                     break;
                 }
-            } while (nextSerial != streamSerial);
+            }
+            while (nextSerial != streamSerial);
         }
 
         /// <summary>
-        /// Disposes this reader and underlying packet readers.
+        /// Disposes the reader and underlying packet readers.
         /// </summary>
         protected virtual void Dispose(bool disposing)
         {
@@ -478,7 +479,7 @@ namespace NVorbis.Ogg
         }
 
         /// <summary>
-        /// Disposes this reader and underlying packet readers.
+        /// Disposes the reader and underlying packet readers.
         /// </summary>
         public void Dispose()
         {
