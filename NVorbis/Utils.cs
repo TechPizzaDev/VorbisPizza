@@ -1,6 +1,7 @@
-﻿namespace NVorbis
+﻿
+namespace NVorbis
 {
-    static class Utils
+    internal static class Utils
     {
         public static int ILog(int x)
         {
@@ -27,7 +28,7 @@
             return ((n >> 16) | (n << 16)) >> (32 - bits);
         }
 
-        static internal float ClipValue(float value, ref bool clipped)
+        public static float ClipValue(float value, ref bool clipped)
         {
             if (value > .99999994f)
             {
@@ -54,7 +55,6 @@
             //     On the flip side, larger exponent values don't seem to be used by the Vorbis codebooks...
             //     Either way, we'll play it safe and let the BCL calculate it.
 
-            // now switch to single-precision and calc the return value
             return mantissa * System.MathF.Pow(2f, exponent);
         }
     }

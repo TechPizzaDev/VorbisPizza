@@ -18,7 +18,7 @@ namespace NVorbis.Contracts
         /// <summary>
         /// Gets or sets the callback to invoke when a new stream is encountered in the container.
         /// </summary>
-        NewStreamHandler NewStreamCallback { get; set; }
+        NewStreamHandler? NewStreamCallback { get; set; }
 
         /// <summary>
         /// Returns a read-only list of the logical streams discovered in this container.

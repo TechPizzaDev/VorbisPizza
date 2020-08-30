@@ -1,4 +1,5 @@
-﻿using NVorbis.Contracts;
+﻿using System;
+using NVorbis.Contracts;
 
 namespace NVorbis
 {
@@ -13,26 +14,27 @@ namespace NVorbis
             base.Init(packet, 1, codebooks);
         }
 
-        public override void Decode(IPacket packet, bool[] doNotDecodeChannel, int blockSize, float[][] buffer)
+        public override void Decode(
+            IPacket packet, ReadOnlySpan<bool> doNotDecodeChannel, int blockSize, float[][] buffer)
         {
             // since we're doing all channels in a single pass, the block size has to be multiplied.
             // otherwise this is just a pass-through call
             base.Decode(packet, doNotDecodeChannel, blockSize * _channels, buffer);
         }
 
-        protected override bool WriteVectors(ICodebook codebook, IPacket packet, float[][] residue, int channel, int offset, int partitionSize)
+        protected override bool WriteVectors(
+            ICodebook codebook, IPacket packet, float[][] residue, int channel, int offset, int partitionSize)
         {
             var chPtr = 0;
 
             offset /= _channels;
             for (int c = 0; c < partitionSize;)
             {
-                var entry = codebook.DecodeScalar(packet);
+                int entry = codebook.DecodeScalar(packet);
                 if (entry == -1)
-                {
                     return true;
-                }
-                for (var d = 0; d < codebook.Dimensions; d++, c++)
+                
+                for (int d = 0; d < codebook.Dimensions; d++, c++)
                 {
                     residue[chPtr][offset] += codebook[entry, d];
                     if (++chPtr == _channels)

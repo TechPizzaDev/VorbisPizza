@@ -1,215 +1,180 @@
-﻿/****************************************************************************
- * NVorbis                                                                  *
- * Copyright (C) 2014, Andrew Ward <afward@gmail.com>                       *
- *                                                                          *
- * See COPYING for license terms (Ms-PL).                                   *
- *                                                                          *
- ***************************************************************************/
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using NVorbis.Contracts;
 
 namespace NVorbis
 {
-    public class VorbisReader : IDisposable
+    /// <summary>
+    /// Implements an easy to use wrapper around <see cref="IContainerReader"/> and <see cref="IStreamDecoder"/>.
+    /// </summary>
+    public sealed class VorbisReader : IVorbisReader
     {
-        private IVorbisContainerReader _containerReader;
-        private List<VorbisStreamDecoder> _decoders;
-        private List<int> _serials;
-        private bool _isDisposed;
+        internal static Func<Stream, bool, IContainerReader> CreateContainerReader { get; set; } =
+            (s, lo) => new Ogg.ContainerReader(s, lo);
 
-        private VorbisReader()
+        internal static Func<IPacketProvider, IStreamDecoder> CreateStreamDecoder { get; set; } =
+            pp => new StreamDecoder(pp, new Factory());
+
+        private readonly List<IStreamDecoder> _decoders;
+        private readonly IContainerReader _containerReader;
+        private readonly bool _leaveOpen;
+
+        private IStreamDecoder _streamDecoder;
+
+        /// <summary>
+        /// Raised when a new stream has been encountered in the file or container.
+        /// </summary>
+        public event EventHandler<NewStreamEventArgs>? NewStream;
+
+        /// <summary>
+        /// Creates a new instance of <see cref="VorbisReader"/> reading from the specified file.
+        /// </summary>
+        /// <param name="fileName">The file to read from.</param>
+        public VorbisReader(string fileName)
+            : this(File.OpenRead(fileName), leaveOpen: false)
         {
-            ClipSamples = true;
-
-            _decoders = new List<VorbisStreamDecoder>();
-            _serials = new List<int>();
         }
 
-        public VorbisReader(string filePath)
-            : this(File.Open(filePath, FileMode.Open, FileAccess.Read, FileShare.Read), leaveOpen: false)
+        /// <summary>
+        /// Creates a new instance of <see cref="VorbisReader"/> reading from the specified stream,
+        /// optionally taking ownership of it.
+        /// </summary>
+        /// <param name="stream">The <see cref="Stream"/> to read from.</param>
+        /// <param name="leaveOpen"><c>false</c> to close the stream when disposed, otherwise <c>true</c>.</param>
+        public VorbisReader(Stream stream, bool leaveOpen = false)
         {
-        }
+            if (stream == null)
+                throw new ArgumentNullException(nameof(stream));
 
-        public VorbisReader(Stream stream, bool leaveOpen) : this()
-        {
-            var oggContainer = new Ogg.OggContainerReader(stream, leaveOpen);
-            if (!LoadContainer(oggContainer))
+            _decoders = new List<IStreamDecoder>();
+
+            var containerReader = CreateContainerReader(stream, leaveOpen);
+            containerReader.NewStreamCallback = ProcessNewStream;
+
+            if (!containerReader.TryInit() || _decoders.Count == 0)
             {
-                // oops, not Ogg!
-                // we don't support any other container types here, so error out
-                oggContainer.Dispose();
-                throw new InvalidDataException("Could not determine container type!");
+                containerReader.NewStreamCallback = null;
+                containerReader.Dispose();
+
+                if (!leaveOpen)
+                    stream.Dispose();
+
+                throw new InvalidDataException("Could not load the specified container.");
             }
-            _containerReader = oggContainer;
 
-            if (_decoders.Count == 0)
-                throw new InvalidDataException("No Vorbis data found!");
-        }
-
-        public VorbisReader(IVorbisContainerReader containerReader) : this()
-        {
-            if (containerReader == null)
-                throw new ArgumentNullException(nameof(containerReader));
-
-            if (!LoadContainer(containerReader))
-                throw new InvalidDataException("Container did not initialize!");
-
+            _leaveOpen = leaveOpen;
             _containerReader = containerReader;
-
-            if (_decoders.Count == 0)
-                throw new InvalidDataException("No Vorbis data found!");
+            _streamDecoder = _decoders[0];
         }
 
-        public VorbisReader(IVorbisPacketProvider packetProvider) : this()
+        private bool ProcessNewStream(IPacketProvider packetProvider)
         {
-            var ea = new NewStreamEventArgs(packetProvider);
-            NewStream(this, ea);
-            if (ea.IgnoreStream)
-                throw new InvalidDataException("No Vorbis data found!");
-        }
+            var decoder = CreateStreamDecoder(packetProvider);
+            decoder.ClipSamples = true;
 
-        private bool LoadContainer(IVorbisContainerReader containerReader)
-        {
-            containerReader.NewStream += NewStream;
-            if (!containerReader.Init())
-            {
-                containerReader.NewStream -= NewStream;
-                return false;
-            }
-            return true;
-        }
-
-        private void NewStream(object? sender, NewStreamEventArgs ea)
-        {
-            var packetProvider = ea.PacketProvider;
-            var decoder = new VorbisStreamDecoder(packetProvider);
-            if (decoder.TryInit())
+            var ea = new NewStreamEventArgs(decoder);
+            NewStream?.Invoke(this, ea);
+            if (!ea.IgnoreStream)
             {
                 _decoders.Add(decoder);
-                _serials.Add(packetProvider.StreamSerial);
+                return true;
             }
-            else
+            return false;
+        }
+
+        /// <summary>
+        /// Cleans up this instance.
+        /// </summary>
+        public void Dispose()
+        {
+            if (_decoders != null)
             {
-                // This is almost certainly not a Vorbis stream
-                ea.IgnoreStream = true;
+                foreach (var decoder in _decoders)
+                    decoder.Dispose();
+                _decoders.Clear();
             }
-        }
 
-        private VorbisStreamDecoder ActiveDecoder
-        {
-            get
+            if (_containerReader != null)
             {
-                if (_decoders == null)
-                    throw new ObjectDisposedException(GetType().FullName);
-                return _decoders[StreamIndex];
+                _containerReader.NewStreamCallback = null;
+                if (!_leaveOpen)
+                    _containerReader.Dispose();
             }
         }
 
-        #region Public Interface
+        /// <inheritdoc/>
+        public IReadOnlyList<IStreamDecoder> Streams => _decoders;
 
-        /// <summary>
-        /// Gets the number of channels in the current stream.
-        /// </summary>
-        public int Channels => ActiveDecoder._channels;
+        #region Convenience Helpers
 
-        /// <summary>
-        /// Gets the sample rate of the current stream.
-        /// </summary>
-        public int SampleRate => ActiveDecoder._sampleRate;
+        // Since most uses of VorbisReader are for single-stream audio files,
+        // we can make life simpler for users by exposing the first stream's properties and methods here.
 
-        /// <summary>
-        /// Gets the encoder's upper bitrate of the current stream.
-        /// </summary>
-        public int UpperBitrate => ActiveDecoder._upperBitrate;
+        /// <inheritdoc/>
+        public int Channels => _streamDecoder.Channels;
 
-        /// <summary>
-        /// Gets the encoder's nominal bitrate of the current stream.
-        /// </summary>
-        public int NominalBitrate => ActiveDecoder._nominalBitrate;
+        /// <inheritdoc/>
+        public int SampleRate => _streamDecoder.SampleRate;
 
-        /// <summary>
-        /// Gets the encoder's lower bitrate of the current stream.
-        /// </summary>
-        public int LowerBitrate => ActiveDecoder._lowerBitrate;
+        /// <inheritdoc/>
+        public int UpperBitrate => _streamDecoder.UpperBitrate;
 
-        /// <summary>
-        /// Gets the encoder's vendor string for the current stream.
-        /// </summary>
-        public string Vendor => ActiveDecoder._vendor;
+        /// <inheritdoc/>
+        public int NominalBitrate => _streamDecoder.NominalBitrate;
 
-        /// <summary>
-        /// Gets the comments in the current stream.
-        /// </summary>
-        public string[] Comments => ActiveDecoder._comments;
+        /// <inheritdoc/>
+        public int LowerBitrate => _streamDecoder.LowerBitrate;
 
-        /// <summary>
-        /// Gets whether the previous short sample count was due to a parameter change in the stream.
-        /// </summary>
-        public bool IsParameterChange => ActiveDecoder.IsParameterChange;
+        /// <inheritdoc/>
+        public ITagData Tags => _streamDecoder.Tags;
 
-        /// <summary>
-        /// Gets the number of bits read that are related to framing and transport alone.
-        /// </summary>
-        public long ContainerOverheadBits => ActiveDecoder.ContainerBits;
+        /// <inheritdoc/>
+        public long ContainerOverheadBits => _containerReader?.ContainerBits ?? 0;
 
-        /// <summary>
-        /// Gets or sets whether to automatically apply clipping to samples returned by <see cref="ReadSamples"/>.
-        /// </summary>
-        public bool ClipSamples { get; set; }
+        /// <inheritdoc/>
+        public long ContainerWasteBits => _containerReader?.WasteBits ?? 0;
 
-        /// <summary>
-        /// Gets the currently selected stream's index.
-        /// </summary>
-        public int StreamIndex { get; private set; }
+        /// <inheritdoc/>
+        public int StreamIndex => _decoders.IndexOf(_streamDecoder);
 
-        /// <summary>
-        /// Gets stats from each available decoder stream.
-        /// </summary>
-        public IVorbisStreamStatus[] GetStatusReaders()
+        /// <inheritdoc/>
+        public TimeSpan TotalTime => _streamDecoder.TotalTime;
+
+        /// <inheritdoc/>
+        public long TotalSamples => _streamDecoder.TotalSamples;
+
+        /// <inheritdoc/>
+        public TimeSpan TimePosition
         {
-            var stats = new IVorbisStreamStatus[_decoders.Count];
-            for (int i = 0; i < stats.Length; i++)
-                stats[i] = _decoders[i];
-            return stats;
+            get => _streamDecoder.TimePosition;
+            set => _streamDecoder.TimePosition = value;
         }
 
-        /// <summary>
-        /// Reads decoded samples from the current logical stream
-        /// </summary>
-        /// <param name="buffer">The buffer to write the samples to</param>
-        /// <returns>The number of samples written</returns>
-        public int ReadSamples(Span<float> buffer)
+        /// <inheritdoc/>
+        public long SamplePosition
         {
-            int count = ActiveDecoder.ReadSamples(buffer);
-
-            if (ClipSamples)
-            {
-                var decoder = _decoders[StreamIndex];
-                for (int i = 0; i < count; i++)
-                    buffer[i] = Utils.ClipValue(buffer[i], ref decoder._clipped);
-            }
-
-            return count;
+            get => _streamDecoder.SamplePosition;
+            set => _streamDecoder.SamplePosition = value;
         }
 
-        /// <summary>
-        /// Clears the parameter change flag so further samples can be requested.
-        /// </summary>
-        public void ClearParameterChange()
+        /// <inheritdoc/>
+        public bool IsEndOfStream => _streamDecoder.IsEndOfStream;
+
+        /// <inheritdoc/>
+        public bool ClipSamples
         {
-            ActiveDecoder.IsParameterChange = false;
+            get => _streamDecoder.ClipSamples;
+            set => _streamDecoder.ClipSamples = value;
         }
 
-        /// <summary>
-        /// Returns the number of logical streams found so far in the physical container.
-        /// </summary>
-        public int StreamCount => _decoders.Count;
+        /// <inheritdoc/>
+        public bool HasClipped => _streamDecoder.HasClipped;
 
-        /// <summary>
-        /// Searches for the next stream in a concatenated file.
-        /// </summary>
-        /// <returns>Whether if a new stream was found.</returns>
+        /// <inheritdoc/>
+        public IStreamStats StreamStats => _streamDecoder.Stats;
+
+        /// <inheritdoc/>
         public bool FindNextStream()
         {
             if (_containerReader == null)
@@ -217,116 +182,51 @@ namespace NVorbis
             return _containerReader.FindNextStream();
         }
 
-        /// <summary>
-        /// Switches to an alternate logical stream.
-        /// </summary>
-        /// <param name="index">The logical stream index to switch to,</param>
-        /// <returns>
-        /// Whether the properties of the logical stream differ from those of
-        /// the one previously being decoded.
-        /// </returns>
+        /// <inheritdoc/>
         public bool SwitchStreams(int index)
         {
-            if (index < 0 || index >= StreamCount)
+            if (index < 0 || index >= _decoders.Count)
                 throw new ArgumentOutOfRangeException(nameof(index));
 
-            if (_decoders == null)
-                throw new ObjectDisposedException(GetType().FullName);
-
-            if (StreamIndex == index)
+            var newDecoder = _decoders[index];
+            var oldDecoder = _streamDecoder;
+            if (newDecoder == oldDecoder)
                 return false;
 
-            var curentDecoder = _decoders[StreamIndex];
-            StreamIndex = index;
-            var newDecoder = _decoders[StreamIndex];
+            // carry-through the clipping setting
+            newDecoder.ClipSamples = oldDecoder.ClipSamples;
 
-            return curentDecoder._channels != newDecoder._channels
-                || curentDecoder._sampleRate != newDecoder._sampleRate;
-        }
+            _streamDecoder = newDecoder;
 
-        /// <summary>
-        /// Gets or sets the current timestamp of the decoder.  
-        /// Is the timestamp before the next sample to be decoded,
-        /// </summary>
-        public TimeSpan TimePosition
-        {
-            get => TimeSpan.FromSeconds((double)ActiveDecoder.CurrentPosition / SampleRate);
-            set => ActiveDecoder.SeekTo((long)(value.TotalSeconds * SampleRate));
-
-        }
-
-        /// <summary>
-        /// Gets or sets the current position of the next sample to be decoded.
-        /// </summary>
-        public long SamplePosition
-        {
-            get => ActiveDecoder.CurrentPosition;
-            set => ActiveDecoder.SeekTo(value);
-        }
-
-        /// <summary>
-        /// Gets the total length of the current logical stream.
-        /// </summary>
-        public TimeSpan? TotalTime
-        {
-            get
-            {
-                var decoder = ActiveDecoder;
-                if (decoder.CanSeek)
-                    return TimeSpan.FromSeconds((double)decoder.GetLastGranulePos() / decoder._sampleRate);
-                return null;
-            }
-        }
-
-        /// <summary>
-        /// Gets the total sample amount of the current logical stream.
-        /// </summary>
-        public long? TotalSamples
-        {
-            get
-            {
-                var decoder = ActiveDecoder;
-                if (decoder.CanSeek)
-                    return decoder.GetLastGranulePos();
-                return null;
-            }
-        }
-
-        #endregion
-
-        protected virtual void Dispose(bool disposing)
-        {
-            if (!_isDisposed)
-            {
-                if (disposing)
-                {
-                    if (_decoders != null)
-                    {
-                        foreach (var decoder in _decoders)
-                            decoder.Dispose();
-
-                        _decoders.Clear();
-                        _decoders = null!;
-                    }
-
-                    if (_containerReader != null)
-                    {
-                        _containerReader.NewStream -= NewStream;
-                        _containerReader.Dispose();
-                        _containerReader = null!;
-                    }
-                }
-
-                _isDisposed = true;
-            }
+            return newDecoder.Channels != oldDecoder.Channels || newDecoder.SampleRate != oldDecoder.SampleRate;
         }
 
         /// <inheritdoc/>
-        public void Dispose()
+        public void SeekTo(TimeSpan timePosition, SeekOrigin seekOrigin = SeekOrigin.Begin)
         {
-            // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
-            Dispose(disposing: true);
-            GC.SuppressFinalize(this);
+            _streamDecoder.SeekTo(timePosition, seekOrigin);
         }
+
+        /// <inheritdoc/>
+        public void SeekTo(long samplePosition, SeekOrigin seekOrigin = SeekOrigin.Begin)
+        {
+            _streamDecoder.SeekTo(samplePosition, seekOrigin);
+        }
+
+        /// <inheritdoc/>
+        public int ReadSamples(Span<float> buffer)
+        {
+            if (buffer.IsEmpty)
+                return 0;
+
+            // don't allow non-aligned reads (always on a full sample boundary!)
+            int count = buffer.Length;
+            count -= count % _streamDecoder.Channels;
+            buffer = buffer.Slice(0, count);
+
+            return _streamDecoder.Read(buffer);
+        }
+
+        #endregion
     }
 }

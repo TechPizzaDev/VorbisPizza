@@ -25,7 +25,7 @@ namespace NVorbis.Contracts
         long ContainerWasteBits { get; }
 
         /// <summary>
-        /// Gets the list of <see cref="IStreamDecoder"/> instances associated with the loaded file / container.
+        /// Gets the list of <see cref="IStreamDecoder"/> instances associated with the loaded file/container.
         /// </summary>
         IReadOnlyList<IStreamDecoder> Streams { get; }
 
@@ -50,7 +50,8 @@ namespace NVorbis.Contracts
         int UpperBitrate { get; }
 
         /// <summary>
-        /// Gets the nominal bitrate of the stream, if specified.  May be calculated from <see cref="LowerBitrate"/> and <see cref="UpperBitrate"/>.
+        /// Gets the nominal bitrate of the stream, if specified. 
+        /// May be calculated from <see cref="LowerBitrate"/> and <see cref="UpperBitrate"/>.
         /// </summary>
         int NominalBitrate { get; }
 
@@ -70,7 +71,7 @@ namespace NVorbis.Contracts
         long TotalSamples { get; }
 
         /// <summary>
-        /// Gets or sets whether to clip samples returned by <see cref="ReadSamples(float[], int, int)"/>.
+        /// Gets or sets whether to clip samples returned by <see cref="ReadSamples"/>.
         /// </summary>
         bool ClipSamples { get; set; }
 
@@ -85,7 +86,7 @@ namespace NVorbis.Contracts
         long SamplePosition { get; set; }
 
         /// <summary>
-        /// Gets whether <see cref="ReadSamples(float[], int, int)"/> has returned any clipped samples.
+        /// Gets whether <see cref="ReadSamples"/> has returned any clipped samples.
         /// </summary>
         bool HasClipped { get; }
 
@@ -105,7 +106,9 @@ namespace NVorbis.Contracts
         ITagData Tags { get; }
 
         /// <summary>
-        /// Searches for the next stream in a concatenated file.  Will raise <see cref="NewStream"/> for the found stream, and will add it to <see cref="Streams"/> if not marked as ignored.
+        /// Searches for the next stream in a concatenated file.
+        /// Will raise <see cref="NewStream"/> for the found stream, 
+        /// and will add it to <see cref="Streams"/> if not marked as ignored.
         /// </summary>
         /// <returns><see langword="true"/> if a new stream was found, otherwise <see langword="false"/>.</returns>
         bool FindNextStream();
@@ -114,19 +117,22 @@ namespace NVorbis.Contracts
         /// Switches to an alternate logical stream.
         /// </summary>
         /// <param name="index">The logical stream index to switch to</param>
-        /// <returns><see langword="true"/> if the properties of the logical stream differ from those of the one previously being decoded. Otherwise, <see langword="false"/>.</returns>
+        /// <returns>
+        /// <see langword="true"/> if the properties of the logical stream differ from 
+        /// those of the one previously being decoded. Otherwise, <see langword="false"/>.
+        /// </returns>
         bool SwitchStreams(int index);
 
         /// <summary>
         /// Reads samples into the specified buffer.
         /// </summary>
         /// <param name="buffer">The buffer to read the samples into.</param>
-        /// <param name="offset">The index to start reading samples into the buffer.</param>
-        /// <param name="count">The number of samples that should be read into the buffer.  Must be a multiple of <see cref="Channels"/>.</param>
         /// <returns>The number of samples read into the buffer.</returns>
-        /// <exception cref="ArgumentOutOfRangeException">Thrown when the buffer is too small or <paramref name="offset"/> is less than zero.</exception>
-        /// <remarks>The data populated into <paramref name="buffer"/> is interleaved by channel in normal PCM fashion: Left, Right, Left, Right, Left, Right</remarks>
-        int ReadSamples(float[] buffer, int offset, int count);
+        /// <remarks>
+        /// The data populated into <paramref name="buffer"/> is interleaved by channel in normal PCM fashion: 
+        /// Left, Right, Left, Right, Left, Right, etc...
+        /// </remarks>
+        int ReadSamples(Span<float> buffer);
 
         /// <summary>
         /// Seeks the stream by the specified duration.

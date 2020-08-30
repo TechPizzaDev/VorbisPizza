@@ -1,29 +1,35 @@
-﻿using NVorbis.Contracts;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using NVorbis.Contracts;
 
 namespace NVorbis
 {
-    // Packed LSP values on dB amplittude and Bark frequency scale.  Virtually unused (libvorbis did not use past beta 4).  Probably untested.
-    class Floor0 : IFloor
+    // Packed LSP values on dB amplittude and Bark frequency scale. 
+    // Virtually unused (libvorbis did not use past beta 4).  Probably untested.
+    internal class Floor0 : IFloor
     {
-        class Data : IFloorData
+        private class Data : IFloorData
         {
             internal float[] Coeff;
             internal float Amp;
 
-            public bool ExecuteChannel => (ForceEnergy || Amp > 0f) && !ForceNoEnergy;
-
             public bool ForceEnergy { get; set; }
             public bool ForceNoEnergy { get; set; }
+
+            public bool ExecuteChannel => (ForceEnergy || Amp > 0f) && !ForceNoEnergy;
+
+            public Data(int coeffLength)
+            {
+                Coeff = new float[coeffLength];
+            }
         }
 
-        int _order, _rate, _bark_map_size, _ampBits, _ampOfs, _ampDiv;
-        ICodebook[] _books;
-        int _bookBits;
-        Dictionary<int, float[]> _wMap;
-        Dictionary<int, int[]> _barkMaps;
+        private int _order, _rate, _bark_map_size, _ampBits, _ampOfs, _ampDiv;
+        private ICodebook[] _books;
+        private int _bookBits;
+        private Dictionary<int, float[]> _wMap;
+        private Dictionary<int, int[]> _barkMaps;
 
         public void Init(IPacket packet, int channels, int block0Size, int block1Size, ICodebook[] codebooks)
         {
@@ -35,21 +41,24 @@ namespace NVorbis
             _ampOfs = (int)packet.ReadBits(8);
             _books = new ICodebook[(int)packet.ReadBits(4) + 1];
 
-            if (_order < 1 || _rate < 1 || _bark_map_size < 1 || _books.Length == 0) throw new InvalidDataException();
+            if (_order < 1 || _rate < 1 || _bark_map_size < 1 || _books.Length == 0)
+                throw new InvalidDataException();
 
             _ampDiv = (1 << _ampBits) - 1;
 
             for (int i = 0; i < _books.Length; i++)
             {
                 var num = (int)packet.ReadBits(8);
-                if (num < 0 || num >= codebooks.Length) throw new InvalidDataException();
+                if (num < 0 || num >= codebooks.Length)
+                    throw new InvalidDataException();
                 var book = codebooks[num];
 
-                if (book.MapType == 0 || book.Dimensions < 1) throw new InvalidDataException();
+                if (book.MapType == 0 || book.Dimensions < 1)
+                    throw new InvalidDataException();
 
                 _books[i] = book;
             }
-            _bookBits = Utils.ilog(_books.Length);
+            _bookBits = Utils.ILog(_books.Length);
 
             _barkMaps = new Dictionary<int, int[]>
             {
@@ -64,150 +73,142 @@ namespace NVorbis
             };
         }
 
-        int[] SynthesizeBarkCurve(int n)
+        private int[] SynthesizeBarkCurve(int n)
         {
-            var scale = _bark_map_size / toBARK(_rate / 2);
+            var scale = _bark_map_size / ToBARK(_rate / 2);
 
             var map = new int[n + 1];
-
-            for (int i = 0; i < n - 1; i++)
-            {
-                map[i] = Math.Min(_bark_map_size - 1, (int)Math.Floor(toBARK((_rate / 2f) / n * i) * scale));
-            }
+            for (int i = 0; i < map.Length - 2; i++)
+                map[i] = Math.Min(_bark_map_size - 1, (int)Math.Floor(ToBARK(_rate / 2f / n * i) * scale));
+            
             map[n] = -1;
             return map;
         }
 
-        static float toBARK(double lsp)
+        private static float ToBARK(double lsp)
         {
             return (float)(13.1 * Math.Atan(0.00074 * lsp) + 2.24 * Math.Atan(0.0000000185 * lsp * lsp) + .0001 * lsp);
         }
 
-        float[] SynthesizeWDelMap(int n)
+        private float[] SynthesizeWDelMap(int n)
         {
-            var wdel = (float)(Math.PI / _bark_map_size);
+            float wdel = (float)(Math.PI / _bark_map_size);
 
             var map = new float[n];
             for (int i = 0; i < n; i++)
             {
-                map[i] = 2f * (float)Math.Cos(wdel * i);
+                map[i] = 2f * MathF.Cos(wdel * i);
             }
             return map;
         }
 
         public IFloorData Unpack(IPacket packet, int blockSize, int channel)
         {
-            var data = new Data
-            {
-                Coeff = new float[_order + 1],
-            };
-
+            var data = new Data(coeffLength: _order + 1);
             data.Amp = packet.ReadBits(_ampBits);
-            if (data.Amp > 0f)
+
+            if (data.Amp <= 0f)
+                return data;
+
+            // this is pretty well stolen directly from libvorbis...  BSD license
+            Array.Clear(data.Coeff, 0, data.Coeff.Length);
+
+            data.Amp = data.Amp / _ampDiv * _ampOfs;
+
+            var bookNum = (uint)packet.ReadBits(_bookBits);
+            if (bookNum >= _books.Length)
             {
-                // this is pretty well stolen directly from libvorbis...  BSD license
-                Array.Clear(data.Coeff, 0, data.Coeff.Length);
+                // we ran out of data or the packet is corrupt...  0 the floor and return
+                data.Amp = 0;
+                return data;
+            }
+            var book = _books[bookNum];
 
-                data.Amp = data.Amp / _ampDiv * _ampOfs;
-
-                var bookNum = (uint)packet.ReadBits(_bookBits);
-                if (bookNum >= _books.Length)
+            // first, the book decode...
+            for (int i = 0; i < _order;)
+            {
+                var entry = book.DecodeScalar(packet);
+                if (entry == -1)
                 {
                     // we ran out of data or the packet is corrupt...  0 the floor and return
                     data.Amp = 0;
                     return data;
                 }
-                var book = _books[bookNum];
 
-                // first, the book decode...
-                for (int i = 0; i < _order;)
-                {
-                    var entry = book.DecodeScalar(packet);
-                    if (entry == -1)
-                    {
-                        // we ran out of data or the packet is corrupt...  0 the floor and return
-                        data.Amp = 0;
-                        return data;
-                    }
-                    for (int j = 0; i < _order && j < book.Dimensions; j++, i++)
-                    {
-                        data.Coeff[i] = book[entry, j];
-                    }
-                }
+                for (int j = 0; i < _order && j < book.Dimensions; j++, i++)
+                    data.Coeff[i] = book[entry, j];
+            }
 
-                // then, the "averaging"
-                var last = 0f;
-                for (int j = 0; j < _order;)
-                {
-                    for (int k = 0; j < _order && k < book.Dimensions; j++, k++)
-                    {
-                        data.Coeff[j] += last;
-                    }
-                    last = data.Coeff[j - 1];
-                }
+            // then, the "averaging"
+            var last = 0f;
+            for (int j = 0; j < _order;)
+            {
+                for (int k = 0; j < _order && k < book.Dimensions; j++, k++)
+                    data.Coeff[j] += last;
+
+                last = data.Coeff[j - 1];
             }
             return data;
         }
 
         public void Apply(IFloorData floorData, int blockSize, float[] residue)
         {
-            if (!(floorData is Data data)) throw new ArgumentException("Incorrect packet data!");
+            if (!(floorData is Data data))
+                throw new ArgumentException("Incorrect packet data type.", nameof(floorData));
 
-            var n = blockSize / 2;
+            int n = blockSize / 2;
 
-            if (data.Amp > 0f)
-            {
-                // this is pretty well stolen directly from libvorbis...  BSD license
-                var barkMap = _barkMaps[blockSize];
-                var wMap = _wMap[blockSize];
-
-                int i = 0;
-                for (i = 0; i < _order; i++)
-                {
-                    data.Coeff[i] = 2f * (float)Math.Cos(data.Coeff[i]);
-                }
-
-                i = 0;
-                while (i < n)
-                {
-                    int j;
-                    var k = barkMap[i];
-                    var p = .5f;
-                    var q = .5f;
-                    var w = wMap[k];
-                    for (j = 1; j < _order; j += 2)
-                    {
-                        q *= w - data.Coeff[j - 1];
-                        p *= w - data.Coeff[j];
-                    }
-                    if (j == _order)
-                    {
-                        // odd order filter; slightly assymetric
-                        q *= w - data.Coeff[j - 1];
-                        p *= p * (4f - w * w);
-                        q *= q;
-                    }
-                    else
-                    {
-                        // even order filter; still symetric
-                        p *= p * (2f - w);
-                        q *= q * (2f + w);
-                    }
-
-                    // calc the dB of this bark section
-                    q = data.Amp / (float)Math.Sqrt(p + q) - _ampOfs;
-
-                    // now convert to a linear sample multiplier
-                    q = (float)Math.Exp(q * 0.11512925f);
-
-                    residue[i] *= q;
-
-                    while (barkMap[++i] == k) residue[i] *= q;
-                }
-            }
-            else
+            if (data.Amp <= 0f)
             {
                 Array.Clear(residue, 0, n);
+                return;
+            }
+
+            // this is pretty well stolen directly from libvorbis...  BSD license
+            var barkMap = _barkMaps[blockSize];
+            var wMap = _wMap[blockSize];
+
+            int i;
+            for (i = 0; i < _order; i++)
+                data.Coeff[i] = 2f * MathF.Cos(data.Coeff[i]);
+
+            i = 0;
+            while (i < n)
+            {
+                int j;
+                var k = barkMap[i];
+                var p = .5f;
+                var q = .5f;
+                var w = wMap[k];
+                for (j = 1; j < _order; j += 2)
+                {
+                    q *= w - data.Coeff[j - 1];
+                    p *= w - data.Coeff[j];
+                }
+                if (j == _order)
+                {
+                    // odd order filter; slightly assymetric
+                    q *= w - data.Coeff[j - 1];
+                    p *= p * (4f - w * w);
+                    q *= q;
+                }
+                else
+                {
+                    // even order filter; still symetric
+                    p *= p * (2f - w);
+                    q *= q * (2f + w);
+                }
+
+                // calc the dB of this bark section
+                q = data.Amp / MathF.Sqrt(p + q) - _ampOfs;
+
+                // now convert to a linear sample multiplier
+                q = MathF.Exp(q * 0.11512925f);
+
+                residue[i] *= q;
+
+                while (barkMap[++i] == k)
+                    residue[i] *= q;
             }
         }
     }

@@ -24,7 +24,8 @@ namespace NVorbis.Contracts
         int UpperBitrate { get; }
 
         /// <summary>
-        /// Gets the nominal bitrate of the stream, if specified.  May be calculated from <see cref="LowerBitrate"/> and <see cref="UpperBitrate"/>.
+        /// Gets the nominal bitrate of the stream, if specified.
+        /// May be calculated from <see cref="LowerBitrate"/> and <see cref="UpperBitrate"/>.
         /// </summary>
         int NominalBitrate { get; }
 
@@ -59,12 +60,12 @@ namespace NVorbis.Contracts
         long SamplePosition { get; set; }
 
         /// <summary>
-        /// Gets or sets whether to clip samples returned by <see cref="Read(float[], int, int)"/>.
+        /// Gets or sets whether to clip samples returned by <see cref="Read"/>.
         /// </summary>
         bool ClipSamples { get; set; }
 
         /// <summary>
-        /// Gets whether <see cref="Read(float[], int, int)"/> has returned any clipped samples.
+        /// Gets whether <see cref="Read"/> has returned any clipped samples.
         /// </summary>
         bool HasClipped { get; }
 
@@ -95,12 +96,15 @@ namespace NVorbis.Contracts
         /// <summary>
         /// Reads samples into the specified buffer.
         /// </summary>
-        /// <param name="buffer">The buffer to read the samples into.</param>
-        /// <param name="offset">The index to start reading samples into the buffer.</param>
-        /// <param name="count">The number of samples that should be read into the buffer.  Must be a multiple of <see cref="Channels"/>.</param>
+        /// <param name="buffer">
+        /// The buffer to read the samples into.
+        /// Length must be a multiple of <see cref="Channels"/>.
+        /// </param>
         /// <returns>The number of samples read into the buffer.</returns>
-        /// <exception cref="ArgumentOutOfRangeException">Thrown when the buffer is too small or <paramref name="offset"/> is less than zero.</exception>
-        /// <remarks>The data populated into <paramref name="buffer"/> is interleaved by channel in normal PCM fashion: Left, Right, Left, Right, Left, Right</remarks>
-        int Read(float[] buffer, int offset, int count);
+        /// <exception cref="ArgumentOutOfRangeException">The buffer is too small.</exception>
+        /// <remarks>
+        /// The data populated into <paramref name="buffer"/> is interleaved by channel in normal PCM fashion:
+        /// Left, Right, Left, Right, Left, Right, etc...</remarks>
+        int Read(Span<float> buffer);
     }
 }

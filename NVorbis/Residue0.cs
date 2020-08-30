@@ -1,38 +1,36 @@
-﻿using NVorbis.Contracts;
-using System;
+﻿using System;
+using System.Buffers;
 using System.IO;
+using NVorbis.Contracts;
 
 namespace NVorbis
 {
     // each channel gets its own pass, one dimension at a time
-    class Residue0 : IResidue
+    internal class Residue0 : IResidue
     {
-        static int icount(int v)
+        private static int ICount(int v)
         {
             var ret = 0;
             while (v != 0)
             {
-                ret += (v & 1);
+                ret += v & 1;
                 v >>= 1;
             }
             return ret;
         }
 
-        int _channels;
-        int _begin;
-        int _end;
-        int _partitionSize;
-        int _classifications;
-        int _maxStages;
+        private int _channels;
+        private int _begin;
+        private int _end;
+        private int _partitionSize;
+        private int _classifications;
+        private int _maxStages;
+        private ICodebook[][] _books;
+        private ICodebook _classBook;
+        private int[] _cascade;
+        private int[][] _decodeMap;
 
-        ICodebook[][] _books;
-        ICodebook _classBook;
-
-        int[] _cascade;
-        int[][] _decodeMap;
-
-
-        virtual public void Init(IPacket packet, int channels, ICodebook[] codebooks)
+        public virtual void Init(IPacket packet, int channels, ICodebook[] codebooks)
         {
             // this is pretty well stolen directly from libvorbis...  BSD license
             _begin = (int)packet.ReadBits(24);
@@ -54,14 +52,15 @@ namespace NVorbis
                 {
                     _cascade[i] = low_bits;
                 }
-                acc += icount(_cascade[i]);
+                acc += ICount(_cascade[i]);
             }
 
             var bookNums = new int[acc];
             for (var i = 0; i < acc; i++)
             {
                 bookNums[i] = (int)packet.ReadBits(8);
-                if (codebooks[bookNums[i]].MapType == 0) throw new InvalidDataException();
+                if (codebooks[bookNums[i]].MapType == 0)
+                    throw new InvalidDataException();
             }
 
             var entries = _classBook.Entries;
@@ -70,7 +69,8 @@ namespace NVorbis
             while (dim > 0)
             {
                 partvals *= _classifications;
-                if (partvals > entries) throw new InvalidDataException();
+                if (partvals > entries)
+                    throw new InvalidDataException();
                 --dim;
             }
 
@@ -82,7 +82,7 @@ namespace NVorbis
             int stages;
             for (int j = 0; j < _classifications; j++)
             {
-                stages = Utils.ilog(_cascade[j]);
+                stages = Utils.ILog(_cascade[j]);
                 _books[j] = new ICodebook[stages];
                 if (stages > 0)
                 {
@@ -116,58 +116,68 @@ namespace NVorbis
             _channels = channels;
         }
 
-        virtual public void Decode(IPacket packet, bool[] doNotDecodeChannel, int blockSize, float[][] buffer)
+        public virtual void Decode(
+            IPacket packet, ReadOnlySpan<bool> doNotDecodeChannel, int blockSize, float[][] buffer)
         {
             // this is pretty well stolen directly from libvorbis...  BSD license
-            var end = _end < blockSize / 2 ? _end : blockSize / 2;
-            var n = end - _begin;
+            int end = _end < blockSize / 2 ? _end : blockSize / 2;
+            int n = end - _begin;
 
-            if (n > 0 && Array.IndexOf(doNotDecodeChannel, false) != -1)
+            if (n <= 0 || doNotDecodeChannel.IndexOf(false) == -1)
+                return;
+
+            int partitionCount = n / _partitionSize;
+            int partitionWords = (partitionCount + _classBook.Dimensions - 1) / _classBook.Dimensions;
+
+            int partitionWordCacheSize = partitionWords * _channels;
+            var partWordCache = partitionWordCacheSize <= 1024
+                ? stackalloc int[partitionWordCacheSize]
+                : new int[partitionWordCacheSize];
+
+            for (int stage = 0; stage < _maxStages; stage++)
             {
-                var partitionCount = n / _partitionSize;
-
-                var partitionWords = (partitionCount + _classBook.Dimensions - 1) / _classBook.Dimensions;
-                var partWordCache = new int[_channels, partitionWords][];
-
-                for (var stage = 0; stage < _maxStages; stage++)
+                for (int partitionIdx = 0, entryIdx = 0; partitionIdx < partitionCount; entryIdx++)
                 {
-                    for (int partitionIdx = 0, entryIdx = 0; partitionIdx < partitionCount; entryIdx++)
+                    if (stage == 0)
                     {
-                        if (stage == 0)
+                        for (int ch = 0; ch < _channels; ch++)
                         {
-                            for (var ch = 0; ch < _channels; ch++)
+                            int idx = _classBook.DecodeScalar(packet);
+                            if (idx >= 0 && idx < _decodeMap.Length)
                             {
-                                var idx = _classBook.DecodeScalar(packet);
-                                if (idx >= 0 && idx < _decodeMap.Length)
-                                {
-                                    partWordCache[ch, entryIdx] = _decodeMap[idx];
-                                }
-                                else
-                                {
-                                    partitionIdx = partitionCount;
-                                    stage = _maxStages;
-                                    break;
-                                }
+                                partWordCache[entryIdx * _channels + ch] = idx;
+                            }
+                            else
+                            {
+                                partitionIdx = partitionCount;
+                                stage = _maxStages;
+                                break;
                             }
                         }
-                        for (var dimensionIdx = 0; partitionIdx < partitionCount && dimensionIdx < _classBook.Dimensions; dimensionIdx++, partitionIdx++)
+                    }
+
+                    for (
+                        int dimensionIdx = 0;
+                        partitionIdx < partitionCount && dimensionIdx < _classBook.Dimensions;
+                        dimensionIdx++, partitionIdx++)
+                    {
+                        int offset = _begin + partitionIdx * _partitionSize;
+                        for (int ch = 0; ch < _channels; ch++)
                         {
-                            var offset = _begin + partitionIdx * _partitionSize;
-                            for (var ch = 0; ch < _channels; ch++)
+                            int mapIndex = partWordCache[entryIdx * _channels + ch];
+                            int index = _decodeMap[mapIndex][dimensionIdx];
+
+                            if ((_cascade[index] & (1 << stage)) != 0)
                             {
-                                var idx = partWordCache[ch, entryIdx][dimensionIdx];
-                                if ((_cascade[idx] & (1 << stage)) != 0)
+                                var book = _books[index][stage];
+                                if (book != null)
                                 {
-                                    var book = _books[idx][stage];
-                                    if (book != null)
+                                    if (WriteVectors(book, packet, buffer, ch, offset, _partitionSize))
                                     {
-                                        if (WriteVectors(book, packet, buffer, ch, offset, _partitionSize))
-                                        {
-                                            // bad packet...  exit now and try to use what we already have
-                                            partitionIdx = partitionCount;
-                                            stage = _maxStages;
-                                            break;
-                                        }
+                                        // bad packet...  exit now and try to use what we already have
+                                        partitionIdx = partitionCount;
+                                        stage = _maxStages;
+                                        break;
                                     }
                                 }
                             }

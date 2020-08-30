@@ -8,6 +8,6 @@ namespace NVorbis.Contracts
         IReadOnlyList<HuffmanListNode> PrefixTree { get; }
         IReadOnlyList<HuffmanListNode> OverflowList { get; }
 
-        void GenerateTable(IReadOnlyList<int> value, int[] lengthList, int[] codeList);
+        void GenerateTable(IReadOnlyList<int> values, int[] lengthList, int[] codeList);
     }
 }

@@ -1,7 +1,9 @@
 ﻿using NVorbis.Contracts;
 using NVorbis.Contracts.Ogg;
 using System;
+using System.Buffers.Binary;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 
 namespace NVorbis.Ogg
 {
@@ -11,7 +13,7 @@ namespace NVorbis.Ogg
         private readonly Queue<(byte[] buf, bool isResync)> _pageQueue = new Queue<(byte[] buf, bool isResync)>();
 
         private readonly IPageReader _reader;
-        private byte[] _pageBuf;
+        private byte[]? _pageBuf;
         private int _packetIndex;
         private bool _isEndOfStream;
         private int _dataStart;
@@ -39,16 +41,15 @@ namespace NVorbis.Ogg
             if (((PageFlags)buf[5] & PageFlags.BeginningOfStream) != 0)
             {
                 if (_isEndOfStream)
-                {
                     return false;
-                }
+
                 isResync = true;
-                _lastSeqNo = BitConverter.ToInt32(buf, 18);
+                _lastSeqNo = BinaryPrimitives.ReadInt32LittleEndian(buf.AsSpan(18));
             }
             else
             {
                 // check the sequence number
-                var seqNo = BitConverter.ToInt32(buf, 18);
+                int seqNo = BinaryPrimitives.ReadInt32LittleEndian(buf.AsSpan(18));
                 isResync |= seqNo != _lastSeqNo + 1;
                 _lastSeqNo = seqNo;
             }
@@ -73,13 +74,14 @@ namespace NVorbis.Ogg
             _isEndOfStream = true;
         }
 
-        public IPacket GetNextPacket()
+        public IPacket? GetNextPacket()
         {
             // if not done...
             if (_packetBuf.Length > 0)
             {
                 // only allow if last call was for peek
-                if (!_lastWasPeek) throw new InvalidOperationException("Must call Done() on previous packet first.");
+                if (!_lastWasPeek)
+                    throw new InvalidOperationException("Must call Done() on previous packet first.");
 
                 // then return ourself, noting that we didn't peek the packet
                 _lastWasPeek = false;
@@ -89,19 +91,19 @@ namespace NVorbis.Ogg
             // always advance to the next packet
             _lastWasPeek = false;
             if (GetPacket())
-            {
                 return this;
-            }
+
             return null;
         }
 
-        public IPacket PeekNextPacket()
+        public IPacket? PeekNextPacket()
         {
             // if not done...
             if (_packetBuf.Length > 0)
             {
                 // only allow if last call was for peek
-                if (!_lastWasPeek) throw new InvalidOperationException("Must call Done() on previous packet first.");
+                if (!_lastWasPeek)
+                    throw new InvalidOperationException("Must call Done() on previous packet first.");
 
                 // then just return ourself
                 return this;
@@ -110,16 +112,15 @@ namespace NVorbis.Ogg
             // use a local variable to throw away the updated position
             _lastWasPeek = true;
             if (GetPacket())
-            {
                 return this;
-            }
+
             return null;
         }
 
         private bool GetPacket()
         {
             // if we don't already have a page, grab it
-            byte[] pageBuf;
+            byte[]? pageBuf;
             bool isResync;
             int dataStart;
             int packetIndex;
@@ -170,7 +171,7 @@ namespace NVorbis.Ogg
 
             // second, determine how long the packet is
             var dataLen = GetPacketLength(pageBuf, ref packetIndex);
-            var packetBuf = new Memory<byte>(pageBuf, dataStart, dataLen);
+            var packetBuf = pageBuf.AsMemory(dataStart, dataLen);
             dataStart += dataLen;
 
             // third, determine if the packet is the last one in the page
@@ -196,7 +197,7 @@ namespace NVorbis.Ogg
             long? granulePos = null;
             if (isLast)
             {
-                granulePos = BitConverter.ToInt64(pageBuf, 6);
+                granulePos = BinaryPrimitives.ReadInt64BigEndian(pageBuf.AsSpan(6));
 
                 // fifth, set flags from the end page
                 if (((PageFlags)pageBuf[5] & PageFlags.EndOfStream) != 0 || (_isEndOfStream && _pageQueue.Count == 0))
@@ -222,9 +223,9 @@ namespace NVorbis.Ogg
                         var contSz = GetPacketLength(pageBuf, ref packetIndex);
 
                         // set up the new buffer and fill it
-                        packetBuf = new Memory<byte>(new byte[prevBuf.Length + contSz]);
+                        packetBuf = new byte[prevBuf.Length + contSz];
                         prevBuf.CopyTo(packetBuf);
-                        (new Memory<byte>(pageBuf, dataStart, contSz)).CopyTo(packetBuf.Slice(prevBuf.Length));
+                        pageBuf.AsMemory(dataStart, contSz).CopyTo(packetBuf.Slice(prevBuf.Length));
 
                         // now that we've read, update our start position
                         dataStart += contSz;
@@ -251,7 +252,10 @@ namespace NVorbis.Ogg
             return true;
         }
 
-        private bool ReadNextPage(out byte[] pageBuf, out bool isResync, out int dataStart, out int packetIndex, out bool isContinuation, out bool isContinued)
+        private bool ReadNextPage(
+            [MaybeNullWhen(false)] out byte[] pageBuf,
+            out bool isResync, out int dataStart, out int packetIndex,
+            out bool isContinuation, out bool isContinued)
         {
             while (_pageQueue.Count == 0)
             {
@@ -279,7 +283,7 @@ namespace NVorbis.Ogg
             return true;
         }
 
-        private int GetPacketLength(byte[] pageBuf, ref int packetIndex)
+        private static int GetPacketLength(byte[] pageBuf, ref int packetIndex)
         {
             var len = 0;
             while (pageBuf[packetIndex] == 255 && packetIndex < pageBuf[26] + 27)
@@ -318,7 +322,15 @@ namespace NVorbis.Ogg
             base.Done();
         }
 
-        long Contracts.IPacketProvider.GetGranuleCount() => throw new NotSupportedException();
-        long Contracts.IPacketProvider.SeekTo(long granulePos, int preRoll, GetPacketGranuleCount getPacketGranuleCount) => throw new NotSupportedException();
+        long IPacketProvider.GetGranuleCount()
+        {
+            throw new NotSupportedException();
+        }
+
+        long IPacketProvider.SeekTo(
+            long granulePos, int preRoll, GetPacketGranuleCountDelegate getPacketGranuleCount)
+        {
+            throw new NotSupportedException();
+        }
     }
 }

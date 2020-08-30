@@ -155,7 +155,10 @@ namespace NVorbis.Contracts
         /// Retrieves the value of a tag as a single value.
         /// </summary>
         /// <param name="key">The tag name to retrieve.</param>
-        /// <param name="concatenate"><see langword="true"/> to concatenate multiple instances into multiple lines. <see langword="false"/> to return just the last instance.</param>
+        /// <param name="concatenate">
+        /// <see langword="true"/> to concatenate multiple instances into multiple lines.
+        /// <see langword="false"/> to return just the last instance.
+        /// </param>
         /// <returns>The requested tag value, if available.  Otherwise <see langword="null"/>.</returns>
         string GetTagSingle(string key, bool concatenate = false);
 
@@ -163,7 +166,9 @@ namespace NVorbis.Contracts
         /// Retrieves the values of a tag.
         /// </summary>
         /// <param name="key">The tag name to retrieve.</param>
-        /// <returns>An <see cref="IReadOnlyList{T}"/> containing the values in the order read from the stream.</returns>
+        /// <returns>
+        /// An <see cref="IReadOnlyList{T}"/> containing the values in the order read from the stream.
+        /// </returns>
         IReadOnlyList<string> GetTagMulti(string key);
     }
 }

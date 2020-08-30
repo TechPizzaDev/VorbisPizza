@@ -13,24 +13,22 @@ namespace NVorbis
         /// </summary>
         /// <param name="packet">The packet instance to use.</param>
         /// <param name="buffer">The buffer to read into.</param>
-        /// <param name="index">The index into the buffer to use.</param>
-        /// <param name="count">The number of bytes to read into the buffer.</param>
         /// <returns>The number of bytes actually read into the buffer.</returns>
-        public static int Read(this IPacket packet, byte[] buffer, int index, int count)
+        public static int Read(this IPacket packet, Span<byte> buffer)
         {
-            if (index < 0 || index >= buffer.Length) throw new ArgumentOutOfRangeException(nameof(index));
-            if (count < 0 || index + count > buffer.Length) throw new ArgumentOutOfRangeException(nameof(count));
-            for (int i = 0; i < count; i++)
+            if (packet == null)
+                throw new ArgumentNullException(nameof(packet));
+
+            for (int i = 0; i < buffer.Length; i++)
             {
-                var value = (byte)packet.TryPeekBits(8, out var bitsRead);
+                byte value = (byte)packet.TryPeekBits(8, out int bitsRead);
                 if (bitsRead == 0)
-                {
                     return i;
-                }
-                buffer[index++] = value;
+                
+                buffer[i] = value;
                 packet.SkipBits(8);
             }
-            return count;
+            return buffer.Length;
         }
 
         /// <summary>
@@ -41,13 +39,16 @@ namespace NVorbis
         /// <returns>A byte array holding the data read.</returns>
         public static byte[] ReadBytes(this IPacket packet, int count)
         {
+            if (packet == null)
+                throw new ArgumentNullException(nameof(packet));
+
             var buf = new byte[count];
-            var cnt = Read(packet, buf, 0, count);
-            if (cnt < count)
+            int actualCount = Read(packet, buf.AsSpan(0, count));
+            if (actualCount < count)
             {
-                var temp = new byte[cnt];
-                Buffer.BlockCopy(buf, 0, temp, 0, cnt);
-                return temp;
+                var tmp = new byte[actualCount];
+                Buffer.BlockCopy(buf, 0, tmp, 0, actualCount);
+                return tmp;
             }
             return buf;
         }

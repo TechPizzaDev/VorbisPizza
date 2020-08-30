@@ -3,11 +3,9 @@ using System.IO;
 
 namespace TestApp
 {
-    class ForwardOnlyStream : Stream
+    public class ForwardOnlyStream : Stream
     {
-#pragma warning disable CA2213 // Disposable fields should be disposed
         private readonly Stream _steam;
-#pragma warning restore CA2213 // Disposable fields should be disposed
 
         public override bool CanRead => _steam.CanRead;
 

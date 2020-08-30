@@ -12,7 +12,11 @@ namespace NVorbis.Contracts.Ogg
 
         int FindPage(long granulePos);
 
-        bool GetPage(int pageIndex, out long granulePos, out bool isResync, out bool isContinuation, out bool isContinued, out int packetCount, out int pageOverhead);
+        bool GetPage(
+            int pageIndex, 
+            out long granulePos, 
+            out bool isResync, out bool isContinuation, out bool isContinued, 
+            out int packetCount, out int pageOverhead);
 
         void SetEndOfStream();
 

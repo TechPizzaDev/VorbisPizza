@@ -4,11 +4,9 @@ using System.Collections.Generic;
 
 namespace NVorbis
 {
-    class Mdct : IMdct
+    internal class Mdct : IMdct
     {
-        private static Dictionary<int, Mdct> _setupCache = new Dictionary<int, Mdct>();
-
-        Dictionary<int, MdctImpl> _setupCache = new Dictionary<int, MdctImpl>();
+        private Dictionary<int, MdctImpl> _setupCache = new Dictionary<int, MdctImpl>();
 
         public void Reverse(float[] samples, int sampleCount)
         {
@@ -20,51 +18,51 @@ namespace NVorbis
             impl.CalcReverse(samples);
         }
 
-        class MdctImpl
+        private class MdctImpl
         {
             readonly int _n, _n2, _n4, _n8, _ld;
 
             readonly float[] _a, _b, _c;
             readonly ushort[] _bitrev;
+            readonly float[] _buf2;
 
-        private Mdct(int n)
-        {
-            _n = n;
-            _n2 = n / 2;
-            _n4 = _n2 / 2;
-            _n8 = _n4 / 2;
-
-            _ld = Utils.ILog(n) - 1;
-
-            // first, calc the "twiddle factors"
-            _A = new float[_n2];
-            _B = new float[_n2];
-            _C = new float[_n4];
-
-            for (int k = 0, k2 = 0; k < _n4; ++k, k2 += 2)
+            public MdctImpl(int n)
             {
-                _A[k2] = MathF.Cos(4 * k * MathF.PI / n);
-                _A[k2 + 1] = -MathF.Sin(4 * k * MathF.PI / n);
-                _B[k2] = MathF.Cos((k2 + 1) * MathF.PI / n / 2) * .5f;
-                _B[k2 + 1] = MathF.Sin((k2 + 1) * MathF.PI / n / 2) * .5f;
+                _n = n;
+                _n2 = n / 2;
+                _n4 = _n2 / 2;
+                _n8 = _n4 / 2;
+
+                _ld = Utils.ILog(n) - 1;
+
+                // first, calc the "twiddle factors"
+                _a = new float[_n2];
+                _b = new float[_n2];
+                _c = new float[_n4];
+                _buf2 = new float[_n2];
+
+                for (int k = 0, k2 = 0; k < _n4; ++k, k2 += 2)
+                {
+                    _a[k2] = MathF.Cos(4 * k * MathF.PI / n);
+                    _a[k2 + 1] = -MathF.Sin(4 * k * MathF.PI / n);
+                    _b[k2] = MathF.Cos((k2 + 1) * MathF.PI / n / 2) * .5f;
+                    _b[k2 + 1] = MathF.Sin((k2 + 1) * MathF.PI / n / 2) * .5f;
+                }
+                for (int k = 0, k2 = 0; k < _n8; ++k, k2 += 2)
+                {
+                    _c[k2] = MathF.Cos(2 * (k2 + 1) * MathF.PI / n);
+                    _c[k2 + 1] = -MathF.Sin(2 * (k2 + 1) * MathF.PI / n);
+                }
+
+                // now, calc the bit reverse table
+                _bitrev = new ushort[_n8];
+                for (int i = 0; i < _n8; ++i)
+                    _bitrev[i] = (ushort)(Utils.BitReverse((uint)i, _ld - 3) << 2);
             }
-            for (int k = 0, k2 = 0; k < _n8; ++k, k2 += 2)
+
+            internal void CalcReverse(Span<float> buffer)
             {
-                _C[k2] = MathF.Cos(2 * (k2 + 1) * MathF.PI / n);
-                _C[k2 + 1] = -MathF.Sin(2 * (k2 + 1) * MathF.PI / n);
-            }
-
-            // now, calc the bit reverse table
-            _bitrev = new ushort[_n8];
-            for (int i = 0; i < _n8; ++i)
-                _bitrev[i] = (ushort)(Utils.BitReverse((uint)i, _ld - 3) << 2);
-        }
-
-            internal void CalcReverse(float[] buffer)
-            {
-                float[] u, v;
-
-                var buf2 = new float[_n2];
+                Span<float> u, v;
 
                 // copy and reflect spectral data
                 // step 0
@@ -76,8 +74,8 @@ namespace NVorbis
                     var e_stop = _n2;// buffer
                     while (e != e_stop)
                     {
-                        buf2[d + 1] = (buffer[e] * _a[AA] - buffer[e + 2] * _a[AA + 1]);
-                        buf2[d] = (buffer[e] * _a[AA + 1] + buffer[e + 2] * _a[AA]);
+                        _buf2[d + 1] = buffer[e] * _a[AA] - buffer[e + 2] * _a[AA + 1];
+                        _buf2[d] = buffer[e] * _a[AA + 1] + buffer[e + 2] * _a[AA];
                         d -= 2;
                         AA += 2;
                         e += 4;
@@ -86,8 +84,8 @@ namespace NVorbis
                     e = _n2 - 3;
                     while (d >= 0)
                     {
-                        buf2[d + 1] = (-buffer[e + 2] * _a[AA] - -buffer[e] * _a[AA + 1]);
-                        buf2[d] = (-buffer[e + 2] * _a[AA + 1] + -buffer[e] * _a[AA]);
+                        _buf2[d + 1] = -buffer[e + 2] * _a[AA] - -buffer[e] * _a[AA + 1];
+                        _buf2[d] = -buffer[e + 2] * _a[AA + 1] + -buffer[e] * _a[AA];
                         d -= 2;
                         AA += 2;
                         e -= 4;
@@ -96,7 +94,7 @@ namespace NVorbis
 
                 // apply "symbolic" names
                 u = buffer;
-                v = buf2;
+                v = _buf2;
 
                 // step 2
 
@@ -139,14 +137,14 @@ namespace NVorbis
                 // step 3
 
                 // iteration 0
-                step3_iter0_loop(_n >> 4, u, _n2 - 1 - _n4 * 0, -_n8);
-                step3_iter0_loop(_n >> 4, u, _n2 - 1 - _n4 * 1, -_n8);
+                Step3_iter0_loop(_n >> 4, u, _n2 - 1 - _n4 * 0, -_n8);
+                Step3_iter0_loop(_n >> 4, u, _n2 - 1 - _n4 * 1, -_n8);
 
                 // iteration 1
-                step3_inner_r_loop(_n >> 5, u, _n2 - 1 - _n8 * 0, -(_n >> 4), 16);
-                step3_inner_r_loop(_n >> 5, u, _n2 - 1 - _n8 * 1, -(_n >> 4), 16);
-                step3_inner_r_loop(_n >> 5, u, _n2 - 1 - _n8 * 2, -(_n >> 4), 16);
-                step3_inner_r_loop(_n >> 5, u, _n2 - 1 - _n8 * 3, -(_n >> 4), 16);
+                Step3_inner_r_loop(_n >> 5, u, _n2 - 1 - _n8 * 0, -(_n >> 4), 16);
+                Step3_inner_r_loop(_n >> 5, u, _n2 - 1 - _n8 * 1, -(_n >> 4), 16);
+                Step3_inner_r_loop(_n >> 5, u, _n2 - 1 - _n8 * 2, -(_n >> 4), 16);
+                Step3_inner_r_loop(_n >> 5, u, _n2 - 1 - _n8 * 3, -(_n >> 4), 16);
 
                 // iterations 2 ... x
                 var l = 2;
@@ -157,7 +155,7 @@ namespace NVorbis
                     var lim = 1 << (l + 1);
                     for (int i = 0; i < lim; ++i)
                     {
-                        step3_inner_r_loop(_n >> (l + 4), u, _n2 - 1 - k0 * i, -k0_2, 1 << (l + 3));
+                        Step3_inner_r_loop(_n >> (l + 4), u, _n2 - 1 - k0 * i, -k0_2, 1 << (l + 3));
                     }
                 }
 
@@ -174,14 +172,14 @@ namespace NVorbis
 
                     for (int r = rlim; r > 0; --r)
                     {
-                        step3_inner_s_loop(lim, u, i_off, -k0_2, A0, k1, k0);
+                        Step3_inner_s_loop(lim, u, i_off, -k0_2, A0, k1, k0);
                         A0 += k1 * 4;
                         i_off -= 8;
                     }
                 }
 
                 // combine some iteration steps...
-                step3_inner_s_loop_ld654(_n >> 5, u, _n2 - 1, _n);
+                Step3_inner_s_loop_ld654(_n >> 5, u, _n2 - 1, _n);
 
                 // steps 4, 5, and 6
                 {
@@ -267,16 +265,16 @@ namespace NVorbis
                     {
                         float p0, p1, p2, p3;
 
-                        p3 = buf2[e + 6] * _b[b + 7] - buf2[e + 7] * _b[b + 6];
-                        p2 = -buf2[e + 6] * _b[b + 6] - buf2[e + 7] * _b[b + 7];
+                        p3 = _buf2[e + 6] * _b[b + 7] - _buf2[e + 7] * _b[b + 6];
+                        p2 = -_buf2[e + 6] * _b[b + 6] - _buf2[e + 7] * _b[b + 7];
 
                         buffer[d0] = p3;
                         buffer[d1 + 3] = -p3;
                         buffer[d2] = p2;
                         buffer[d3 + 3] = p2;
 
-                        p1 = buf2[e + 4] * _b[b + 5] - buf2[e + 5] * _b[b + 4];
-                        p0 = -buf2[e + 4] * _b[b + 4] - buf2[e + 5] * _b[b + 5];
+                        p1 = _buf2[e + 4] * _b[b + 5] - _buf2[e + 5] * _b[b + 4];
+                        p0 = -_buf2[e + 4] * _b[b + 4] - _buf2[e + 5] * _b[b + 5];
 
                         buffer[d0 + 1] = p1;
                         buffer[d1 + 2] = -p1;
@@ -284,16 +282,16 @@ namespace NVorbis
                         buffer[d3 + 2] = p0;
 
 
-                        p3 = buf2[e + 2] * _b[b + 3] - buf2[e + 3] * _b[b + 2];
-                        p2 = -buf2[e + 2] * _b[b + 2] - buf2[e + 3] * _b[b + 3];
+                        p3 = _buf2[e + 2] * _b[b + 3] - _buf2[e + 3] * _b[b + 2];
+                        p2 = -_buf2[e + 2] * _b[b + 2] - _buf2[e + 3] * _b[b + 3];
 
                         buffer[d0 + 2] = p3;
                         buffer[d1 + 1] = -p3;
                         buffer[d2 + 2] = p2;
                         buffer[d3 + 1] = p2;
 
-                        p1 = buf2[e] * _b[b + 1] - buf2[e + 1] * _b[b];
-                        p0 = -buf2[e] * _b[b] - buf2[e + 1] * _b[b + 1];
+                        p1 = _buf2[e] * _b[b + 1] - _buf2[e + 1] * _b[b];
+                        p0 = -_buf2[e] * _b[b] - _buf2[e + 1] * _b[b + 1];
 
                         buffer[d0 + 3] = p1;
                         buffer[d1] = -p1;
@@ -310,7 +308,7 @@ namespace NVorbis
                 }
             }
 
-            void step3_iter0_loop(int n, float[] e, int i_off, int k_off)
+            void Step3_iter0_loop(int n, Span<float> e, int i_off, int k_off)
             {
                 var ee0 = i_off;        // e
                 var ee2 = ee0 + k_off;  // e
@@ -356,7 +354,7 @@ namespace NVorbis
                 }
             }
 
-            void step3_inner_r_loop(int lim, float[] e, int d0, int k_off, int k1)
+            void Step3_inner_r_loop(int lim, Span<float> e, int d0, int k_off, int k1)
             {
                 float k00_20, k01_21;
 
@@ -407,7 +405,7 @@ namespace NVorbis
                 }
             }
 
-            void step3_inner_s_loop(int n, float[] e, int i_off, int k_off, int a, int a_off, int k0)
+            void Step3_inner_s_loop(int n, Span<float> e, int i_off, int k_off, int a, int a_off, int k0)
             {
                 var A0 = _a[a];
                 var A1 = _a[a + 1];
@@ -458,7 +456,7 @@ namespace NVorbis
                 }
             }
 
-            void step3_inner_s_loop_ld654(int n, float[] e, int i_off, int base_n)
+            void Step3_inner_s_loop_ld654(int n, Span<float> e, int i_off, int base_n)
             {
                 var a_off = base_n >> 3;
                 var A2 = _a[a_off];
@@ -497,14 +495,14 @@ namespace NVorbis
                     e[z - 14] = (k00 + k11) * A2;
                     e[z - 15] = (k00 - k11) * A2;
 
-                    iter_54(e, z);
-                    iter_54(e, z - 8);
+                    Iter_54(e, z);
+                    Iter_54(e, z - 8);
 
                     z -= 16;
                 }
             }
 
-            private void iter_54(float[] e, int z)
+            private static void Iter_54(Span<float> e, int z)
             {
                 float k00, k11, k22, k33;
                 float y0, y1, y2, y3;

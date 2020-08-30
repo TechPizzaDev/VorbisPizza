@@ -1,11 +1,19 @@
-﻿namespace NVorbis.Contracts
+﻿
+namespace NVorbis.Contracts
 {
-    class HuffmanListNode
+    internal class HuffmanListNode
     {
-        internal int Value;
-
-        internal int Length;
-        internal int Bits;
-        internal int Mask;
+        public int Value;
+        public int Length;
+        public int Bits;
+        public int Mask;
+        
+        public HuffmanListNode(int value, int length, int bits, int mask)
+        {
+            Value = value;
+            Length = length;
+            Bits = bits;
+            Mask = mask;
+        }
     }
 }

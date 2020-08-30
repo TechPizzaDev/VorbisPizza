@@ -31,7 +31,7 @@ namespace NVorbis
                 }
                 if (samples > 0)
                 {
-                    return (int)(((double)bits / samples) * _sampleRate);
+                    return (int)((double)bits / samples * _sampleRate);
                 }
                 return 0;
             }
@@ -49,7 +49,7 @@ namespace NVorbis
                 }
                 if (samples > 0)
                 {
-                    return (int)(((double)bits / samples) * _sampleRate);
+                    return (int)((double)bits / samples * _sampleRate);
                 }
                 return 0;
             }
