@@ -34,40 +34,42 @@ namespace NVorbis.Ogg
         public long WasteBits { get; private set; }
 
         private bool VerifyPage(
-            ReadOnlySpan<byte> headerBuf,
-            [MaybeNullWhen(false)] out byte[] pageBuf,
+            ReadOnlySpan<byte> headerBuffer,
+            [MaybeNullWhen(false)] out byte[] pageBuffer,
             out int bytesRead)
         {
-            int segCount = headerBuf[26];
-            if (headerBuf.Length < 27 + segCount)
+            int segCount = headerBuffer[26];
+            if (headerBuffer.Length < 27 + segCount)
             {
-                pageBuf = null;
+                pageBuffer = null;
                 bytesRead = 0;
                 return false;
             }
 
-            int dataLen = 0;
+            int dataLength = 0;
             for (int i = 0; i < segCount; i++)
-                dataLen += headerBuf[i + 27];
+                dataLength += headerBuffer[i + 27];
 
-            pageBuf = new byte[dataLen + segCount + 27];
-            var pageBufSpan = pageBuf.AsSpan();
+            int pageLength = dataLength + segCount + 27;
+            pageBuffer = new byte[pageLength];
+            var page = pageBuffer.AsSpan();
 
-            headerBuf.Slice(0, segCount + 27).CopyTo(pageBufSpan);
+            headerBuffer.Slice(0, segCount + 27).CopyTo(page);
 
-            bytesRead = EnsureRead(pageBufSpan.Slice(segCount + 27, dataLen));
-            if (bytesRead != dataLen)
+            bytesRead = EnsureRead(page.Slice(segCount + 27, dataLength));
+            if (bytesRead != dataLength)
                 return false;
-            dataLen = pageBuf.Length;
 
             _crc.Reset();
-            _crc.Update(pageBufSpan.Slice(0, 22));
+            _crc.Update(page.Slice(0, 22));
             _crc.Update(0);
             _crc.Update(0);
             _crc.Update(0);
             _crc.Update(0);
-            _crc.Update(pageBufSpan.Slice(26, dataLen));
-            return _crc.Test(BinaryPrimitives.ReadUInt32LittleEndian(pageBufSpan.Slice(22)));
+            _crc.Update(page[26..pageLength]);
+
+            uint pageCrc = BinaryPrimitives.ReadUInt32LittleEndian(page.Slice(22));
+            return _crc.Test(pageCrc);
         }
 
         private bool AddPage(byte[] pageBuf, bool isResync)
