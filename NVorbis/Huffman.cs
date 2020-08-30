@@ -1,29 +1,20 @@
-﻿/****************************************************************************
- * NVorbis                                                                  *
- * Copyright (C) 2014, Andrew Ward <afward@gmail.com>                       *
- *                                                                          *
- * See COPYING for license terms (Ms-PL).                                   *
- *                                                                          *
- ***************************************************************************/
+﻿using NVorbis.Contracts;
 using System;
 using System.Collections.Generic;
-using System.Runtime.InteropServices;
 
 namespace NVorbis
 {
-    internal static class Huffman
+    class Huffman : IHuffman, IComparer<HuffmanListNode>
     {
         private const int MaxTableBits = 10;
 
-        internal static (HuffmanListNode[] Initial, HuffmanListNode[] Result) BuildPrefixedLinkedList<TList>(
-            TList values,
-            int[] lengthList,
-            int[] codeList,
-            out int tableBits,
-            out int? firstOverflowNode)
-            where TList : IReadOnlyList<int>
+        public int TableBits { get; private set; }
+        public IReadOnlyList<HuffmanListNode> PrefixTree { get; private set; }
+        public IReadOnlyList<HuffmanListNode> OverflowList { get; private set; }
+
+        public void GenerateTable(IReadOnlyList<int> values, int[] lengthList, int[] codeList)
         {
-            var initialNodes = new HuffmanListNode[lengthList.Length];
+            var list = new HuffmanListNode[lengthList.Length];
 
             var maxLen = 0;
             for (int i = 0; i < initialNodes.Length; i++)
@@ -39,68 +30,48 @@ namespace NVorbis
                     maxLen = lengthList[i];
             }
 
-            Array.Sort(initialNodes, 0, initialNodes.Length);
+            Array.Sort(list, 0, list.Length, this);
 
             tableBits = maxLen > MaxTableBits ? MaxTableBits : maxLen;
 
-            var resultNodes = new HuffmanListNode[1 << tableBits];
+            var prefixList = new HuffmanListNode[1 << tableBits];
 
-            firstOverflowNode = null;
-            for (int i = 0; i < initialNodes.Length && initialNodes[i].Length < 99999; i++)
+            List<HuffmanListNode> overflowList = null;
+            for (int i = 0; i < list.Length && list[i].Length < 99999; i++)
             {
-                if (firstOverflowNode == null)
+                int itemBits = list[i].Length;
+                if (itemBits > tableBits)
                 {
-                    int itemBits = initialNodes[i].Length;
-                    if (itemBits > tableBits)
+                    overflowList = new List<HuffmanListNode>(list.Length - i);
+                    for (; i < list.Length && list[i].Length < 99999; i++)
                     {
-                        firstOverflowNode = i;
-                    }
-                    else
-                    {
-                        int maxVal = 1 << (tableBits - itemBits);
-                        var item = initialNodes[i];
-                        for (int j = 0; j < maxVal; j++)
-                        {
-                            int idx = (j << itemBits) | item.Bits;
-                            resultNodes[idx] = item;
-                        }
+                        overflowList.Add(list[i]);
                     }
                 }
                 else
                 {
-                    initialNodes[i - 1].NextIndex = i;
+                    int maxVal = 1 << (tableBits - itemBits);
+                    var item = list[i];
+                    for (int j = 0; j < maxVal; j++)
+                    {
+                        int idx = (j << itemBits) | item.Bits;
+                        prefixList[idx] = item;
+                    }
                 }
             }
-            return (initialNodes, resultNodes);
-        }
-    }
 
-    [StructLayout(LayoutKind.Sequential)]
-    internal struct HuffmanListNode : IComparable<HuffmanListNode>
-    {
-        public readonly bool HasValue;
-        public readonly int Value;
-        public readonly int Length;
-        public readonly int Bits;
-        public readonly int Mask;
-        public int NextIndex;
-
-        public HuffmanListNode(int value, int length, int bits, int mask, int nextIndex)
-        {
-            HasValue = true;
-            Value = value;
-            Length = length;
-            Bits = bits;
-            Mask = mask;
-            NextIndex = nextIndex;
+            TableBits = tableBits;
+            PrefixTree = prefixList;
+            OverflowList = overflowList;
         }
 
-        public int CompareTo(HuffmanListNode other)
+        public int Compare(HuffmanListNode x, HuffmanListNode y)
         {
-            int length = Length - other.Length;
-            if (length == 0)
-                return Bits - other.Bits;
-            return length;
+            int len = x.Length - y.Length;
+            if (len == 0)
+                return x.Bits - y.Bits;
+
+            return len;
         }
     }
 }

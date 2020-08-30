@@ -1,10 +1,4 @@
-﻿/****************************************************************************
- * NVorbis                                                                  *
- * Copyright (C) 2014, Andrew Ward <afward@gmail.com>                       *
- *                                                                          *
- * See COPYING for license terms (Ms-PL).                                   *
- *                                                                          *
- ***************************************************************************/
+﻿using NVorbis.Contracts;
 using System;
 
 namespace NVorbis
@@ -16,22 +10,22 @@ namespace NVorbis
     public class NewStreamEventArgs : EventArgs
     {
         /// <summary>
-        /// Creates a new instance of <see cref="NewStreamEventArgs"/> with the specified <see cref="IVorbisPacketProvider"/>.
+        /// Gets new the <see cref="IStreamDecoder"/> instance.
         /// </summary>
-        /// <param name="packetProvider">An <see cref="IVorbisPacketProvider"/> instance.</param>
-        public NewStreamEventArgs(IVorbisPacketProvider packetProvider)
-        {
-            PacketProvider = packetProvider ?? throw new ArgumentNullException(nameof(packetProvider));
-        }
-
-        /// <summary>
-        /// Gets new the <see cref="IVorbisPacketProvider"/> instance.
-        /// </summary>
-        public IVorbisPacketProvider PacketProvider { get; private set; }
+        public IStreamDecoder StreamDecoder { get; }
 
         /// <summary>
         /// Gets or sets whether to ignore the logical stream associated with the packet provider.
         /// </summary>
         public bool IgnoreStream { get; set; }
+
+        /// <summary>
+        /// Creates a new instance of <see cref="NewStreamEventArgs"/> with the specified <see cref="IStreamDecoder"/>.
+        /// </summary>
+        /// <param name="streamDecoder">An <see cref="IStreamDecoder"/> instance.</param>
+        public NewStreamEventArgs(IStreamDecoder streamDecoder)
+        {
+            StreamDecoder = streamDecoder ?? throw new ArgumentNullException(nameof(streamDecoder));
+        }
     }
 }

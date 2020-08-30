@@ -1,11 +1,4 @@
-﻿/****************************************************************************
- * NVorbis                                                                  *
- * Copyright (C) 2014, Andrew Ward <afward@gmail.com>                       *
- *                                                                          *
- * See COPYING for license terms (Ms-PL).                                   *
- *                                                                          *
- ***************************************************************************/
-namespace NVorbis
+﻿namespace NVorbis
 {
     static class Utils
     {
@@ -34,39 +27,19 @@ namespace NVorbis
             return ((n >> 16) | (n << 16)) >> (32 - bits);
         }
 
-        // make it so we can twiddle bits in a float...
-        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit)]
-        struct FloatBits
+        static internal float ClipValue(float value, ref bool clipped)
         {
-            [System.Runtime.InteropServices.FieldOffset(0)]
-            public float Float;
-
-            [System.Runtime.InteropServices.FieldOffset(0)]
-            public uint Bits;
-        }
-
-        public static float ClipValue(float value, ref bool clipped)
-        {
-            /************
-             * There is some magic happening here... IEEE 754 single precision floats are built such that:
-             *   1) The only difference between x and -x is the sign bit (31)
-             *   2) If x is further from 0 than y, the bitwise value of x is greater than the bitwise value of y (ignoring the sign bit)
-             * 
-             * With those assumptions, we can just look for the bitwise magnitude to be too large...
-             */
-
-            FloatBits fb;
-            fb.Bits = 0;
-            fb.Float = value;
-
-            // as a courtesy to those writing out 24-bit and 16-bit samples, our full scale is 0.99999994 instead of 1.0
-            if ((fb.Bits & 0x7FFFFFFF) > 0x3f7fffff) // 0x3f7fffff == 0.99999994f
+            if (value > .99999994f)
             {
                 clipped = true;
-                fb.Bits = 0x3f7fffff | (fb.Bits & 0x80000000);
+                return 0.99999994f;
             }
-
-            return fb.Float;
+            if (value < -.99999994f)
+            {
+                clipped = true;
+                return -0.99999994f;
+            }
+            return value;
         }
 
         public static float ConvertFromVorbisFloat32(uint bits)
@@ -83,17 +56,6 @@ namespace NVorbis
 
             // now switch to single-precision and calc the return value
             return mantissa * System.MathF.Pow(2f, exponent);
-        }
-
-        /// <summary>
-        /// No-allocation way to sum an int queue.
-        /// </summary>
-        public static int Sum(System.Collections.Generic.Queue<int> queue)
-        {
-            int sum = 0;
-            foreach (var item in queue)
-                sum += item;
-            return sum;
         }
     }
 }
