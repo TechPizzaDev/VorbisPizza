@@ -6,8 +6,7 @@ namespace NVorbis
     /// <summary>
     /// Event data for when a new logical stream is found in a container.
     /// </summary>
-    [Serializable]
-    public class NewStreamEventArgs : EventArgs
+    public struct NewStreamEventArgs
     {
         /// <summary>
         /// Gets new the <see cref="IStreamDecoder"/> instance.
@@ -26,6 +25,7 @@ namespace NVorbis
         public NewStreamEventArgs(IStreamDecoder streamDecoder)
         {
             StreamDecoder = streamDecoder ?? throw new ArgumentNullException(nameof(streamDecoder));
+            IgnoreStream = false;
         }
     }
 }
