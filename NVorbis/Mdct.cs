@@ -1,6 +1,6 @@
-﻿using NVorbis.Contracts;
-using System;
+﻿using System;
 using System.Collections.Generic;
+using NVorbis.Contracts;
 
 namespace NVorbis
 {
@@ -20,11 +20,10 @@ namespace NVorbis
 
         private class MdctImpl
         {
-            readonly int _n, _n2, _n4, _n8, _ld;
-
-            readonly float[] _a, _b, _c;
-            readonly ushort[] _bitrev;
-            readonly float[] _buf2;
+            private readonly int _n, _n2, _n4, _n8, _ld;
+            private readonly float[] _a, _b, _c;
+            private readonly ushort[] _bitrev;
+            private readonly float[] _buf2;
 
             public MdctImpl(int n)
             {
@@ -308,7 +307,7 @@ namespace NVorbis
                 }
             }
 
-            void Step3_iter0_loop(int n, Span<float> e, int i_off, int k_off)
+            private void Step3_iter0_loop(int n, Span<float> e, int i_off, int k_off)
             {
                 var ee0 = i_off;        // e
                 var ee2 = ee0 + k_off;  // e
@@ -354,7 +353,7 @@ namespace NVorbis
                 }
             }
 
-            void Step3_inner_r_loop(int lim, Span<float> e, int d0, int k_off, int k1)
+            private void Step3_inner_r_loop(int lim, Span<float> e, int d0, int k_off, int k1)
             {
                 float k00_20, k01_21;
 
@@ -405,7 +404,7 @@ namespace NVorbis
                 }
             }
 
-            void Step3_inner_s_loop(int n, Span<float> e, int i_off, int k_off, int a, int a_off, int k0)
+            private void Step3_inner_s_loop(int n, Span<float> e, int i_off, int k_off, int a, int a_off, int k0)
             {
                 var A0 = _a[a];
                 var A1 = _a[a + 1];
@@ -456,7 +455,7 @@ namespace NVorbis
                 }
             }
 
-            void Step3_inner_s_loop_ld654(int n, Span<float> e, int i_off, int base_n)
+            private void Step3_inner_s_loop_ld654(int n, Span<float> e, int i_off, int base_n)
             {
                 var a_off = base_n >> 3;
                 var A2 = _a[a_off];

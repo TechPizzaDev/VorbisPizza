@@ -4,9 +4,9 @@ using NVorbis.Contracts;
 namespace NVorbis
 {
     // all channels in one pass, interleaved
-    class Residue2 : Residue0
+    internal class Residue2 : Residue0
     {
-        int _channels;
+        private int _channels;
 
         public override void Init(IPacket packet, int channels, ICodebook[] codebooks)
         {
@@ -33,7 +33,7 @@ namespace NVorbis
                 int entry = codebook.DecodeScalar(packet);
                 if (entry == -1)
                     return true;
-                
+
                 for (int d = 0; d < codebook.Dimensions; d++, c++)
                 {
                     residue[chPtr][offset] += codebook[entry, d];

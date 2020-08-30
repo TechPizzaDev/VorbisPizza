@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace NVorbis.Contracts
+﻿namespace NVorbis.Contracts
 {
     /// <summary>
     /// Describes an interface for reading statistics about the current stream.

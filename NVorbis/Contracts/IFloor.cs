@@ -1,6 +1,6 @@
 ﻿namespace NVorbis.Contracts
 {
-    interface IFloor
+    internal interface IFloor
     {
         void Init(IPacket packet, int channels, int block0Size, int block1Size, ICodebook[] codebooks);
 

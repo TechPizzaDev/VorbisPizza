@@ -274,7 +274,7 @@ namespace NVorbis.Ogg
             }
 
             // create the packet instance and populate it with the appropriate initial data
-            var dataParts = _dataPartBuilder.Count == 1 
+            var dataParts = _dataPartBuilder.Count == 1
                 ? new Packet.DataParts(_dataPartBuilder[0])
                 : new Packet.DataParts(_dataPartBuilder.ToArray());
 

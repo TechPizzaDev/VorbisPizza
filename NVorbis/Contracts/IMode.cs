@@ -1,6 +1,6 @@
 ﻿namespace NVorbis.Contracts
 {
-    interface IMode
+    internal interface IMode
     {
         int BlockSize { get; }
         float[][] Windows { get; }

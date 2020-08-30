@@ -1,13 +1,13 @@
-﻿using NVorbis.Contracts;
-using NVorbis.Contracts.Ogg;
-using System;
+﻿using System;
 using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using NVorbis.Contracts;
+using NVorbis.Contracts.Ogg;
 
 namespace NVorbis.Ogg
 {
-    class ForwardOnlyPacketProvider : DataPacket, IForwardOnlyPacketProvider
+    internal class ForwardOnlyPacketProvider : DataPacket, IForwardOnlyPacketProvider
     {
         private int _lastSeqNo;
         private readonly Queue<(byte[] buf, bool isResync)> _pageQueue = new Queue<(byte[] buf, bool isResync)>();

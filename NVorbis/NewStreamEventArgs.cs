@@ -1,5 +1,5 @@
-﻿using NVorbis.Contracts;
-using System;
+﻿using System;
+using NVorbis.Contracts;
 
 namespace NVorbis
 {

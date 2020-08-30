@@ -80,7 +80,7 @@ namespace NVorbis
             var map = new int[n + 1];
             for (int i = 0; i < map.Length - 2; i++)
                 map[i] = Math.Min(_bark_map_size - 1, (int)Math.Floor(ToBARK(_rate / 2f / n * i) * scale));
-            
+
             map[n] = -1;
             return map;
         }

@@ -2,7 +2,7 @@
 
 namespace NVorbis.Contracts.Ogg
 {
-    interface ICrc
+    internal interface ICrc
     {
         void Reset();
         void Update(byte value);

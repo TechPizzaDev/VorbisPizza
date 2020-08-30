@@ -1,6 +1,6 @@
 ﻿namespace NVorbis.Contracts
 {
-    interface IMapping
+    internal interface IMapping
     {
         void Init(IPacket packet, int channels, IFloor[] floors, IResidue[] residues, IMdct mdct);
 

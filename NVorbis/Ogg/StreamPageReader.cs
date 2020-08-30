@@ -1,11 +1,11 @@
-﻿using NVorbis.Contracts;
-using NVorbis.Contracts.Ogg;
-using System;
+﻿using System;
 using System.Collections.Generic;
+using NVorbis.Contracts;
+using NVorbis.Contracts.Ogg;
 
 namespace NVorbis.Ogg
 {
-    class StreamPageReader : IStreamPageReader
+    internal class StreamPageReader : IStreamPageReader
     {
         internal static Func<IStreamPageReader, int, IPacketProvider> CreatePacketProvider { get; set; } =
             (pr, ss) => new PacketProvider(pr, ss);

@@ -1,6 +1,6 @@
 ﻿namespace NVorbis.Contracts
 {
-    interface ICodebook
+    internal interface ICodebook
     {
         void Init(IPacket packet, IHuffman huffman);
 

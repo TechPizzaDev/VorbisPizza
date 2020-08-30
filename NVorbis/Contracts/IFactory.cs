@@ -1,6 +1,6 @@
 ﻿namespace NVorbis.Contracts
 {
-    interface IFactory
+    internal interface IFactory
     {
         ICodebook CreateCodebook();
         IFloor CreateFloor(IPacket packet);

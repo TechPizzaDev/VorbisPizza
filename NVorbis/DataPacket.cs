@@ -165,7 +165,7 @@ namespace NVorbis
         {
             if (count <= 0)
                 return;
-            
+
             if (_bitCount > count)
             {
                 // we still have bits left over...

@@ -2,7 +2,7 @@
 
 namespace NVorbis.Contracts
 {
-    interface IHuffman
+    internal interface IHuffman
     {
         int TableBits { get; }
         IReadOnlyList<HuffmanListNode> PrefixTree { get; }

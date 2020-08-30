@@ -1,6 +1,6 @@
 ﻿namespace NVorbis.Contracts
 {
-    interface IMdct
+    internal interface IMdct
     {
         void Reverse(float[] samples, int sampleCount);
     }

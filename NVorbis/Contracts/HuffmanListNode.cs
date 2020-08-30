@@ -7,7 +7,7 @@ namespace NVorbis.Contracts
         public int Length;
         public int Bits;
         public int Mask;
-        
+
         public HuffmanListNode(int value, int length, int bits, int mask)
         {
             Value = value;

@@ -1,6 +1,6 @@
-﻿using NVorbis.Contracts;
-using System;
+﻿using System;
 using System.Collections.Generic;
+using NVorbis.Contracts;
 
 namespace NVorbis
 {

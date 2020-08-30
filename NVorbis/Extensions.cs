@@ -1,5 +1,5 @@
-﻿using NVorbis.Contracts;
-using System;
+﻿using System;
+using NVorbis.Contracts;
 
 namespace NVorbis
 {
@@ -24,7 +24,7 @@ namespace NVorbis
                 byte value = (byte)packet.TryPeekBits(8, out int bitsRead);
                 if (bitsRead == 0)
                     return i;
-                
+
                 buffer[i] = value;
                 packet.SkipBits(8);
             }
