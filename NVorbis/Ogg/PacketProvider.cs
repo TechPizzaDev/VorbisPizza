@@ -32,7 +32,7 @@ namespace NVorbis.Ogg
         public long GetGranuleCount()
         {
             if (_reader == null)
-                throw new ObjectDisposedException(nameof(PacketProvider));
+                throw new ObjectDisposedException(GetType().FullName);
 
             if (!_reader.HasAllPages)
             {
@@ -59,7 +59,7 @@ namespace NVorbis.Ogg
             long granulePos, int preRoll, GetPacketGranuleCountDelegate getPacketGranuleCount)
         {
             if (_reader == null)
-                throw new ObjectDisposedException(nameof(PacketProvider));
+                throw new ObjectDisposedException(GetType().FullName);
 
             int pageIndex = _reader.FindPage(granulePos);
 
@@ -177,7 +177,7 @@ namespace NVorbis.Ogg
         private Packet? GetNextPacket(ref int pageIndex, ref int packetIndex)
         {
             if (_reader == null)
-                throw new ObjectDisposedException(nameof(PacketProvider));
+                throw new ObjectDisposedException(GetType().FullName);
 
             if (_lastPacketPacketIndex != packetIndex || _lastPacketPageIndex != pageIndex || _lastPacket == null)
             {

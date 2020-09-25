@@ -27,7 +27,7 @@ namespace NVorbis.Ogg
         }
 
         protected long StreamPosition => _stream?.Position ??
-            throw new ObjectDisposedException(nameof(PageReaderBase));
+            throw new ObjectDisposedException(GetType().FullName);
 
         public long ContainerBits { get; private set; }
 

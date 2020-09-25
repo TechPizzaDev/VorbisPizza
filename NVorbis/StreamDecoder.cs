@@ -303,7 +303,7 @@ namespace NVorbis
         public int Read(Span<float> buffer)
         {
             if (_packetProvider == null)
-                throw new ObjectDisposedException(nameof(StreamDecoder));
+                throw new ObjectDisposedException(GetType().FullName);
 
             int count = buffer.Length;
             if (count % _channels != 0)
@@ -551,7 +551,7 @@ namespace NVorbis
         public void SeekTo(long samplePosition, SeekOrigin seekOrigin = SeekOrigin.Begin)
         {
             if (_packetProvider == null)
-                throw new ObjectDisposedException(nameof(StreamDecoder));
+                throw new ObjectDisposedException(GetType().FullName);
             if (!_packetProvider.CanSeek)
                 throw new InvalidOperationException("The packet provider is not seekable.");
 
@@ -676,7 +676,7 @@ namespace NVorbis
 
         /// <inheritdoc/>
         public long TotalSamples => _packetProvider?.GetGranuleCount() ??
-            throw new ObjectDisposedException(nameof(StreamDecoder));
+            throw new ObjectDisposedException(GetType().FullName);
 
         /// <inheritdoc/>
         public TimeSpan TimePosition
