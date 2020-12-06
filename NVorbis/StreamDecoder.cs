@@ -352,9 +352,9 @@ namespace NVorbis
                 if (copyLen > 0)
                 {
                     if (ClipSamples)
-                        offset += ClippingCopyBuffer(buffer.Slice(offset), copyLen);
+                        offset += ClippingCopyBuffer(buffer[offset..], copyLen);
                     else
-                        offset += CopyBuffer(buffer.Slice(offset), copyLen);
+                        offset += CopyBuffer(buffer[offset..], copyLen);
                 }
             }
             while (offset < count);

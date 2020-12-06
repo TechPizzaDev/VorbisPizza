@@ -68,7 +68,7 @@ namespace NVorbis.Ogg
             _crc.Update(0);
             _crc.Update(page[26..pageLength]);
 
-            uint pageCrc = BinaryPrimitives.ReadUInt32LittleEndian(page.Slice(22));
+            uint pageCrc = BinaryPrimitives.ReadUInt32LittleEndian(page[22..]);
             return _crc.Test(pageCrc);
         }
 
@@ -120,7 +120,7 @@ namespace NVorbis.Ogg
             {
                 total = Math.Min(_overflowBuf.Length - _overflowBufIndex, buffer.Length);
                 _overflowBuf.AsSpan(_overflowBufIndex, total).CopyTo(buffer);
-                buffer = buffer.Slice(total);
+                buffer = buffer[total..];
 
                 if ((_overflowBufIndex += total) == _overflowBuf.Length)
                     _overflowBuf = null;
@@ -178,7 +178,7 @@ namespace NVorbis.Ogg
                     break;
 
                 totalRead += read;
-                buffer = buffer.Slice(read);
+                buffer = buffer[read..];
             }
             while (!buffer.IsEmpty);
             return totalRead;
@@ -242,7 +242,7 @@ namespace NVorbis.Ogg
                 count += offset;
                 for (int i = 0; i < count - 4; i++)
                 {
-                    if (VerifyHeader(headerBuf.Slice(i), ref count, true))
+                    if (VerifyHeader(headerBuf[i..], ref count, true))
                     {
                         if (VerifyPage(headerBuf.Slice(i, count), out byte[]? pageBuf, out int bytesRead))
                         {

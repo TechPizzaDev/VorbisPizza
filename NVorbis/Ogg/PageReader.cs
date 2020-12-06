@@ -53,10 +53,10 @@ namespace NVorbis.Ogg
                 pktCnt++;
             }
 
-            StreamSerial = streamSerial ?? BinaryPrimitives.ReadInt32LittleEndian(pageBuf.Slice(14));
-            SequenceNumber = BinaryPrimitives.ReadInt32LittleEndian(pageBuf.Slice(18));
+            StreamSerial = streamSerial ?? BinaryPrimitives.ReadInt32LittleEndian(pageBuf[14..]);
+            SequenceNumber = BinaryPrimitives.ReadInt32LittleEndian(pageBuf[18..]);
             PageFlags = (PageFlags)pageBuf[5];
-            GranulePosition = BinaryPrimitives.ReadInt64LittleEndian(pageBuf.Slice(6));
+            GranulePosition = BinaryPrimitives.ReadInt64LittleEndian(pageBuf[6..]);
             PacketCount = (short)pktCnt;
             IsResync = isResync;
             IsContinued = isContinued;

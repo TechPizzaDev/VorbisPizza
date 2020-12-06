@@ -94,7 +94,7 @@ namespace NVorbis.Ogg
                     table[14 * 256 + values[14]] ^
                     table[15 * 256 + values[15]];
 
-                values = values.Slice(MaxSlice);
+                values = values[MaxSlice..];
             }
 
             for (int i = 0; i < values.Length; i++)

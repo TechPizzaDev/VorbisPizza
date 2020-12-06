@@ -225,7 +225,7 @@ namespace NVorbis.Ogg
                         // set up the new buffer and fill it
                         packetBuf = new byte[prevBuf.Length + contSz];
                         prevBuf.CopyTo(packetBuf);
-                        pageBuf.AsMemory(dataStart, contSz).CopyTo(packetBuf.Slice(prevBuf.Length));
+                        pageBuf.AsMemory(dataStart, contSz).CopyTo(packetBuf[prevBuf.Length..]);
 
                         // now that we've read, update our start position
                         dataStart += contSz;
