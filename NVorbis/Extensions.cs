@@ -21,36 +21,14 @@ namespace NVorbis
 
             for (int i = 0; i < buffer.Length; i++)
             {
-                byte value = (byte)packet.TryPeekBits(8, out int bitsRead);
+                ulong value = packet.TryPeekBits(8, out int bitsRead);
                 if (bitsRead == 0)
                     return i;
 
-                buffer[i] = value;
+                buffer[i] = (byte)value;
                 packet.SkipBits(8);
             }
             return buffer.Length;
-        }
-
-        /// <summary>
-        /// Reads the specified number of bytes from the packet and advances the position counter.
-        /// </summary>
-        /// <param name="packet"></param>
-        /// <param name="count">The number of bytes to read.</param>
-        /// <returns>A byte array holding the data read.</returns>
-        public static byte[] ReadBytes(this IPacket packet, int count)
-        {
-            if (packet == null)
-                throw new ArgumentNullException(nameof(packet));
-
-            var buf = new byte[count];
-            int actualCount = Read(packet, buf.AsSpan(0, count));
-            if (actualCount < count)
-            {
-                var tmp = new byte[actualCount];
-                Buffer.BlockCopy(buf, 0, tmp, 0, actualCount);
-                return tmp;
-            }
-            return buf;
         }
 
         /// <summary>
