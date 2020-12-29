@@ -2,12 +2,14 @@
 using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.IO;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using NVorbis.Contracts;
 using NVorbis.Contracts.Ogg;
 
 namespace NVorbis.Ogg
 {
+    [SkipLocalsInit]
     internal class PageReader : PageReaderBase, IPageData
     {
         internal static Func<IPageData, int, IStreamPageReader> CreateStreamPageReader { get; set; } =

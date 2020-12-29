@@ -1,10 +1,12 @@
 ﻿using System;
 using System.IO;
+using System.Runtime.CompilerServices;
 using NVorbis.Contracts;
 
 namespace NVorbis
 {
     // each channel gets its own pass, one dimension at a time
+    [SkipLocalsInit]
     internal class Residue0 : IResidue
     {
         private static int ICount(int v)
@@ -186,7 +188,7 @@ namespace NVorbis
             }
         }
 
-        virtual protected bool WriteVectors(ICodebook codebook, IPacket packet, float[][] residue, int channel, int offset, int partitionSize)
+        protected virtual bool WriteVectors(ICodebook codebook, IPacket packet, float[][] residue, int channel, int offset, int partitionSize)
         {
             var res = residue[channel];
             var steps = partitionSize / codebook.Dimensions;

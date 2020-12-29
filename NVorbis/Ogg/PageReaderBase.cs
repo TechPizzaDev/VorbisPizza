@@ -3,10 +3,12 @@ using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
+using System.Runtime.CompilerServices;
 using NVorbis.Contracts.Ogg;
 
 namespace NVorbis.Ogg
 {
+    [SkipLocalsInit]
     internal abstract class PageReaderBase : IPageReader
     {
         internal static Func<ICrc> CreateCrc { get; set; } = () => new Crc();
@@ -290,7 +292,7 @@ namespace NVorbis.Ogg
             return false;
         }
 
-        abstract public bool ReadPageAt(long offset);
+        public abstract bool ReadPageAt(long offset);
 
         public void Dispose()
         {

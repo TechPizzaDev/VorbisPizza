@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Runtime.CompilerServices;
 using NVorbis.Contracts;
 
 namespace NVorbis
 {
+    [SkipLocalsInit]
     internal class Codebook : ICodebook
     {
         private int[] _lengths;

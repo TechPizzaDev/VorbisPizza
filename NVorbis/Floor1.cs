@@ -8,6 +8,7 @@ namespace NVorbis
 {
     // Linear interpolated values on dB amplitude and linear frequency scale. 
     // Draws a curve between each point to define the low-resolution spectral data.
+    [SkipLocalsInit]
     internal class Floor1 : IFloor
     {
         #region Data
@@ -308,7 +309,7 @@ namespace NVorbis
 
         public void Apply(IFloorData floorData, int blockSize, float[] residue)
         {
-            if (!(floorData is Data data))
+            if (floorData is not Data data)
                 throw new ArgumentException("Incorrect packet data type.", nameof(floorData));
 
             int n = blockSize / 2;

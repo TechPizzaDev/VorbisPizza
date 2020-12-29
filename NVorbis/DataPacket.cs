@@ -64,7 +64,7 @@ namespace NVorbis
         /// <summary>
         /// Gets the total number of bits in the packet.
         /// </summary>
-        abstract protected int TotalBits { get; }
+        protected abstract int TotalBits { get; }
 
         private bool GetFlag(PacketFlags flag) => _packetFlags.HasFlag(flag);
 
@@ -80,7 +80,7 @@ namespace NVorbis
         /// Reads the next byte in the packet.
         /// </summary>
         /// <returns>The next byte in the packet, or <c>-1</c> if no more data is available.</returns>
-        abstract protected int ReadNextByte();
+        protected abstract int ReadNextByte();
 
         /// <summary>
         /// Frees the buffers and caching for the packet instance.
