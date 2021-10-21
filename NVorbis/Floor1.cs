@@ -191,7 +191,8 @@ namespace NVorbis
 
             if (data.PostCount > 0)
             {
-                var stepFlags = UnwrapPosts(data);
+                Span<bool> stepFlags = stackalloc bool[64];
+                UnwrapPosts(stepFlags, data);
 
                 var lx = 0;
                 var ly = data.Posts[0] * _multiplier;
@@ -221,13 +222,12 @@ namespace NVorbis
             }
         }
 
-        bool[] UnwrapPosts(Data data)
+        void UnwrapPosts(Span<bool> stepFlags, Data data)
         {
-            var stepFlags = new bool[64];
             stepFlags[0] = true;
             stepFlags[1] = true;
 
-            var finalY = new int[64];
+            var finalY = data.Posts;
             finalY[0] = data.Posts[0];
             finalY[1] = data.Posts[1];
 
@@ -287,13 +287,6 @@ namespace NVorbis
                     finalY[i] = predicted;
                 }
             }
-
-            for (int i = 0; i < data.PostCount; i++)
-            {
-                data.Posts[i] = finalY[i];
-            }
-
-            return stepFlags;
         }
 
         int RenderPoint(int x0, int y0, int x1, int y1, int X)

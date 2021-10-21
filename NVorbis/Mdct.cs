@@ -10,14 +10,14 @@ namespace NVorbis
 
         Dictionary<int, MdctImpl> _setupCache = new Dictionary<int, MdctImpl>();
 
-        public void Reverse(float[] samples, int sampleCount)
+        public void Reverse(float[] samples, float[] buf2, int sampleCount)
         {
             if (!_setupCache.TryGetValue(sampleCount, out var impl))
             {
                 impl = new MdctImpl(sampleCount);
                 _setupCache[sampleCount] = impl;
             }
-            impl.CalcReverse(samples);
+            impl.CalcReverse(samples, buf2);
         }
 
         class MdctImpl
@@ -62,11 +62,9 @@ namespace NVorbis
                 }
             }
 
-            internal void CalcReverse(float[] buffer)
+            internal void CalcReverse(float[] buffer, float[] buf2)
             {
                 float[] u, v;
-
-                var buf2 = new float[_n2];
 
                 // copy and reflect spectral data
                 // step 0

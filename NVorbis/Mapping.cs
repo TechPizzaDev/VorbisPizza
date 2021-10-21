@@ -12,6 +12,7 @@ namespace NVorbis
         IResidue[] _submapResidue;
         IFloor[] _channelFloor;
         IResidue[] _channelResidue;
+        float[] _buf2;
 
         public void Init(IPacket packet, int channels, IFloor[] floors, IResidue[] residues, IMdct mdct)
         {
@@ -89,6 +90,7 @@ namespace NVorbis
                 _channelResidue[c] = _submapResidue[mux[c]];
             }
 
+            _buf2 = Array.Empty<float>();
             _mdct = mdct;
         }
 
@@ -181,13 +183,16 @@ namespace NVorbis
                 }
             }
 
+            if (halfBlockSize > _buf2.Length)
+                Array.Resize(ref _buf2, halfBlockSize);
+
             // apply floor / dot product / MDCT (only run if we have sound energy in that channel)
             for (var c = 0; c < _channelFloor.Length; c++)
             {
                 if (floorData[c].ExecuteChannel)
                 {
                     _channelFloor[c].Apply(floorData[c], blockSize, buffer[c]);
-                    _mdct.Reverse(buffer[c], blockSize);
+                    _mdct.Reverse(buffer[c], _buf2, blockSize);
                 }
                 else
                 {
