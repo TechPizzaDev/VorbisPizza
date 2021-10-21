@@ -6,12 +6,13 @@ namespace TestApp
 {
     static class Program
     {
-        const string OGG_FILE = @"..\TestFiles\3test.ogg";
-        //const string OGG_FILE = @"..\TestFiles\2test.ogg";
+        const string OGG_FILE = @"..\..\..\..\TestFiles\4test.ogg";
+        //const string OGG_FILE = @"..\..\..\..\TestFiles\3test.ogg";
+        //const string OGG_FILE = @"..\..\..\..\TestFiles\2test.ogg";
 
         static void Main()
         {
-            var wavFileName = Path.Combine(Path.GetTempPath(), Path.ChangeExtension(Path.GetFileName(OGG_FILE), "wav"));
+            var wavFileName = Path.ChangeExtension(Path.GetFileName(OGG_FILE), "wav");
 
             using (var fs = File.OpenRead(OGG_FILE))
             //using (var fwdStream = new ForwardOnlyStream(fs))
@@ -25,7 +26,7 @@ namespace TestApp
                     waveWriter.WriteSamples(sampleBuf, 0, cnt);
                 }
             }
-            Process.Start(wavFileName);
+            //Process.Start(wavFileName);
         }
     }
 }
