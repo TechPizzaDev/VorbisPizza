@@ -16,6 +16,14 @@ namespace NVorbis
 
             public bool ForceEnergy { get; set; }
             public bool ForceNoEnergy { get; set; }
+
+            public void Reset()
+            {
+                Array.Clear(Posts);
+                PostCount = 0;
+                ForceEnergy = false;
+                ForceNoEnergy = false;
+            }
         }
 
         int[] _partitionClass, _classDimensions, _classSubclasses, _xList, _classMasterBookIndex, _hNeigh, _lNeigh, _sortIdx;
@@ -132,9 +140,14 @@ namespace NVorbis
             }
         }
 
-        public IFloorData Unpack(IPacket packet, int blockSize, int channel)
+        public IFloorData CreateFloorData()
         {
-            var data = new Data();
+            return new Data();
+        }
+
+        public void Unpack(IPacket packet, IFloorData floorData, int blockSize, int channel)
+        {
+            var data = (Data)floorData;
 
             // hoist ReadPosts to here since that's all we're doing...
             if (packet.ReadBit())
@@ -179,13 +192,11 @@ namespace NVorbis
 
                 data.PostCount = postCount;
             }
-
-            return data;
         }
 
         public void Apply(IFloorData floorData, int blockSize, float[] residue)
         {
-            if (!(floorData is Data data)) throw new ArgumentException("Incorrect packet data!", "packetData");
+            var data = (Data)floorData;
 
             var n = blockSize / 2;
 

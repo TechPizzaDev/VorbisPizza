@@ -17,6 +17,14 @@ namespace NVorbis
 
             public bool ForceEnergy { get; set; }
             public bool ForceNoEnergy { get; set; }
+
+            public void Reset()
+            {
+                Array.Clear(Coeff);
+                Amp = 0;
+                ForceEnergy = false;
+                ForceNoEnergy = false;
+            }
         }
 
         int _order, _rate, _bark_map_size, _ampBits, _ampOfs, _ampDiv;
@@ -64,6 +72,14 @@ namespace NVorbis
             };
         }
 
+        public IFloorData CreateFloorData()
+        {
+            return new Data
+            {
+                Coeff = new float[_order + 1],
+            };
+        }
+
         int[] SynthesizeBarkCurve(int n)
         {
             var scale = _bark_map_size / toBARK(_rate / 2);
@@ -95,13 +111,10 @@ namespace NVorbis
             return map;
         }
 
-        public IFloorData Unpack(IPacket packet, int blockSize, int channel)
+        public void Unpack(IPacket packet, IFloorData floorData, int blockSize, int channel)
         {
-            var data = new Data
-            {
-                Coeff = new float[_order + 1],
-            };
-
+            var data = (Data)floorData;
+            
             data.Amp = packet.ReadBits(_ampBits);
             if (data.Amp > 0f)
             {
@@ -115,7 +128,7 @@ namespace NVorbis
                 {
                     // we ran out of data or the packet is corrupt...  0 the floor and return
                     data.Amp = 0;
-                    return data;
+                    return;
                 }
                 var book = _books[bookNum];
 
@@ -127,7 +140,7 @@ namespace NVorbis
                     {
                         // we ran out of data or the packet is corrupt...  0 the floor and return
                         data.Amp = 0;
-                        return data;
+                        return;
                     }
                     for (int j = 0; i < _order && j < book.Dimensions; j++, i++)
                     {
@@ -146,13 +159,11 @@ namespace NVorbis
                     last = data.Coeff[j - 1];
                 }
             }
-            return data;
         }
 
         public void Apply(IFloorData floorData, int blockSize, float[] residue)
         {
-            if (!(floorData is Data data)) throw new ArgumentException("Incorrect packet data!");
-
+            var data = (Data)floorData;
             var n = blockSize / 2;
 
             if (data.Amp > 0f)

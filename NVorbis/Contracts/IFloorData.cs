@@ -5,5 +5,7 @@
         bool ExecuteChannel { get; }
         bool ForceEnergy { get; set; }
         bool ForceNoEnergy { get; set; }
+
+        void Reset();
     }
 }

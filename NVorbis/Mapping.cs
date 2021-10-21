@@ -11,6 +11,7 @@ namespace NVorbis
         IFloor[] _submapFloor;
         IResidue[] _submapResidue;
         IFloor[] _channelFloor;
+        IFloorData[] _channelFloorData;
         IResidue[] _channelResidue;
         float[] _buf2;
 
@@ -83,10 +84,12 @@ namespace NVorbis
             }
 
             _channelFloor = new IFloor[channels];
+            _channelFloorData = new IFloorData[channels];
             _channelResidue = new IResidue[channels];
             for (var c = 0; c < channels; c++)
             {
                 _channelFloor[c] = _submapFloor[mux[c]];
+                _channelFloorData[c] = _channelFloor[c].CreateFloorData();
                 _channelResidue[c] = _submapResidue[mux[c]];
             }
 
@@ -99,11 +102,12 @@ namespace NVorbis
             var halfBlockSize = blockSize >> 1;
 
             // read the noise floor data
-            var floorData = new IFloorData[_channelFloor.Length];
-            var noExecuteChannel = new bool[_channelFloor.Length];
+            IFloorData[] floorData = _channelFloorData;
+            Span<bool> noExecuteChannel = stackalloc bool[_channelFloor.Length];
             for (var i = 0; i < _channelFloor.Length; i++)
             {
-                floorData[i] = _channelFloor[i].Unpack(packet, blockSize, i);
+                floorData[i].Reset();
+                _channelFloor[i].Unpack(packet, floorData[i], blockSize, i);
                 noExecuteChannel[i] = !floorData[i].ExecuteChannel;
 
                 // pre-clear the residue buffers

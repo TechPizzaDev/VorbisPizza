@@ -1,4 +1,5 @@
-﻿using NVorbis.Contracts;
+﻿using System;
+using NVorbis.Contracts;
 
 namespace NVorbis
 {
@@ -13,7 +14,8 @@ namespace NVorbis
             base.Init(packet, 1, codebooks);
         }
 
-        public override void Decode(IPacket packet, bool[] doNotDecodeChannel, int blockSize, float[][] buffer)
+        public override void Decode(
+            IPacket packet, ReadOnlySpan<bool> doNotDecodeChannel, int blockSize, float[][] buffer)
         {
             // since we're doing all channels in a single pass, the block size has to be multiplied.
             // otherwise this is just a pass-through call

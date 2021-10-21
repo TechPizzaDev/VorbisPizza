@@ -116,13 +116,14 @@ namespace NVorbis
             _channels = channels;
         }
 
-        virtual public void Decode(IPacket packet, bool[] doNotDecodeChannel, int blockSize, float[][] buffer)
+        virtual public void Decode(
+            IPacket packet, ReadOnlySpan<bool> doNotDecodeChannel, int blockSize, float[][] buffer)
         {
             // this is pretty well stolen directly from libvorbis...  BSD license
             var end = _end < blockSize / 2 ? _end : blockSize / 2;
             var n = end - _begin;
 
-            if (n > 0 && Array.IndexOf(doNotDecodeChannel, false) != -1)
+            if (n > 0 && doNotDecodeChannel.IndexOf(false) != -1)
             {
                 var partitionCount = n / _partitionSize;
 
