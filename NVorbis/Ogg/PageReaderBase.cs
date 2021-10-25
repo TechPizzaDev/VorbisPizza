@@ -7,9 +7,6 @@ namespace NVorbis.Ogg
 {
     abstract class PageReaderBase : IPageReader
     {
-        internal static Func<ICrc> CreateCrc { get; set; } = () => new Crc();
-
-        private readonly ICrc _crc = CreateCrc();
         private readonly HashSet<int> _ignoredSerials = new HashSet<int>();
         private readonly byte[] _headerBuf = new byte[305]; // 27 - 4 + 27 + 255 (found sync at end of first buffer, and found page has full segment count)
         private byte[] _overflowBuf;
@@ -53,20 +50,20 @@ namespace NVorbis.Ogg
             if (bytesRead != dataLen) return false;
             dataLen = pageBuf.Length;
 
-            _crc.Reset();
+            Crc crc = Crc.Create();
             for (i = 0; i < 22; i++)
             {
-                _crc.Update(pageBuf[i]);
+                crc.Update(pageBuf[i]);
             }
-            _crc.Update(0);
-            _crc.Update(0);
-            _crc.Update(0);
-            _crc.Update(0);
+            crc.Update(0);
+            crc.Update(0);
+            crc.Update(0);
+            crc.Update(0);
             for (i += 4; i < dataLen; i++)
             {
-                _crc.Update(pageBuf[i]);
+                crc.Update(pageBuf[i]);
             }
-            return _crc.Test(BitConverter.ToUInt32(pageBuf, 22));
+            return crc.Test(BitConverter.ToUInt32(pageBuf, 22));
         }
 
         private bool AddPage(byte[] pageBuf, bool isResync)
