@@ -63,7 +63,7 @@ namespace NVorbis
 
             TableBits = tableBits;
             PrefixTree = prefixList;
-            OverflowList = overflowList.ToArray();
+            OverflowList = overflowList?.ToArray();
         }
 
         public int Compare(HuffmanListNode x, HuffmanListNode y)
