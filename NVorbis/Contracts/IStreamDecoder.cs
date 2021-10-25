@@ -59,12 +59,12 @@ namespace NVorbis.Contracts
         long SamplePosition { get; set; }
 
         /// <summary>
-        /// Gets or sets whether to clip samples returned by <see cref="Read(Span&lt;float&gt;, int, int)"/>.
+        /// Gets or sets whether to clip samples returned by <see cref="Read(Span{float})"/>.
         /// </summary>
         bool ClipSamples { get; set; }
 
         /// <summary>
-        /// Gets whether <see cref="Read(Span&lt;float&gt;, int, int)"/> has returned any clipped samples.
+        /// Gets whether <see cref="Read(Span{float})"/> has returned any clipped samples.
         /// </summary>
         bool HasClipped { get; }
 

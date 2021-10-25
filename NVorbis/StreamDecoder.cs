@@ -311,7 +311,7 @@ namespace NVorbis
         /// <inheritdoc/>
         public int Read(Span<float> buffer)
         {
-            if (buffer.Length % _channels != 0) throw new ArgumentException(nameof(buffer), "Length must be a multiple of Channels.");
+            if (buffer.Length % _channels != 0) throw new ArgumentException("Length must be a multiple of Channels.", nameof(buffer));
             if (_packetProvider == null) throw new ObjectDisposedException(nameof(StreamDecoder));
 
             // if the caller didn't ask for any data, bail early
@@ -710,12 +710,12 @@ namespace NVorbis
         }
 
         /// <summary>
-        /// Gets or sets whether to clip samples returned by <see cref="Read(Span&lt;float&gt;, int, int)"/>.
+        /// Gets or sets whether to clip samples returned by <see cref="Read(Span{float})"/>.
         /// </summary>
         public bool ClipSamples { get; set; }
 
         /// <summary>
-        /// Gets whether <see cref="Read(Span&lt;float&gt;, int, int)"/> has returned any clipped samples.
+        /// Gets whether <see cref="Read(Span{float})"/> has returned any clipped samples.
         /// </summary>
         public bool HasClipped => _hasClipped;
 
