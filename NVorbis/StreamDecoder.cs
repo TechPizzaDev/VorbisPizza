@@ -1,6 +1,8 @@
 ﻿using NVorbis.Contracts;
 using System;
 using System.IO;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Text;
 
 namespace NVorbis
@@ -10,8 +12,6 @@ namespace NVorbis
     /// </summary>
     public sealed class StreamDecoder : IStreamDecoder
     {
-        static internal Func<IFactory> CreateFactory { get; set; } = () => new Factory();
-
         private Contracts.IPacketProvider _packetProvider;
         private IFactory _factory;
         private StreamStats _stats;
@@ -162,11 +162,11 @@ namespace NVorbis
         {
             var len = (int)packet.ReadBits(32);
 
-            if(len == 0)
+            if (len == 0)
             {
                 return string.Empty;
             }
-            
+
             var buf = new byte[len];
             var cnt = packet.Read(buf, 0, len);
             if (cnt < len)
@@ -308,31 +308,22 @@ namespace NVorbis
 
         #region Decoding
 
-        /// <summary>
-        /// Reads samples into the specified buffer.
-        /// </summary>
-        /// <param name="buffer">The buffer to read the samples into.</param>
-        /// <param name="offset">The index to start reading samples into the buffer.</param>
-        /// <param name="count">The number of samples that should be read into the buffer.  Must be a multiple of <see cref="Channels"/>.</param>
-        /// <returns>The number of samples read into the buffer.</returns>
-        /// <exception cref="ArgumentOutOfRangeException">Thrown when the buffer is too small or <paramref name="offset"/> is less than zero.</exception>
-        /// <remarks>The data populated into <paramref name="buffer"/> is interleaved by channel in normal PCM fashion: Left, Right, Left, Right, Left, Right</remarks>
-        public int Read(Span<float> buffer, int offset, int count)
+        /// <inheritdoc/>
+        public int Read(Span<float> buffer)
         {
-            if (buffer == null) throw new ArgumentNullException(nameof(buffer));
-            if (offset < 0 || offset + count > buffer.Length) throw new ArgumentOutOfRangeException(nameof(offset));
-            if (count % _channels != 0) throw new ArgumentOutOfRangeException(nameof(count), "Must be a multiple of Channels!");
+            if (buffer.Length % _channels != 0) throw new ArgumentException(nameof(buffer), "Length must be a multiple of Channels.");
             if (_packetProvider == null) throw new ObjectDisposedException(nameof(StreamDecoder));
 
             // if the caller didn't ask for any data, bail early
-            if (count == 0)
+            if (buffer.Length == 0)
             {
                 return 0;
             }
 
             // save off value to track when we're done with the request
-            var idx = offset;
-            var tgt = offset + count;
+            nint idx = 0;
+            var tgt = buffer.Length;
+            ref float target = ref MemoryMarshal.GetReference(buffer);
 
             // try to fill the buffer; drain the last buffer if EOS, resync, bad packet, or parameter change
             while (idx < tgt)
@@ -349,7 +340,7 @@ namespace NVorbis
                         break;
                     }
 
-                    if (!ReadNextPacket((idx - offset) / _channels, out var samplePosition))
+                    if (!ReadNextPacket(idx / _channels, out var samplePosition))
                     {
                         // drain the current packet (the windowing will fade it out)
                         _prevPacketEnd = _prevPacketStop;
@@ -359,62 +350,63 @@ namespace NVorbis
                     if (samplePosition.HasValue && !_hasPosition)
                     {
                         _hasPosition = true;
-                        _currentPosition = samplePosition.Value - (_prevPacketEnd - _prevPacketStart) - (idx - offset) / _channels;
+                        _currentPosition = samplePosition.Value - (_prevPacketEnd - _prevPacketStart) - idx / _channels;
                     }
                 }
 
                 // we read out the valid samples from the previous packet
-                var copyLen = Math.Min((tgt - idx) / _channels, _prevPacketEnd - _prevPacketStart);
+                var copyLen = (int)Math.Min((tgt - idx) / _channels, _prevPacketEnd - _prevPacketStart);
                 if (copyLen > 0)
                 {
                     if (ClipSamples)
                     {
-                        idx += ClippingCopyBuffer(buffer, idx, copyLen);
+                        idx += ClippingCopyBuffer(ref Unsafe.Add(ref target, idx), copyLen);
                     }
                     else
                     {
-                        idx += CopyBuffer(buffer, idx, copyLen);
+                        idx += CopyBuffer(ref Unsafe.Add(ref target, idx), copyLen);
                     }
                 }
             }
 
-            // update the count of floats written
-            count = idx - offset;
-
             // update the position
-            _currentPosition += count / _channels;
+            _currentPosition += idx / _channels;
 
             // return count of floats written
-            return count;
+            return (int)idx;
         }
 
-        private int ClippingCopyBuffer(Span<float> target, int targetIndex, int count)
+        private nint ClippingCopyBuffer(ref float target, int count)
         {
-            var idx = targetIndex;
+            var prevPacketBuf = _prevPacketBuf;
+            nint channels = _channels;
+            nint idx = 0;
             for (; count > 0; _prevPacketStart++, count--)
             {
-                for (var ch = 0; ch < _channels; ch++)
+                for (nint ch = 0; ch < channels; ch++)
                 {
-                    target[idx++] = Utils.ClipValue(_prevPacketBuf[ch][_prevPacketStart], ref _hasClipped);
+                    Unsafe.Add(ref target, idx++) = Utils.ClipValue(prevPacketBuf[ch][_prevPacketStart], ref _hasClipped);
                 }
             }
-            return idx - targetIndex;
+            return idx;
         }
 
-        private int CopyBuffer(Span<float> target, int targetIndex, int count)
+        private nint CopyBuffer(ref float target, int count)
         {
-            var idx = targetIndex;
+            var prevPacketBuf = _prevPacketBuf;
+            nint channels = _channels;
+            nint idx = 0;
             for (; count > 0; _prevPacketStart++, count--)
             {
-                for (var ch = 0; ch < _channels; ch++)
+                for (nint ch = 0; ch < channels; ch++)
                 {
-                    target[idx++] = _prevPacketBuf[ch][_prevPacketStart];
+                    Unsafe.Add(ref target, idx++) = prevPacketBuf[ch][_prevPacketStart];
                 }
             }
-            return idx - targetIndex;
+            return idx;
         }
 
-        private bool ReadNextPacket(int bufferedSamples, out long? samplePosition)
+        private bool ReadNextPacket(nint bufferedSamples, out long? samplePosition)
         {
             // decode the next packet now so we can start overlapping with it
             var curPacket = DecodeNextPacket(out var startIndex, out var validLen, out var totalLen, out var isEndOfStream, out samplePosition, out var bitsRead, out var bitsRemaining, out var containerOverheadBits);

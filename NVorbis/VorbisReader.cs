@@ -331,33 +331,22 @@ namespace NVorbis
         /// <param name="offset">The index to start reading samples into the buffer.</param>
         /// <param name="count">The number of samples that should be read into the buffer.</param>
         /// <returns>The number of floats read into the buffer.</returns>
-        /// <exception cref="ArgumentOutOfRangeException">Thrown when the buffer is too small or <paramref name="offset"/> is less than zero.</exception>
+        /// <exception cref="ArgumentException">Thrown when the buffer is too small or the length is not a multiple of <see cref="Channels"/>.</exception>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="offset"/> is less than zero.</exception>
         /// <remarks>The data populated into <paramref name="buffer"/> is interleaved by channel in normal PCM fashion: Left, Right, Left, Right, Left, Right</remarks>
         public int ReadSamples(float[] buffer, int offset, int count)
         {
-            // don't allow non-aligned reads (always on a full sample boundary!)
-            count -= count % _streamDecoder.Channels;
-            if (count > 0)
-            {
-                return _streamDecoder.Read(buffer, offset, count);
-            }
-            return 0;
+            return ReadSamples(buffer.AsSpan(offset, count));
         }
 
-        /// <summary>
-        /// Reads samples into the specified buffer.
-        /// </summary>
-        /// <param name="buffer">The buffer to read the samples into.</param>
-        /// <returns>The number of floats read into the buffer.</returns>
-        /// <exception cref="ArgumentOutOfRangeException">Thrown when the buffer is too small.</exception>
-        /// <remarks>The data populated into <paramref name="buffer"/> is interleaved by channel in normal PCM fashion: Left, Right, Left, Right, Left, Right</remarks>
+        /// <inheritdoc/>
         public int ReadSamples(Span<float> buffer)
         {
             // don't allow non-aligned reads (always on a full sample boundary!)
             int count = buffer.Length - buffer.Length % _streamDecoder.Channels;
-            if (!buffer.IsEmpty)
+            if (count != 0)
             {
-                return _streamDecoder.Read(buffer, 0, count);
+                return _streamDecoder.Read(buffer.Slice(0, count));
             }
             return 0;
         }
