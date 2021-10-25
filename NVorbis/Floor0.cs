@@ -28,12 +28,12 @@ namespace NVorbis
         }
 
         int _order, _rate, _bark_map_size, _ampBits, _ampOfs, _ampDiv;
-        ICodebook[] _books;
+        Codebook[] _books;
         int _bookBits;
         Dictionary<int, float[]> _wMap;
         Dictionary<int, int[]> _barkMaps;
 
-        public void Init(IPacket packet, int channels, int block0Size, int block1Size, ICodebook[] codebooks)
+        public void Init(IPacket packet, int channels, int block0Size, int block1Size, Codebook[] codebooks)
         {
             // this is pretty well stolen directly from libvorbis...  BSD license
             _order = (int)packet.ReadBits(8);
@@ -41,7 +41,7 @@ namespace NVorbis
             _bark_map_size = (int)packet.ReadBits(16);
             _ampBits = (int)packet.ReadBits(6);
             _ampOfs = (int)packet.ReadBits(8);
-            _books = new ICodebook[(int)packet.ReadBits(4) + 1];
+            _books = new Codebook[(int)packet.ReadBits(4) + 1];
 
             if (_order < 1 || _rate < 1 || _bark_map_size < 1 || _books.Length == 0) throw new InvalidDataException();
 

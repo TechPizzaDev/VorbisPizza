@@ -6,7 +6,7 @@ using System.IO;
 
 namespace NVorbis
 {
-    class Codebook : ICodebook
+    class Codebook
     {
         // FastRange is "borrowed" from GitHub: TechnologicalPizza/MonoGame.NVorbis
         class FastRange : IReadOnlyList<int>

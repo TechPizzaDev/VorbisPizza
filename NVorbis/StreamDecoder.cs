@@ -234,7 +234,7 @@ namespace NVorbis
             var huffman = _factory.CreateHuffman();
 
             // read the books
-            var books = new ICodebook[packet.ReadBits(8) + 1];
+            var books = new Codebook[packet.ReadBits(8) + 1];
             for (var i = 0; i < books.Length; i++)
             {
                 books[i] = _factory.CreateCodebook();

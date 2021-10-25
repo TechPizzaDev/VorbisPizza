@@ -14,7 +14,7 @@ namespace NVorbis
             return new Mdct();
         }
 
-        public ICodebook CreateCodebook()
+        public Codebook CreateCodebook()
         {
             return new Codebook();
         }

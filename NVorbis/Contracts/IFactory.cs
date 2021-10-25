@@ -2,7 +2,7 @@
 {
     interface IFactory
     {
-        ICodebook CreateCodebook();
+        Codebook CreateCodebook();
         IFloor CreateFloor(IPacket packet);
         IResidue CreateResidue(IPacket packet);
         IMapping CreateMapping(IPacket packet);

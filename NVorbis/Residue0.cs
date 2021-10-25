@@ -25,14 +25,14 @@ namespace NVorbis
         int _classifications;
         int _maxStages;
 
-        ICodebook[][] _books;
-        ICodebook _classBook;
+        Codebook[][] _books;
+        Codebook _classBook;
 
         int[] _cascade;
         int[][] _decodeMap;
 
 
-        virtual public void Init(IPacket packet, int channels, ICodebook[] codebooks)
+        virtual public void Init(IPacket packet, int channels, Codebook[] codebooks)
         {
             // this is pretty well stolen directly from libvorbis...  BSD license
             _begin = (int)packet.ReadBits(24);
@@ -75,7 +75,7 @@ namespace NVorbis
             }
 
             // now the lookups
-            _books = new ICodebook[_classifications][];
+            _books = new Codebook[_classifications][];
 
             acc = 0;
             var maxstage = 0;
@@ -83,7 +83,7 @@ namespace NVorbis
             for (int j = 0; j < _classifications; j++)
             {
                 stages = Utils.ilog(_cascade[j]);
-                _books[j] = new ICodebook[stages];
+                _books[j] = new Codebook[stages];
                 if (stages > 0)
                 {
                     maxstage = Math.Max(maxstage, stages);
@@ -178,7 +178,7 @@ namespace NVorbis
             }
         }
 
-        virtual protected bool WriteVectors(ICodebook codebook, IPacket packet, float[][] residue, int channel, int offset, int partitionSize)
+        virtual protected bool WriteVectors(Codebook codebook, IPacket packet, float[][] residue, int channel, int offset, int partitionSize)
         {
             var res = residue[channel];
             var steps = partitionSize / codebook.Dimensions;

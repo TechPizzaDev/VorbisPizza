@@ -2,7 +2,7 @@
 {
     interface IFloor
     {
-        void Init(IPacket packet, int channels, int block0Size, int block1Size, ICodebook[] codebooks);
+        void Init(IPacket packet, int channels, int block0Size, int block1Size, Codebook[] codebooks);
 
         IFloorData CreateFloorData();
 

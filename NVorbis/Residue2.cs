@@ -8,7 +8,7 @@ namespace NVorbis
     {
         int _channels;
 
-        public override void Init(IPacket packet, int channels, ICodebook[] codebooks)
+        public override void Init(IPacket packet, int channels, Codebook[] codebooks)
         {
             _channels = channels;
             base.Init(packet, 1, codebooks);
@@ -22,7 +22,7 @@ namespace NVorbis
             base.Decode(packet, doNotDecodeChannel, blockSize * _channels, buffer);
         }
 
-        protected override bool WriteVectors(ICodebook codebook, IPacket packet, float[][] residue, int channel, int offset, int partitionSize)
+        protected override bool WriteVectors(Codebook codebook, IPacket packet, float[][] residue, int channel, int offset, int partitionSize)
         {
             var chPtr = 0;
 
