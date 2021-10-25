@@ -1,5 +1,6 @@
 ﻿using NVorbis.Contracts;
 using System;
+using System.Runtime.CompilerServices;
 
 namespace NVorbis
 {
@@ -97,6 +98,7 @@ namespace NVorbis
             _mdct = mdct;
         }
 
+        [SkipLocalsInit]
         public void DecodePacket(IPacket packet, int blockSize, int channels, float[][] buffer)
         {
             var halfBlockSize = blockSize >> 1;

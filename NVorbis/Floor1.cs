@@ -1,6 +1,7 @@
 ﻿using NVorbis.Contracts;
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 
 namespace NVorbis
 {
@@ -194,6 +195,7 @@ namespace NVorbis
             }
         }
 
+        [SkipLocalsInit]
         public void Apply(IFloorData floorData, int blockSize, float[] residue)
         {
             var data = (Data)floorData;

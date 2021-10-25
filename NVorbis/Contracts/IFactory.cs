@@ -8,6 +8,6 @@
         IMapping CreateMapping(IPacket packet);
         IMode CreateMode();
         IMdct CreateMdct();
-        IHuffman CreateHuffman();
+        Huffman CreateHuffman();
     }
 }

@@ -3,6 +3,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using System.Runtime.CompilerServices;
 
 namespace NVorbis
 {
@@ -51,12 +52,12 @@ namespace NVorbis
 
         int[] _lengths;
         float[] _lookupTable;
-        IReadOnlyList<HuffmanListNode> _overflowList;
-        IReadOnlyList<HuffmanListNode> _prefixList;
+        HuffmanListNode[] _overflowList;
+        HuffmanListNode[] _prefixList;
         int _prefixBitLength;
         int _maxBits;
 
-        public void Init(IPacket packet, IHuffman huffman)
+        public void Init(IPacket packet, Huffman huffman)
         {
             // first, check the sync pattern
             var chkVal = packet.ReadBits(24);
@@ -73,7 +74,7 @@ namespace NVorbis
             InitLookupTable(packet);
         }
 
-        private void InitTree(IPacket packet, IHuffman huffman)
+        private void InitTree(IPacket packet, Huffman huffman)
         {
             bool sparse;
             int total = 0;
@@ -169,10 +170,12 @@ namespace NVorbis
             }
         }
 
+        [SkipLocalsInit]
         bool ComputeCodewords(bool sparse, int[] codewords, int[] codewordLengths, int[] len, int n, int[] values)
         {
             int i, k, m = 0;
-            uint[] available = new uint[32];
+            Span<uint> available = stackalloc uint[32];
+            available.Clear();
 
             for (k = 0; k < n; ++k) if (len[k] > 0) break;
             if (k == n) return true;
@@ -305,11 +308,17 @@ namespace NVorbis
             }
 
             // nope, not possible... run through the overflow nodes
-            data = (int)packet.TryPeekBits(_maxBits, out _);
+            return DecodeOverflowScalar(packet);
+        }
 
-            for (var i = 0; i < _overflowList.Count; i++)
+        private int DecodeOverflowScalar(IPacket packet)
+        {
+            var data = (int)packet.TryPeekBits(_maxBits, out _);
+
+            var overflowList = _overflowList;
+            for (var i = 0; i < overflowList.Length; i++)
             {
-                node = _overflowList[i];
+                var node = overflowList[i];
                 if (node.Bits == (data & node.Mask))
                 {
                     packet.SkipBits(node.Length);

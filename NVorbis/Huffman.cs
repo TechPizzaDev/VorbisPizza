@@ -4,13 +4,13 @@ using System.Collections.Generic;
 
 namespace NVorbis
 {
-    class Huffman : IHuffman, IComparer<HuffmanListNode>
+    class Huffman : IComparer<HuffmanListNode>
     {
         const int MAX_TABLE_BITS = 10;
 
         public int TableBits { get; private set; }
-        public IReadOnlyList<HuffmanListNode> PrefixTree { get; private set; }
-        public IReadOnlyList<HuffmanListNode> OverflowList { get; private set; }
+        public HuffmanListNode[] PrefixTree { get; private set; }
+        public HuffmanListNode[] OverflowList { get; private set; }
 
         public void GenerateTable(IReadOnlyList<int> values, int[] lengthList, int[] codeList)
         {
@@ -36,7 +36,7 @@ namespace NVorbis
 
             var tableBits = maxLen > MAX_TABLE_BITS ? MAX_TABLE_BITS : maxLen;
 
-            var prefixList = new List<HuffmanListNode>(1 << tableBits);
+            var prefixList = new HuffmanListNode[1 << tableBits];
             List<HuffmanListNode> overflowList = null;
             for (int i = 0; i < list.Length && list[i].Length < 99999; i++)
             {
@@ -56,26 +56,17 @@ namespace NVorbis
                     for (int j = 0; j < maxVal; j++)
                     {
                         var idx = (j << itemBits) | item.Bits;
-                        while (prefixList.Count <= idx)
-                        {
-                            prefixList.Add(null);
-                        }
                         prefixList[idx] = item;
                     }
                 }
             }
 
-            while (prefixList.Count < 1 << tableBits)
-            {
-                prefixList.Add(null);
-            }
-
             TableBits = tableBits;
             PrefixTree = prefixList;
-            OverflowList = overflowList;
+            OverflowList = overflowList.ToArray();
         }
 
-        int IComparer<HuffmanListNode>.Compare(HuffmanListNode x, HuffmanListNode y)
+        public int Compare(HuffmanListNode x, HuffmanListNode y)
         {
             var len = x.Length - y.Length;
             if (len == 0)
