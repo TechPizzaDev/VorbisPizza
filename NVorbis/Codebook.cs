@@ -2,37 +2,31 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 namespace NVorbis
 {
     class Codebook
     {
-        // FastRange is "borrowed" from GitHub: TechnologicalPizza/MonoGame.NVorbis
-        class FastRange : IReadOnlyList<int>
+        struct FastRange : IReadOnlyList<int>
         {
-            [ThreadStatic]
-            static FastRange _cachedRange;
-
-            internal static FastRange Get(int start, int count)
-            {
-                var fr = _cachedRange ?? (_cachedRange = new FastRange());
-                fr._start = start;
-                fr._count = count;
-                return fr;
-            }
-
             int _start;
             int _count;
 
-            private FastRange() { }
+            public FastRange(int start, int count)
+            {
+                _start = start;
+                _count = count;
+            }
 
             public int this[int index]
             {
                 get
                 {
-                    if (index > _count) throw new ArgumentOutOfRangeException();
+                    Debug.Assert((uint)index < (uint)_count);
                     return _start + index;
                 }
             }
@@ -159,11 +153,15 @@ namespace NVorbis
                     values = new int[sortedCount];
                 }
 
-                if (!ComputeCodewords(sparse, codewords, codewordLengths, _lengths, Entries, values)) throw new InvalidDataException();
+                if (!ComputeCodewords(sparse, codewords, codewordLengths, _lengths.AsSpan(0, Entries), values)) 
+                    throw new InvalidDataException();
 
-                var valueList = (IReadOnlyList<int>)values ?? FastRange.Get(0, codewords.Length);
+                var lengthList = codewordLengths ?? _lengths;
+                if (values != null)
+                    huffman.GenerateTable(values, lengthList, codewords);
+                else
+                    huffman.GenerateTable(new FastRange(0, codewords.Length), lengthList, codewords);
 
-                huffman.GenerateTable(valueList, codewordLengths ?? _lengths, codewords);
                 _prefixList = huffman.PrefixTree;
                 _prefixBitLength = huffman.TableBits;
                 _overflowList = huffman.OverflowList;
@@ -171,20 +169,20 @@ namespace NVorbis
         }
 
         [SkipLocalsInit]
-        bool ComputeCodewords(bool sparse, int[] codewords, int[] codewordLengths, int[] len, int n, int[] values)
+        bool ComputeCodewords(bool sparse, int[] codewords, int[] codewordLengths, ReadOnlySpan<int> len, int[] values)
         {
             int i, k, m = 0;
             Span<uint> available = stackalloc uint[32];
             available.Clear();
 
-            for (k = 0; k < n; ++k) if (len[k] > 0) break;
-            if (k == n) return true;
+            for (k = 0; k < len.Length; ++k) if (len[k] > 0) break;
+            if (k == len.Length) return true;
 
             AddEntry(sparse, codewords, codewordLengths, 0, k, m++, len[k], values);
 
             for (i = 1; i <= len[k]; ++i) available[i] = 1U << (32 - i);
 
-            for (i = k + 1; i < n; ++i)
+            for (i = k + 1; i < len.Length; ++i)
             {
                 uint res;
                 int z = len[i], y;
@@ -300,8 +298,8 @@ namespace NVorbis
             if (bitsRead == 0) return -1;
 
             // try to get the value from the prefix list...
-            var node = _prefixList[data];
-            if (node != null)
+            var node = Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(_prefixList), data);
+            if (node.Length != -1)
             {
                 packet.SkipBits(node.Length);
                 return node.Value;
@@ -318,7 +316,7 @@ namespace NVorbis
             var overflowList = _overflowList;
             for (var i = 0; i < overflowList.Length; i++)
             {
-                var node = overflowList[i];
+                ref var node = ref overflowList[i];
                 if (node.Bits == (data & node.Mask))
                 {
                     packet.SkipBits(node.Length);

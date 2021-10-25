@@ -12,7 +12,8 @@ namespace NVorbis
         public HuffmanListNode[] PrefixTree { get; private set; }
         public HuffmanListNode[] OverflowList { get; private set; }
 
-        public void GenerateTable(IReadOnlyList<int> values, int[] lengthList, int[] codeList)
+        public void GenerateTable<TList>(TList values, int[] lengthList, int[] codeList)
+            where TList : IReadOnlyList<int>
         {
             var list = new HuffmanListNode[lengthList.Length];
 
@@ -37,6 +38,11 @@ namespace NVorbis
             var tableBits = maxLen > MAX_TABLE_BITS ? MAX_TABLE_BITS : maxLen;
 
             var prefixList = new HuffmanListNode[1 << tableBits];
+            for (int i = 0; i < prefixList.Length; i++)
+            {
+                prefixList[i].Length = -1;
+            }
+
             List<HuffmanListNode> overflowList = null;
             for (int i = 0; i < list.Length && list[i].Length < 99999; i++)
             {
@@ -52,7 +58,7 @@ namespace NVorbis
                 else
                 {
                     var maxVal = 1 << (tableBits - itemBits);
-                    var item = list[i];
+                    var item = list[i]; 
                     for (int j = 0; j < maxVal; j++)
                     {
                         var idx = (j << itemBits) | item.Bits;
