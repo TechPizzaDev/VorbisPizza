@@ -33,7 +33,7 @@ namespace NVorbis
         Dictionary<int, float[]> _wMap;
         Dictionary<int, int[]> _barkMaps;
 
-        public void Init(IPacket packet, int channels, int block0Size, int block1Size, Codebook[] codebooks)
+        public void Init(DataPacket packet, int channels, int block0Size, int block1Size, Codebook[] codebooks)
         {
             // this is pretty well stolen directly from libvorbis...  BSD license
             _order = (int)packet.ReadBits(8);
@@ -111,7 +111,7 @@ namespace NVorbis
             return map;
         }
 
-        public void Unpack(IPacket packet, IFloorData floorData, int blockSize, int channel)
+        public void Unpack(DataPacket packet, IFloorData floorData, int blockSize, int channel)
         {
             var data = (Data)floorData;
             

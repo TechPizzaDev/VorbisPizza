@@ -2,8 +2,8 @@
 {
     interface IMapping
     {
-        void Init(IPacket packet, int channels, IFloor[] floors, IResidue[] residues, IMdct mdct);
+        void Init(DataPacket packet, int channels, IFloor[] floors, IResidue[] residues, IMdct mdct);
 
-        void DecodePacket(IPacket packet, int blockSize, int channels, float[][] buffer);
+        void DecodePacket(DataPacket packet, int blockSize, int channels, float[][] buffer);
     }
 }

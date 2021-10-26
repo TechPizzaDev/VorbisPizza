@@ -67,7 +67,7 @@ namespace NVorbis
             }
         }
 
-        private static Exception GetInvalidStreamException(IPacket packet)
+        private static Exception GetInvalidStreamException(DataPacket packet)
         {
             try
             {
@@ -104,7 +104,7 @@ namespace NVorbis
 
         #region Init
 
-        private bool ProcessHeaderPackets(IPacket packet)
+        private bool ProcessHeaderPackets(DataPacket packet)
         {
             if (!ProcessHeaderPacket(packet, LoadStreamHeader, _ => _packetProvider.GetNextPacket().Done()))
             {
@@ -126,7 +126,7 @@ namespace NVorbis
             return true;
         }
 
-        private static bool ProcessHeaderPacket(IPacket packet, Func<IPacket, bool> processAction, Action<IPacket> doneAction)
+        private static bool ProcessHeaderPacket(DataPacket packet, Func<DataPacket, bool> processAction, Action<DataPacket> doneAction)
         {
             if (packet != null)
             {
@@ -146,7 +146,7 @@ namespace NVorbis
         static private readonly byte[] PacketSignatureComments = { 0x03, 0x76, 0x6f, 0x72, 0x62, 0x69, 0x73 };
         static private readonly byte[] PacketSignatureBooks = { 0x05, 0x76, 0x6f, 0x72, 0x62, 0x69, 0x73 };
 
-        static private bool ValidateHeader(IPacket packet, byte[] expected)
+        static private bool ValidateHeader(DataPacket packet, byte[] expected)
         {
             for (var i = 0; i < expected.Length; i++)
             {
@@ -158,7 +158,7 @@ namespace NVorbis
             return true;
         }
 
-        static private string ReadString(IPacket packet)
+        static private string ReadString(DataPacket packet)
         {
             var len = (int)packet.ReadBits(32);
 
@@ -168,7 +168,7 @@ namespace NVorbis
             }
 
             var buf = new byte[len];
-            var cnt = packet.Read(buf, 0, len);
+            var cnt = packet.Read(buf.AsSpan(0, len));
             if (cnt < len)
             {
                 throw new InvalidDataException("Could not read full string!");
@@ -176,7 +176,7 @@ namespace NVorbis
             return Encoding.UTF8.GetString(buf);
         }
 
-        private bool LoadStreamHeader(IPacket packet)
+        private bool LoadStreamHeader(DataPacket packet)
         {
             if (!ValidateHeader(packet, PacketSignatureStream))
             {
@@ -203,7 +203,7 @@ namespace NVorbis
             return true;
         }
 
-        private bool LoadComments(IPacket packet)
+        private bool LoadComments(DataPacket packet)
         {
             if (!ValidateHeader(packet, PacketSignatureComments))
             {
@@ -223,7 +223,7 @@ namespace NVorbis
             return true;
         }
 
-        private bool LoadBooks(IPacket packet)
+        private bool LoadBooks(DataPacket packet)
         {
             if (!ValidateHeader(packet, PacketSignatureBooks))
             {
@@ -456,7 +456,7 @@ namespace NVorbis
 
         private float[][] DecodeNextPacket(out int packetStartindex, out int packetValidLength, out int packetTotalLength, out bool isEndOfStream, out long? samplePosition, out int bitsRead, out int bitsRemaining, out int containerOverheadBits)
         {
-            IPacket packet = null;
+            DataPacket packet = null;
             try
             {
                 if ((packet = _packetProvider.GetNextPacket()) == null)
@@ -619,7 +619,7 @@ namespace NVorbis
             _currentPosition = samplePosition;
         }
 
-        private int GetPacketGranules(IPacket curPacket, bool isLastInPage)
+        private int GetPacketGranules(DataPacket curPacket, bool isLastInPage)
         {
             // if it's a resync, there's not any audio data to return
             if (curPacket.IsResync) return 0;

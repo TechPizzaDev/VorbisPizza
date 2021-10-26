@@ -1,12 +1,12 @@
-﻿using NVorbis.Contracts;
-using System;
+﻿using System;
+using System.Diagnostics;
 
 namespace NVorbis
 {
     /// <summary>
-    /// Provides a concrete base implementation of <see cref="IPacket"/>.
+    /// Describes an abstract packet of data from a data stream.
     /// </summary>
-    abstract public class DataPacket : IPacket
+    abstract public class DataPacket
     {
         /// <summary>
         /// Defines flags to apply to the current packet
@@ -147,7 +147,12 @@ namespace NVorbis
             _readBits = 0;
         }
 
-        ulong IPacket.ReadBits(int count)
+        /// <summary>
+        /// Reads the specified number of bits from the packet and advances the read position.
+        /// </summary>
+        /// <param name="count">The number of bits to read.</param>
+        /// <returns>The value read. If not enough bits remained, this will be a truncated value.</returns>
+        public ulong ReadBits(int count)
         {
             // short-circuit 0
             if (count == 0) return 0UL;
@@ -160,14 +165,14 @@ namespace NVorbis
         }
 
         /// <summary>
-        /// Attempts to read the specified number of bits from the packet.  Does not advance the read position.
+        /// Attempts to read the specified number of bits from the packet. Does not advance the read position.
         /// </summary>
         /// <param name="count">The number of bits to read.</param>
         /// <param name="bitsRead">Outputs the actual number of bits read.</param>
         /// <returns>The value of the bits read.</returns>
         public ulong TryPeekBits(int count, out int bitsRead)
         {
-            if (count < 0 || count > 64) throw new ArgumentOutOfRangeException(nameof(count));
+            Debug.Assert((uint)count <= 64);
             if (count == 0)
             {
                 bitsRead = 0;
@@ -184,7 +189,7 @@ namespace NVorbis
                     value = _bitBucket;
                     return value;
                 }
-                _bitBucket = (ulong)(val & 0xFF) << _bitCount | _bitBucket;
+                _bitBucket |= (ulong)val << _bitCount;
                 _bitCount += 8;
 
                 if (_bitCount > 64)

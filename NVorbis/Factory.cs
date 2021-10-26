@@ -19,7 +19,7 @@ namespace NVorbis
             return new Codebook();
         }
 
-        public IFloor CreateFloor(IPacket packet)
+        public IFloor CreateFloor(DataPacket packet)
         {
             var type = (int)packet.ReadBits(16);
             switch (type)
@@ -30,7 +30,7 @@ namespace NVorbis
             }
         }
 
-        public IMapping CreateMapping(IPacket packet)
+        public IMapping CreateMapping(DataPacket packet)
         {
             if (packet.ReadBits(16) != 0)
             {
@@ -45,7 +45,7 @@ namespace NVorbis
             return new Mode();
         }
 
-        public IResidue CreateResidue(IPacket packet)
+        public IResidue CreateResidue(DataPacket packet)
         {
             var type = (int)packet.ReadBits(16);
             switch (type)

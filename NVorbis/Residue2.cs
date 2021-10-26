@@ -8,21 +8,21 @@ namespace NVorbis
     {
         int _channels;
 
-        public override void Init(IPacket packet, int channels, Codebook[] codebooks)
+        public override void Init(DataPacket packet, int channels, Codebook[] codebooks)
         {
             _channels = channels;
             base.Init(packet, 1, codebooks);
         }
 
         public override void Decode(
-            IPacket packet, ReadOnlySpan<bool> doNotDecodeChannel, int blockSize, float[][] buffer)
+            DataPacket packet, ReadOnlySpan<bool> doNotDecodeChannel, int blockSize, float[][] buffer)
         {
             // since we're doing all channels in a single pass, the block size has to be multiplied.
             // otherwise this is just a pass-through call
             base.Decode(packet, doNotDecodeChannel, blockSize * _channels, buffer);
         }
 
-        protected override bool WriteVectors(Codebook codebook, IPacket packet, float[][] residue, int channel, int offset, int partitionSize)
+        protected override bool WriteVectors(Codebook codebook, DataPacket packet, float[][] residue, int channel, int offset, int partitionSize)
         {
             var chPtr = 0;
 

@@ -51,7 +51,7 @@ namespace NVorbis
         int _prefixBitLength;
         int _maxBits;
 
-        public void Init(IPacket packet, Huffman huffman)
+        public void Init(DataPacket packet, Huffman huffman)
         {
             // first, check the sync pattern
             var chkVal = packet.ReadBits(24);
@@ -68,7 +68,7 @@ namespace NVorbis
             InitLookupTable(packet);
         }
 
-        private void InitTree(IPacket packet, Huffman huffman)
+        private void InitTree(DataPacket packet, Huffman huffman)
         {
             bool sparse;
             int total = 0;
@@ -220,7 +220,7 @@ namespace NVorbis
             }
         }
 
-        private void InitLookupTable(IPacket packet)
+        private void InitLookupTable(DataPacket packet)
         {
             MapType = (int)packet.ReadBits(4);
             if (MapType == 0) return;
@@ -292,7 +292,7 @@ namespace NVorbis
             return r;
         }
 
-        public int DecodeScalar(IPacket packet)
+        public int DecodeScalar(DataPacket packet)
         {
             var data = (int)packet.TryPeekBits(_prefixBitLength, out var bitsRead);
             if (bitsRead == 0) return -1;
@@ -309,7 +309,7 @@ namespace NVorbis
             return DecodeOverflowScalar(packet);
         }
 
-        private int DecodeOverflowScalar(IPacket packet)
+        private int DecodeOverflowScalar(DataPacket packet)
         {
             var data = (int)packet.TryPeekBits(_maxBits, out _);
 

@@ -3,10 +3,10 @@
     /// <summary>
     /// Encapsulates a method that calculates the number of granules decodable from the specified packet.
     /// </summary>
-    /// <param name="packet">The <see cref="IPacket"/> to calculate.</param>
+    /// <param name="packet">The <see cref="DataPacket"/> to calculate.</param>
     /// <param name="isLastInPage"><see langword="true"/> if the packet is the last in the page, otherise <see langword="false"/>.</param>
     /// <returns>The calculated number of granules.</returns>
-    public delegate int GetPacketGranuleCount(IPacket packet, bool isLastInPage);
+    public delegate int GetPacketGranuleCount(DataPacket packet, bool isLastInPage);
 
     /// <summary>
     /// Describes an interface for a packet stream reader.
@@ -26,14 +26,14 @@
         /// <summary>
         /// Gets the next packet in the stream and advances to the next packet position.
         /// </summary>
-        /// <returns>The <see cref="IPacket"/> instance for the next packet if available, otherwise <see langword="null"/>.</returns>
-        IPacket GetNextPacket();
+        /// <returns>The <see cref="DataPacket"/> instance for the next packet if available, otherwise <see langword="null"/>.</returns>
+        DataPacket GetNextPacket();
 
         /// <summary>
         /// Gets the next packet in the stream without advancing to the next packet position.
         /// </summary>
-        /// <returns>The <see cref="IPacket"/> instance for the next packet if available, otherwise <see langword="null"/>.</returns>
-        IPacket PeekNextPacket();
+        /// <returns>The <see cref="DataPacket"/> instance for the next packet if available, otherwise <see langword="null"/>.</returns>
+        DataPacket PeekNextPacket();
 
         /// <summary>
         /// Seeks the stream to the packet that is prior to the requested granule position by the specified preroll number of packets.

@@ -5,7 +5,7 @@ using System.Collections.Generic;
 
 namespace NVorbis.Ogg
 {
-    class ForwardOnlyPacketProvider : DataPacket, IForwardOnlyPacketProvider
+    sealed class ForwardOnlyPacketProvider : DataPacket, IForwardOnlyPacketProvider
     {
         private int _lastSeqNo;
         private readonly Queue<(byte[] buf, bool isResync)> _pageQueue = new Queue<(byte[] buf, bool isResync)>();
@@ -73,7 +73,7 @@ namespace NVorbis.Ogg
             _isEndOfStream = true;
         }
 
-        public IPacket GetNextPacket()
+        public DataPacket GetNextPacket()
         {
             // if not done...
             if (_packetBuf.Length > 0)
@@ -95,7 +95,7 @@ namespace NVorbis.Ogg
             return null;
         }
 
-        public IPacket PeekNextPacket()
+        public DataPacket PeekNextPacket()
         {
             // if not done...
             if (_packetBuf.Length > 0)

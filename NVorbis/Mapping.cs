@@ -16,7 +16,7 @@ namespace NVorbis
         IResidue[] _channelResidue;
         float[] _buf2;
 
-        public void Init(IPacket packet, int channels, IFloor[] floors, IResidue[] residues, IMdct mdct)
+        public void Init(DataPacket packet, int channels, IFloor[] floors, IResidue[] residues, IMdct mdct)
         {
             var submapCount = 1;
             if (packet.ReadBit())
@@ -99,7 +99,7 @@ namespace NVorbis
         }
 
         [SkipLocalsInit]
-        public void DecodePacket(IPacket packet, int blockSize, int channels, float[][] buffer)
+        public void DecodePacket(DataPacket packet, int blockSize, int channels, float[][] buffer)
         {
             var halfBlockSize = blockSize >> 1;
 

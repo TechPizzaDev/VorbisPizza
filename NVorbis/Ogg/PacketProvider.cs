@@ -41,12 +41,12 @@ namespace NVorbis.Ogg
             return _reader.MaxGranulePosition.Value;
         }
 
-        public IPacket GetNextPacket()
+        public DataPacket GetNextPacket()
         {
             return GetNextPacket(ref _pageIndex, ref _packetIndex);
         }
 
-        public IPacket PeekNextPacket()
+        public DataPacket PeekNextPacket()
         {
             var pageIndex = _pageIndex;
             var packetIndex = _packetIndex;
@@ -360,7 +360,7 @@ namespace NVorbis.Ogg
             return Memory<byte>.Empty;
         }
 
-        void IPacketReader.InvalidatePacketCache(IPacket packet)
+        public void InvalidatePacketCache(DataPacket packet)
         {
             if (ReferenceEquals(_lastPacket, packet))
             {

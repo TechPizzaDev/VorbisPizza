@@ -4,7 +4,7 @@ using System.Collections.Generic;
 
 namespace NVorbis.Ogg
 {
-    internal class Packet : DataPacket
+    internal sealed class Packet : DataPacket
     {
         // size with 1-2 packet segments (> 2 packet segments should be very uncommon):
         //   x86:  68 bytes

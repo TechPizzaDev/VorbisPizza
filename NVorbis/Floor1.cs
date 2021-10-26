@@ -36,7 +36,7 @@ namespace NVorbis
         static readonly int[] _rangeLookup = { 256, 128, 86, 64 };
         static readonly int[] _yBitsLookup = { 8, 7, 7, 6 };
 
-        public void Init(IPacket packet, int channels, int block0Size, int block1Size, Codebook[] codebooks)
+        public void Init(DataPacket packet, int channels, int block0Size, int block1Size, Codebook[] codebooks)
         {
             var maximum_class = -1;
             _partitionClass = new int[(int)packet.ReadBits(5)];
@@ -146,7 +146,7 @@ namespace NVorbis
             return new Data();
         }
 
-        public void Unpack(IPacket packet, IFloorData floorData, int blockSize, int channel)
+        public void Unpack(DataPacket packet, IFloorData floorData, int blockSize, int channel)
         {
             var data = (Data)floorData;
 

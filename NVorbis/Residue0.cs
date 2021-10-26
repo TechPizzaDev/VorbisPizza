@@ -32,7 +32,7 @@ namespace NVorbis
         int[][] _decodeMap;
 
 
-        virtual public void Init(IPacket packet, int channels, Codebook[] codebooks)
+        virtual public void Init(DataPacket packet, int channels, Codebook[] codebooks)
         {
             // this is pretty well stolen directly from libvorbis...  BSD license
             _begin = (int)packet.ReadBits(24);
@@ -117,7 +117,7 @@ namespace NVorbis
         }
 
         virtual public void Decode(
-            IPacket packet, ReadOnlySpan<bool> doNotDecodeChannel, int blockSize, float[][] buffer)
+            DataPacket packet, ReadOnlySpan<bool> doNotDecodeChannel, int blockSize, float[][] buffer)
         {
             // this is pretty well stolen directly from libvorbis...  BSD license
             var end = _end < blockSize / 2 ? _end : blockSize / 2;
@@ -178,7 +178,7 @@ namespace NVorbis
             }
         }
 
-        virtual protected bool WriteVectors(Codebook codebook, IPacket packet, float[][] residue, int channel, int offset, int partitionSize)
+        virtual protected bool WriteVectors(Codebook codebook, DataPacket packet, float[][] residue, int channel, int offset, int partitionSize)
         {
             var res = residue[channel];
             var steps = partitionSize / codebook.Dimensions;

@@ -13,7 +13,7 @@ namespace NVorbis
         int _block1Size;
         IMapping _mapping;
 
-        public void Init(IPacket packet, int channels, int block0Size, int block1Size, IMapping[] mappings)
+        public void Init(DataPacket packet, int channels, int block0Size, int block1Size, IMapping[] mappings)
         {
             _channels = channels;
             _block0Size = block0Size;
@@ -91,7 +91,7 @@ namespace NVorbis
             }
         }
 
-        private bool GetPacketInfo(IPacket packet, bool isLastInPage, out int blockSize, out int windowIndex, out int leftOverlapHalfSize, out int packetStartIndex, out int packetValidLength, out int packetTotalLength)
+        private bool GetPacketInfo(DataPacket packet, bool isLastInPage, out int blockSize, out int windowIndex, out int leftOverlapHalfSize, out int packetStartIndex, out int packetValidLength, out int packetTotalLength)
         {
             bool prevFlag, nextFlag;
             if (_blockFlag)
@@ -132,7 +132,7 @@ namespace NVorbis
             return true;
         }
 
-        public bool Decode(IPacket packet, float[][] buffer, out int packetStartindex, out int packetValidLength, out int packetTotalLength)
+        public bool Decode(DataPacket packet, float[][] buffer, out int packetStartindex, out int packetValidLength, out int packetTotalLength)
         {
             if (GetPacketInfo(packet, false, out var blockSize, out var windowIndex, out _, out packetStartindex, out packetValidLength, out packetTotalLength))
             {
@@ -151,7 +151,7 @@ namespace NVorbis
             return false;
         }
 
-        public int GetPacketSampleCount(IPacket packet, bool isLastInPage)
+        public int GetPacketSampleCount(DataPacket packet, bool isLastInPage)
         {
             GetPacketInfo(packet, isLastInPage, out _, out _, out _, out var packetStartIndex, out var packetValidLength, out _);
             return packetValidLength - packetStartIndex;

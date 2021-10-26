@@ -3,9 +3,9 @@
     interface IFactory
     {
         Codebook CreateCodebook();
-        IFloor CreateFloor(IPacket packet);
-        IResidue CreateResidue(IPacket packet);
-        IMapping CreateMapping(IPacket packet);
+        IFloor CreateFloor(DataPacket packet);
+        IResidue CreateResidue(DataPacket packet);
+        IMapping CreateMapping(DataPacket packet);
         IMode CreateMode();
         IMdct CreateMdct();
         Huffman CreateHuffman();

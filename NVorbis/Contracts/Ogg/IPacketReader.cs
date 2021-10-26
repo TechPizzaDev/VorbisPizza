@@ -6,6 +6,6 @@ namespace NVorbis.Contracts.Ogg
     {
         Memory<byte> GetPacketData(int pagePacketIndex);
 
-        void InvalidatePacketCache(IPacket packet);
+        void InvalidatePacketCache(DataPacket packet);
     }
 }
