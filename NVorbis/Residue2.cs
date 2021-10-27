@@ -24,9 +24,9 @@ namespace NVorbis
 
         protected override bool WriteVectors(Codebook codebook, DataPacket packet, float[][] residue, int channel, int offset, int partitionSize)
         {
-            var chPtr = 0;
-
-            offset /= _channels;
+            nint ch = 0;
+            nint channels = _channels;
+            nint o = offset / channels;
             for (int c = 0; c < partitionSize;)
             {
                 var entry = codebook.DecodeScalar(packet);
@@ -34,13 +34,15 @@ namespace NVorbis
                 {
                     return true;
                 }
-                for (var d = 0; d < codebook.Dimensions; d++, c++)
+
+                var lookup = codebook.GetLookup(entry);
+                for (var d = 0; d < lookup.Length; d++, c++)
                 {
-                    residue[chPtr][offset] += codebook[entry, d];
-                    if (++chPtr == _channels)
+                    residue[ch][o] += lookup[d];
+                    if (++ch == channels)
                     {
-                        chPtr = 0;
-                        offset++;
+                        ch = 0;
+                        o++;
                     }
                 }
             }

@@ -326,7 +326,10 @@ namespace NVorbis
             return -1;
         }
 
-        public float this[int entry, int dim] => _lookupTable[entry * Dimensions + dim];
+        public ReadOnlySpan<float> GetLookup(int entry)
+        {
+            return _lookupTable.AsSpan(entry * Dimensions, Dimensions);
+        }
 
         public int Dimensions { get; private set; }
 

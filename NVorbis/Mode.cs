@@ -138,12 +138,14 @@ namespace NVorbis
             {
                 _mapping.DecodePacket(packet, blockSize, _channels, buffer);
 
-                var window = Windows[windowIndex];
-                for (var i = 0; i < blockSize; i++)
+                nint channels = _channels;
+                var window = Windows[windowIndex].AsSpan(0, blockSize);
+                for (int i = 0; i < window.Length; i++)
                 {
-                    for (var ch = 0; ch < _channels; ch++)
+                    float v = window[i];
+                    for (nint ch = 0; ch < channels; ch++)
                     {
-                        buffer[ch][i] *= window[i];
+                        buffer[ch][i] *= v;
                     }
                 }
                 return true;

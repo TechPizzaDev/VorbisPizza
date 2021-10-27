@@ -16,9 +16,11 @@ namespace NVorbis
                 {
                     return true;
                 }
-                for (int j = 0; j < codebook.Dimensions; i++, j++)
+
+                var lookup = codebook.GetLookup(entry);
+                for (int j = 0; j < lookup.Length; i++, j++)
                 {
-                    res[offset + i] += codebook[entry, j];
+                    res[offset + i] += lookup[j];
                 }
             }
 

@@ -182,21 +182,22 @@ namespace NVorbis
         {
             var res = residue[channel];
             var steps = partitionSize / codebook.Dimensions;
-            var entryCache = new int[steps];
 
-            for (var i = 0; i < steps; i++)
+            for (var step = 0; step < steps; step++, offset++)
             {
-                if ((entryCache[i] = codebook.DecodeScalar(packet)) == -1)
+                int entry = codebook.DecodeScalar(packet);
+                if (entry == -1)
                 {
                     return true;
                 }
-            }
-            for (var dim = 0; dim < codebook.Dimensions; dim++)
-            {
-                for (var step = 0; step < steps; step++, offset++)
+
+                float r = 0;
+                var lookup = codebook.GetLookup(entry);
+                for (var dim = 0; dim < lookup.Length; dim++)
                 {
-                    res[offset] += codebook[entryCache[step], dim];
+                    r += lookup[dim];
                 }
+                res[offset] += r;
             }
             return false;
         }

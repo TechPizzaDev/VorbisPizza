@@ -142,9 +142,11 @@ namespace NVorbis
                         data.Amp = 0;
                         return;
                     }
-                    for (int j = 0; i < _order && j < book.Dimensions; j++, i++)
+
+                    var lookup = book.GetLookup(entry);
+                    for (int j = 0; i < _order && j < lookup.Length; j++, i++)
                     {
-                        data.Coeff[i] = book[entry, j];
+                        data.Coeff[i] = lookup[j];
                     }
                 }
 
