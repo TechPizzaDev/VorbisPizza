@@ -125,10 +125,13 @@ namespace NVorbis
 
             if (n > 0 && doNotDecodeChannel.IndexOf(false) != -1)
             {
+                var channels = _channels;
+                var decodeMap = _decodeMap;
                 var partitionCount = n / _partitionSize;
 
                 var partitionWords = (partitionCount + _classBook.Dimensions - 1) / _classBook.Dimensions;
-                var partWordCache = new int[_channels, partitionWords][];
+                int cacheLength = channels * partitionWords;
+                Span<int> partWordCache = cacheLength < 512 ? stackalloc int[cacheLength] : new int[cacheLength];
 
                 for (var stage = 0; stage < _maxStages; stage++)
                 {
@@ -136,12 +139,12 @@ namespace NVorbis
                     {
                         if (stage == 0)
                         {
-                            for (var ch = 0; ch < _channels; ch++)
+                            for (var ch = 0; ch < channels; ch++)
                             {
                                 var idx = _classBook.DecodeScalar(packet);
-                                if (idx >= 0 && idx < _decodeMap.Length)
+                                if (idx >= 0 && idx < decodeMap.Length)
                                 {
-                                    partWordCache[ch, entryIdx] = _decodeMap[idx];
+                                    partWordCache[ch * partitionWords + entryIdx] = idx;
                                 }
                                 else
                                 {
@@ -154,9 +157,10 @@ namespace NVorbis
                         for (var dimensionIdx = 0; partitionIdx < partitionCount && dimensionIdx < _classBook.Dimensions; dimensionIdx++, partitionIdx++)
                         {
                             var offset = _begin + partitionIdx * _partitionSize;
-                            for (var ch = 0; ch < _channels; ch++)
+                            for (var ch = 0; ch < channels; ch++)
                             {
-                                var idx = partWordCache[ch, entryIdx][dimensionIdx];
+                                var map = decodeMap[partWordCache[ch * partitionWords + entryIdx]];
+                                var idx = map[dimensionIdx];
                                 if ((_cascade[idx] & (1 << stage)) != 0)
                                 {
                                     var book = _books[idx][stage];
