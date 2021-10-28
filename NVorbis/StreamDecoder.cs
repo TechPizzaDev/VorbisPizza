@@ -109,17 +109,26 @@ namespace NVorbis
 
         private bool ProcessHeaderPackets(DataPacket packet)
         {
-            if (!ProcessHeaderPacket(packet, LoadStreamHeader, _ => _packetProvider.GetNextPacket().Done()))
+            if (!ProcessHeaderPacket(
+                packet,
+                static (p, s) => s.LoadStreamHeader(p), 
+                static (_, s) => s._packetProvider.GetNextPacket().Done()))
             {
                 return false;
             }
 
-            if (!ProcessHeaderPacket(_packetProvider.GetNextPacket(), LoadComments, pkt => pkt.Done()))
+            if (!ProcessHeaderPacket(
+                _packetProvider.GetNextPacket(), 
+                static (p, s) => s.LoadComments(p), 
+                static (p, _) => p.Done()))
             {
                 return false;
             }
 
-            if (!ProcessHeaderPacket(_packetProvider.GetNextPacket(), LoadBooks, pkt => pkt.Done()))
+            if (!ProcessHeaderPacket(
+                _packetProvider.GetNextPacket(), 
+                static (p, s) => s.LoadBooks(p),
+                static (p, _) => p.Done()))
             {
                 return false;
             }
@@ -129,27 +138,30 @@ namespace NVorbis
             return true;
         }
 
-        private static bool ProcessHeaderPacket(DataPacket packet, Func<DataPacket, bool> processAction, Action<DataPacket> doneAction)
+        private bool ProcessHeaderPacket(
+            DataPacket packet, 
+            Func<DataPacket, StreamDecoder, bool> processAction, 
+            Action<DataPacket, StreamDecoder> doneAction)
         {
             if (packet != null)
             {
                 try
                 {
-                    return processAction(packet);
+                    return processAction(packet, this);
                 }
                 finally
                 {
-                    doneAction(packet);
+                    doneAction(packet, this);
                 }
             }
             return false;
         }
 
-        static private readonly byte[] PacketSignatureStream = { 0x01, 0x76, 0x6f, 0x72, 0x62, 0x69, 0x73, 0x00, 0x00, 0x00, 0x00 };
-        static private readonly byte[] PacketSignatureComments = { 0x03, 0x76, 0x6f, 0x72, 0x62, 0x69, 0x73 };
-        static private readonly byte[] PacketSignatureBooks = { 0x05, 0x76, 0x6f, 0x72, 0x62, 0x69, 0x73 };
+        static private ReadOnlySpan<byte> PacketSignatureStream => new byte[] { 0x01, 0x76, 0x6f, 0x72, 0x62, 0x69, 0x73, 0x00, 0x00, 0x00, 0x00 };
+        static private ReadOnlySpan<byte> PacketSignatureComments => new byte[] { 0x03, 0x76, 0x6f, 0x72, 0x62, 0x69, 0x73 };
+        static private ReadOnlySpan<byte> PacketSignatureBooks => new byte[] { 0x05, 0x76, 0x6f, 0x72, 0x62, 0x69, 0x73 };
 
-        static private bool ValidateHeader(DataPacket packet, byte[] expected)
+        static private bool ValidateHeader(DataPacket packet, ReadOnlySpan<byte> expected)
         {
             for (var i = 0; i < expected.Length; i++)
             {
