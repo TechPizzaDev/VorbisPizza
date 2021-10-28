@@ -3,7 +3,10 @@ using System;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.X86;
 using System.Text;
+using static System.Runtime.CompilerServices.Unsafe;
 
 namespace NVorbis
 {
@@ -355,16 +358,16 @@ namespace NVorbis
                 }
 
                 // we read out the valid samples from the previous packet
-                var copyLen = (int)Math.Min((tgt - idx) / _channels, _prevPacketEnd - _prevPacketStart);
+                var copyLen = Math.Min((tgt - idx) / _channels, _prevPacketEnd - _prevPacketStart);
                 if (copyLen > 0)
                 {
                     if (ClipSamples)
                     {
-                        idx += ClippingCopyBuffer(ref Unsafe.Add(ref target, idx), copyLen);
+                        idx += ClippingCopyBuffer(ref Add(ref target, idx), copyLen);
                     }
                     else
                     {
-                        idx += CopyBuffer(ref Unsafe.Add(ref target, idx), copyLen);
+                        idx += CopyBuffer(ref Add(ref target, idx), copyLen);
                     }
                 }
             }
@@ -376,34 +379,92 @@ namespace NVorbis
             return (int)idx;
         }
 
-        private nint ClippingCopyBuffer(ref float target, int count)
+        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
+        private nint ClippingCopyBuffer(ref float target, nint count)
         {
             var prevPacketBuf = _prevPacketBuf;
             nint channels = _channels;
-            nint idx = 0;
-            for (; count > 0; _prevPacketStart++, count--)
+            nint j = 0;
+
+            if (Sse.IsSupported)
             {
-                for (nint ch = 0; ch < channels; ch++)
+                var clipped = Vector128<float>.Zero;
+
+                if (_channels == 2)
                 {
-                    Unsafe.Add(ref target, idx++) = Utils.ClipValue(prevPacketBuf[ch][_prevPacketStart], ref _hasClipped);
+                    ref float prev0 = ref prevPacketBuf[0][_prevPacketStart];
+                    ref float prev1 = ref prevPacketBuf[1][_prevPacketStart];
+
+                    for (; j + 4 <= count; j += 4)
+                    {
+                        var p0 = As<float, Vector128<float>>(ref Add(ref prev0, j));
+                        var p1 = As<float, Vector128<float>>(ref Add(ref prev1, j));
+
+                        var t0 = Sse.Shuffle(p0, p1, 0b01_00_01_00);
+                        var ts0 = Sse.Shuffle(t0, t0, 0b11_01_10_00);
+
+                        var t1 = Sse.Shuffle(p0, p1, 0b11_10_11_10);
+                        var ts1 = Sse.Shuffle(t1, t1, 0b11_01_10_00);
+
+                        ts0 = Utils.ClipValue(ts0, ref clipped);
+                        ts1 = Utils.ClipValue(ts1, ref clipped);
+
+                        As<float, Vector128<float>>(ref Add(ref target, j * 2 + 0)) = ts0;
+                        As<float, Vector128<float>>(ref Add(ref target, j * 2 + 4)) = ts1;
+                    }
+                }
+                else if (_channels == 1)
+                {
+                    ref float prev0 = ref prevPacketBuf[0][_prevPacketStart];
+
+                    for (; j + 4 <= count; j += 4)
+                    {
+                        var p0 = As<float, Vector128<float>>(ref Add(ref prev0, j));
+                        p0 = Utils.ClipValue(p0, ref clipped);
+                        As<float, Vector128<float>>(ref Add(ref target, j)) = p0;
+                    }
+                }
+
+                var mask = Sse.CompareEqual(clipped, Vector128<float>.Zero);
+                _hasClipped |= Sse.MoveMask(mask) != 0xf;
+            }
+
+            for (nint ch = 0; ch < channels; ch++)
+            {
+                ref float tar = ref Add(ref target, ch);
+                ref float prev = ref prevPacketBuf[ch][_prevPacketStart];
+
+                for (nint i = j; i < count; i++)
+                {
+                    Add(ref tar, i * channels) = Utils.ClipValue(Add(ref prev, i), ref _hasClipped);
                 }
             }
-            return idx;
+
+            _prevPacketStart += (int)count;
+
+            return count * channels;
         }
 
-        private nint CopyBuffer(ref float target, int count)
+        private nint CopyBuffer(ref float target, nint count)
         {
             var prevPacketBuf = _prevPacketBuf;
             nint channels = _channels;
-            nint idx = 0;
-            for (; count > 0; _prevPacketStart++, count--)
+            nint j = 0;
+
+            for (nint ch = 0; ch < channels; ch++)
             {
-                for (nint ch = 0; ch < channels; ch++)
+                ref float tar = ref Add(ref target, ch);
+                ref float prev = ref prevPacketBuf[ch][_prevPacketStart];
+
+                for (nint i = j; i < count; i++)
                 {
-                    Unsafe.Add(ref target, idx++) = prevPacketBuf[ch][_prevPacketStart];
+                    Add(ref tar, i * channels) = Add(ref prev, i);
                 }
             }
-            return idx;
+
+            _prevPacketStart += (int)count;
+
+            return count * channels;
         }
 
         private bool ReadNextPacket(nint bufferedSamples, out long? samplePosition)

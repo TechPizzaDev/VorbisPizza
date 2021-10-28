@@ -1,4 +1,8 @@
-﻿namespace NVorbis
+﻿using System.Runtime.CompilerServices;
+using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.X86;
+
+namespace NVorbis
 {
     static class Utils
     {
@@ -38,6 +42,29 @@
             {
                 clipped = true;
                 return -0.99999994f;
+            }
+            return value;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static internal Vector128<float> ClipValue(Vector128<float> value, ref Vector128<float> clipped)
+        {
+            var upper = Vector128.Create(0.99999994f);
+            var lower = Vector128.Create(-0.99999994f);
+
+            var gt = Sse.CompareGreaterThan(value, upper);
+            var lt = Sse.CompareLessThan(value, lower);
+            clipped = Sse.Or(clipped, Sse.Or(gt, lt));
+
+            if (Sse41.IsSupported)
+            {
+                value = Sse41.BlendVariable(value, upper, gt);
+                value = Sse41.BlendVariable(value, lower, lt);
+            }
+            else
+            {
+                value = Sse.Or(Sse.And(gt, upper), Sse.AndNot(gt, value));
+                value = Sse.Or(Sse.And(lt, lower), Sse.AndNot(lt, value));
             }
             return value;
         }
