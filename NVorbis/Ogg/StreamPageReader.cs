@@ -12,15 +12,15 @@ namespace NVorbis.Ogg
         private readonly List<long> _pageOffsets = new List<long>();
 
         private int _lastSeqNbr;
-        private int? _firstDataPageIndex;
+        private uint? _firstDataPageIndex;
         private long _maxGranulePos;
 
-        private int _lastPageIndex = -1;
+        private uint _lastPageIndex = uint.MaxValue;
         private long _lastPageGranulePos;
         private bool _lastPageIsResync;
         private bool _lastPageIsContinuation;
         private bool _lastPageIsContinued;
-        private int _lastPagePacketCount;
+        private uint _lastPagePacketCount;
         private int _lastPageOverhead;
 
         private Memory<byte>[] _cachedPagePackets;
@@ -53,7 +53,7 @@ namespace NVorbis.Ogg
                 {
                     if (_firstDataPageIndex == null && _reader.GranulePosition > 0)
                     {
-                        _firstDataPageIndex = _pageOffsets.Count;
+                        _firstDataPageIndex = (uint)_pageOffsets.Count;
                     }
                     else if (_maxGranulePos > _reader.GranulePosition)
                     {
@@ -89,14 +89,14 @@ namespace NVorbis.Ogg
             }
         }
 
-        public Memory<byte>[] GetPagePackets(int pageIndex)
+        public Memory<byte>[] GetPagePackets(uint pageIndex)
         {
             if (_cachedPagePackets != null && _lastPageIndex == pageIndex)
             {
                 return _cachedPagePackets;
             }
 
-            var pageOffset = _pageOffsets[pageIndex];
+            var pageOffset = _pageOffsets[(int)pageIndex];
             if (pageOffset < 0)
             {
                 pageOffset = -pageOffset;
@@ -119,10 +119,10 @@ namespace NVorbis.Ogg
             }
         }
 
-        public int FindPage(long granulePos)
+        public uint FindPage(long granulePos)
         {
             // if we're being asked for the first granule, just grab the very first data page
-            int pageIndex = -1;
+            uint pageIndex = uint.MaxValue;
             if (granulePos == 0)
             {
                 pageIndex = FindFirstDataPage();
@@ -130,7 +130,7 @@ namespace NVorbis.Ogg
             else
             {
                 // start by looking at the last read page's position...
-                var lastPageIndex = _pageOffsets.Count - 1;
+                var lastPageIndex = (uint)(_pageOffsets.Count - 1);
                 if (GetPageRaw(lastPageIndex, out var pageGP))
                 {
                     // most likely, we can look at previous pages for the appropriate one...
@@ -150,26 +150,26 @@ namespace NVorbis.Ogg
                     }
                 }
             }
-            if (pageIndex == -1)
+            if (pageIndex == uint.MaxValue)
             {
                 throw new ArgumentOutOfRangeException(nameof(granulePos));
             }
             return pageIndex;
         }
 
-        private int FindFirstDataPage()
+        private uint FindFirstDataPage()
         {
             while (!_firstDataPageIndex.HasValue)
             {
-                if (!GetPageRaw(_pageOffsets.Count, out _))
+                if (!GetPageRaw((uint)_pageOffsets.Count, out _))
                 {
-                    return -1;
+                    return uint.MaxValue;
                 }
             }
             return _firstDataPageIndex.Value;
         }
 
-        private int FindPageForward(int pageIndex, long pageGranulePos, long granulePos)
+        private uint FindPageForward(uint pageIndex, long pageGranulePos, long granulePos)
         {
             while (pageGranulePos <= granulePos)
             {
@@ -180,7 +180,7 @@ namespace NVorbis.Ogg
                         // if we couldn't get a page because we're EOS, allow finding the last granulePos
                         if (MaxGranulePosition < granulePos)
                         {
-                            pageIndex = -1;
+                            pageIndex = uint.MaxValue;
                         }
                         break;
                     }
@@ -189,7 +189,7 @@ namespace NVorbis.Ogg
                 {
                     if (!GetPageRaw(pageIndex, out pageGranulePos))
                     {
-                        pageIndex = -1;
+                        pageIndex = uint.MaxValue;
                         break;
                     }
                 }
@@ -226,20 +226,20 @@ namespace NVorbis.Ogg
             return false;
         }
 
-        private int FindPageBisection(long granulePos, int low, int high, long highGranulePos)
+        private uint FindPageBisection(long granulePos, uint low, uint high, long highGranulePos)
         {
             // we can treat low as always being before the first sample; later work will correct that if needed
             var lowGranulePos = 0L;
-            int dist;
+            uint dist;
             while ((dist = high - low) > 0)
             {
                 // try to find the right page by assumming they are all about the same size
-                var index = low + (int)(dist * ((granulePos - lowGranulePos) / (double)(highGranulePos - lowGranulePos)));
+                var index = low + (uint)(dist * ((granulePos - lowGranulePos) / (double)(highGranulePos - lowGranulePos)));
 
                 // go get the actual position of the selected page
                 if (!GetPageRaw(index, out var idxGranulePos))
                 {
-                    return -1;
+                    return uint.MaxValue;
                 }
 
                 // figure out where to go from here
@@ -264,9 +264,9 @@ namespace NVorbis.Ogg
             return low;
         }
 
-        private bool GetPageRaw(int pageIndex, out long pageGranulePos)
+        private bool GetPageRaw(uint pageIndex, out long pageGranulePos)
         {
-            var offset = _pageOffsets[pageIndex];
+            var offset = _pageOffsets[(int)pageIndex];
             if (offset < 0)
             {
                 offset = -offset;
@@ -289,7 +289,7 @@ namespace NVorbis.Ogg
             }
         }
 
-        public bool GetPage(int pageIndex, out long granulePos, out bool isResync, out bool isContinuation, out bool isContinued, out int packetCount, out int pageOverhead)
+        public bool GetPage(uint pageIndex, out long granulePos, out bool isResync, out bool isContinuation, out bool isContinued, out uint packetCount, out int pageOverhead)
         {
             if (_lastPageIndex == pageIndex)
             {
@@ -330,7 +330,7 @@ namespace NVorbis.Ogg
 
             if (pageIndex < _pageOffsets.Count)
             {
-                var offset = _pageOffsets[pageIndex];
+                var offset = _pageOffsets[(int)pageIndex];
                 if (offset < 0)
                 {
                     isResync = true;
@@ -366,7 +366,7 @@ namespace NVorbis.Ogg
             return false;
         }
 
-        private void ReadPageData(int pageIndex, out long granulePos, out bool isContinuation, out bool isContinued, out int packetCount, out int pageOverhead)
+        private void ReadPageData(uint pageIndex, out long granulePos, out bool isContinuation, out bool isContinued, out uint packetCount, out int pageOverhead)
         {
             _cachedPagePackets = null;
             _lastPageGranulePos = granulePos = _reader.GranulePosition;
@@ -382,12 +382,12 @@ namespace NVorbis.Ogg
             HasAllPages = true;
         }
 
-        public int PageCount => _pageOffsets.Count;
+        public uint PageCount => (uint)_pageOffsets.Count;
 
         public bool HasAllPages { get; private set; }
 
         public long? MaxGranulePosition => HasAllPages ? (long?)_maxGranulePos : null;
 
-        public int FirstDataPageIndex => FindFirstDataPage();
+        public uint FirstDataPageIndex => FindFirstDataPage();
     }
 }

@@ -16,7 +16,7 @@ namespace NVorbis.Ogg
 
         private long _nextPageOffset;
         private ushort _pageSize;
-        Memory<byte>[] _packets;
+        private Memory<byte>[] _packets;
 
         public PageReader(Stream stream, bool closeOnDispose, Func<Contracts.IPacketProvider, bool> newStreamCallback)
             : base(stream, closeOnDispose)
@@ -56,7 +56,7 @@ namespace NVorbis.Ogg
             SequenceNumber = BitConverter.ToInt32(pageBuf, 18);
             PageFlags = (PageFlags)pageBuf[5];
             GranulePosition = BitConverter.ToInt64(pageBuf, 6);
-            PacketCount = (short)pktCnt;
+            PacketCount = (ushort)pktCnt;
             IsResync = isResync;
             IsContinued = isContinued;
             PageOverhead = 27 + segCnt;
@@ -208,7 +208,7 @@ namespace NVorbis.Ogg
 
         public long GranulePosition { get; private set; }
 
-        public short PacketCount { get; private set; }
+        public ushort PacketCount { get; private set; }
 
         public bool? IsResync { get; private set; }
 
@@ -225,7 +225,12 @@ namespace NVorbis.Ogg
                 var pageBuf = new byte[_pageSize];
                 SeekStream(PageOffset);
                 EnsureRead(pageBuf, 0, _pageSize);
-                _packets = ReadPackets(PacketCount, new Span<byte>(pageBuf, 27, pageBuf[26]), new Memory<byte>(pageBuf, 27 + pageBuf[26], pageBuf.Length - 27 - pageBuf[26]));
+
+                var length = pageBuf[26];
+                _packets = ReadPackets(
+                    PacketCount, 
+                    pageBuf.AsSpan(27, length), 
+                    pageBuf.AsMemory(27 + length, pageBuf.Length - 27 - length));
             }
 
             return _packets;

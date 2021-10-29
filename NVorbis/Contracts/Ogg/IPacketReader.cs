@@ -4,7 +4,7 @@ namespace NVorbis.Contracts.Ogg
 {
     interface IPacketReader
     {
-        Memory<byte> GetPacketData(int pagePacketIndex);
+        Memory<byte> GetPacketData(PacketDataPart dataPart);
 
         void InvalidatePacketCache(DataPacket packet);
     }

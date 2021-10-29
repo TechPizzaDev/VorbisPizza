@@ -13,14 +13,15 @@ namespace NVorbis.Ogg
         // this is the list of pages & packets in packed 24:8 format
         // in theory, this is good for up to 1016 GiB of Ogg file
         // in practice, probably closer to 300 days @ 160k bps
-        private IReadOnlyList<int> _dataParts;
-        private IPacketReader _packetReader;                    // IntPtr
-        int _dataCount;
-        Memory<byte> _data;
-        int _dataIndex;                                         // 4
-        int _dataOfs;                                           // 4
+        private IReadOnlyList<PacketDataPart> _dataParts;
 
-        internal Packet(IReadOnlyList<int> dataParts, IPacketReader packetReader, Memory<byte> initialData)
+        private IPacketReader _packetReader;
+        private int _dataCount;
+        private Memory<byte> _data;
+        private int _dataIndex;
+        private int _dataOfs;
+
+        internal Packet(IReadOnlyList<PacketDataPart> dataParts, IPacketReader packetReader, Memory<byte> initialData)
         {
             _dataParts = dataParts;
             _packetReader = packetReader;

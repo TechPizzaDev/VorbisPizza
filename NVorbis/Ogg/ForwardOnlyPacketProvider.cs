@@ -319,6 +319,6 @@ namespace NVorbis.Ogg
         }
 
         long Contracts.IPacketProvider.GetGranuleCount() => throw new NotSupportedException();
-        long Contracts.IPacketProvider.SeekTo(long granulePos, int preRoll, GetPacketGranuleCount getPacketGranuleCount) => throw new NotSupportedException();
+        long Contracts.IPacketProvider.SeekTo(long granulePos, uint preRoll, GetPacketGranuleCount getPacketGranuleCount) => throw new NotSupportedException();
     }
 }

@@ -8,20 +8,20 @@ namespace NVorbis.Contracts.Ogg
 
         void AddPage();
 
-        Memory<byte>[] GetPagePackets(int pageIndex);
+        Memory<byte>[] GetPagePackets(uint pageIndex);
 
-        int FindPage(long granulePos);
+        uint FindPage(long granulePos);
 
-        bool GetPage(int pageIndex, out long granulePos, out bool isResync, out bool isContinuation, out bool isContinued, out int packetCount, out int pageOverhead);
+        bool GetPage(uint pageIndex, out long granulePos, out bool isResync, out bool isContinuation, out bool isContinued, out uint packetCount, out int pageOverhead);
 
         void SetEndOfStream();
 
-        int PageCount { get; }
+        uint PageCount { get; }
 
         bool HasAllPages { get; }
 
         long? MaxGranulePosition { get; }
 
-        int FirstDataPageIndex { get; }
+        uint FirstDataPageIndex { get; }
     }
 }
