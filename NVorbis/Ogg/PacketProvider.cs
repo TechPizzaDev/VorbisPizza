@@ -237,7 +237,8 @@ namespace NVorbis.Ogg
             var firstPacketData = _reader.GetPagePackets(pageIndex)[packetIndex];
 
             // create the packet list and add the item to it
-            var pktList = new List<PacketDataPart>(1) { new PacketDataPart(pageIndex, (byte)packetIndex) };
+            var firstDataPart = new PacketDataPart(pageIndex, (byte)packetIndex);
+            PacketDataPart[] dataParts = null;
 
             // make sure we handle continuations
             bool isLastPacket;
@@ -278,7 +279,18 @@ namespace NVorbis.Ogg
                     }
 
                     // add the packet to the list
-                    pktList.Add(new PacketDataPart(contPageIdx, 0));
+
+                    int partOffset = 0;
+                    if (dataParts == null)
+                    {
+                        dataParts = new PacketDataPart[1];
+                    }
+                    else
+                    {
+                        partOffset = dataParts.Length;
+                        Array.Resize(ref dataParts, dataParts.Length + 1);
+                    }
+                    dataParts[partOffset] = new PacketDataPart(contPageIdx, 0);
                 }
 
                 // we're now the first packet in the final page, so we'll act like it...
@@ -294,9 +306,9 @@ namespace NVorbis.Ogg
             }
 
             // create the packet instance and populate it with the appropriate initial data
-            var packet = new Packet(pktList, this, firstPacketData)
+            var packet = new Packet(firstDataPart, dataParts, this, firstPacketData)
             {
-                IsResync = isResync,
+                IsResync = isResync
             };
 
             // if it's the first packet, associate the container overhead with it
