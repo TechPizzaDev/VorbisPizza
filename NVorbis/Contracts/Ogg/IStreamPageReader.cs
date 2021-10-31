@@ -8,7 +8,7 @@ namespace NVorbis.Contracts.Ogg
 
         void AddPage();
 
-        Memory<byte>[] GetPagePackets(uint pageIndex);
+        ArraySegment<byte>[] GetPagePackets(uint pageIndex);
 
         uint FindPage(long granulePos);
 

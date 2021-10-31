@@ -14,6 +14,6 @@ namespace NVorbis.Contracts.Ogg
         bool IsContinued { get; }
         int PageOverhead { get; }
 
-        Memory<byte>[] GetPackets();
+        ArraySegment<byte>[] GetPackets();
     }
 }

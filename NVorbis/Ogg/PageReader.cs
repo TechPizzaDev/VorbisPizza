@@ -16,7 +16,7 @@ namespace NVorbis.Ogg
 
         private long _nextPageOffset;
         private ushort _pageSize;
-        private Memory<byte>[] _packets;
+        private ArraySegment<byte>[] _packets;
 
         public PageReader(Stream stream, bool closeOnDispose, Func<Contracts.IPacketProvider, bool> newStreamCallback)
             : base(stream, closeOnDispose)
@@ -63,9 +63,9 @@ namespace NVorbis.Ogg
             return (ushort)(PageOverhead + dataLen);
         }
 
-        private static Memory<byte>[] ReadPackets(int packetCount, Span<byte> segments, Memory<byte> dataBuffer)
+        private static ArraySegment<byte>[] ReadPackets(int packetCount, Span<byte> segments, ArraySegment<byte> dataBuffer)
         {
-            var list = new Memory<byte>[packetCount];
+            var list = new ArraySegment<byte>[packetCount];
             var listIdx = 0;
             var dataIdx = 0;
             var size = 0;
@@ -130,7 +130,7 @@ namespace NVorbis.Ogg
             // if the page doesn't have any packets, we can't use it
             if (PacketCount == 0) return false;
 
-            _packets = ReadPackets(PacketCount, new Span<byte>(pageBuf, 27, pageBuf[26]), new Memory<byte>(pageBuf, 27 + pageBuf[26], pageBuf.Length - 27 - pageBuf[26]));
+            _packets = ReadPackets(PacketCount, new Span<byte>(pageBuf, 27, pageBuf[26]), new ArraySegment<byte>(pageBuf, 27 + pageBuf[26], pageBuf.Length - 27 - pageBuf[26]));
 
             if (_streamReaders.TryGetValue(streamSerial, out var spr))
             {
@@ -216,7 +216,7 @@ namespace NVorbis.Ogg
 
         public int PageOverhead { get; private set; }
 
-        public Memory<byte>[] GetPackets()
+        public ArraySegment<byte>[] GetPackets()
         {
             if (!CheckLock()) throw new InvalidOperationException("Must be locked!");
 
@@ -230,7 +230,7 @@ namespace NVorbis.Ogg
                 _packets = ReadPackets(
                     PacketCount, 
                     pageBuf.AsSpan(27, length), 
-                    pageBuf.AsMemory(27 + length, pageBuf.Length - 27 - length));
+                    new ArraySegment<byte>(pageBuf, 27 + length, pageBuf.Length - 27 - length));
             }
 
             return _packets;

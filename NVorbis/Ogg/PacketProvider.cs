@@ -233,9 +233,6 @@ namespace NVorbis.Ogg
 
         private Packet CreatePacket(ref uint pageIndex, ref uint packetIndex, bool advance, long granulePos, bool isResync, bool isContinued, uint packetCount, int pageOverhead)
         {
-            // save off the packet data for the initial packet
-            var firstPacketData = _reader.GetPagePackets(pageIndex)[packetIndex];
-
             // create the packet list and add the item to it
             var firstDataPart = new PacketDataPart(pageIndex, (byte)packetIndex);
             PacketDataPart[] dataParts = null;
@@ -306,7 +303,7 @@ namespace NVorbis.Ogg
             }
 
             // create the packet instance and populate it with the appropriate initial data
-            var packet = new Packet(firstDataPart, dataParts, this, firstPacketData)
+            var packet = new Packet(firstDataPart, dataParts, this)
             {
                 IsResync = isResync
             };
@@ -359,7 +356,7 @@ namespace NVorbis.Ogg
             return packet;
         }
 
-        Memory<byte> IPacketReader.GetPacketData(PacketDataPart dataPart)
+        ArraySegment<byte> IPacketReader.GetPacketData(PacketDataPart dataPart)
         {
             var pageIndex = dataPart.PageIndex;
             var packetIndex = dataPart.PacketIndex;
@@ -369,7 +366,7 @@ namespace NVorbis.Ogg
             {
                 return packets[packetIndex];
             }
-            return Memory<byte>.Empty;
+            return ArraySegment<byte>.Empty;
         }
 
         public void InvalidatePacketCache(DataPacket packet)

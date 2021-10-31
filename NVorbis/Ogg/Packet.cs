@@ -1,11 +1,14 @@
 ﻿using NVorbis.Contracts.Ogg;
 using System;
-using System.Collections.Generic;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 namespace NVorbis.Ogg
 {
     internal sealed class Packet : DataPacket
     {
+        private static byte[] _oneByte = new byte[1];
+
         // size with 1-2 packet segments (> 2 packet segments should be very uncommon):
         //   x86:  68 bytes
         //   x64: 104 bytes
@@ -18,16 +21,17 @@ namespace NVorbis.Ogg
 
         private IPacketReader _packetReader;
         private int _dataCount;
-        private Memory<byte> _data;
+        private ArraySegment<byte> _data;
         private int _dataIndex;
         private int _dataOfs;
+        private int _dataEnd;
 
-        internal Packet(PacketDataPart firstDataPart, PacketDataPart[] dataParts, IPacketReader packetReader, Memory<byte> initialData)
+        internal Packet(PacketDataPart firstDataPart, PacketDataPart[] dataParts, IPacketReader packetReader)
         {
             _firstDataPart = firstDataPart;
             _dataParts = dataParts;
             _packetReader = packetReader;
-            _data = initialData;
+            Reset();
         }
 
         private int GetDataPartCount()
@@ -45,40 +49,53 @@ namespace NVorbis.Ogg
             return _firstDataPart;
         }
 
-        protected override int TotalBits => (_dataCount + _data.Length) * 8;
+        protected override int TotalBits => _dataCount;
+
+        private void SetData(ArraySegment<byte> data)
+        {
+            _data = data;
+            _dataOfs = data.Offset;
+            _dataEnd = data.Offset + data.Count;
+        }
 
         protected override int ReadNextByte()
         {
-            int dataPartCount = GetDataPartCount();
-            if (_dataIndex == dataPartCount) return -1;
+            int b = Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(_data.Array), _dataOfs);
 
-            var b = _data.Span[_dataOfs];
-
-            if (++_dataOfs == _data.Length)
+            if (++_dataOfs == _dataEnd)
             {
-                _dataOfs = 0;
-                _dataCount += _data.Length;
-                if (++_dataIndex < dataPartCount)
-                {
-                    _data = _packetReader.GetPacketData(GetDataPart(_dataIndex));
-                }
-                else
-                {
-                    _data = Memory<byte>.Empty;
-                }
+                GetNextPacketData(ref b);
             }
 
             return b;
         }
 
+        private void GetNextPacketData(ref int b)
+        {
+            if (++_dataIndex < GetDataPartCount())
+            {
+                SetData(_packetReader.GetPacketData(GetDataPart(_dataIndex)));
+                _dataCount += _data.Count * 8;
+            }
+            else
+            {
+                // Data is already the special array;
+                // there was an attempt to read past the end of the packet so invalidate the read.
+                if (_data.Array == _oneByte)
+                    b = -1;
+
+                SetData(_oneByte);
+
+                // Restore to previous index to not overflow ever
+                _dataIndex--;
+            }
+        }
+
         public override void Reset()
         {
             _dataIndex = 0;
-            _dataOfs = 0;
-            if (GetDataPartCount() > 0)
-            {
-                _data = _packetReader.GetPacketData(GetDataPart(0));
-            }
+            SetData(_packetReader.GetPacketData(_firstDataPart));
+            _dataCount = _data.Count * 8;
 
             base.Reset();
         }

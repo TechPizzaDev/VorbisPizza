@@ -23,7 +23,7 @@ namespace NVorbis.Ogg
         private uint _lastPagePacketCount;
         private int _lastPageOverhead;
 
-        private Memory<byte>[] _cachedPagePackets;
+        private ArraySegment<byte>[] _cachedPagePackets;
 
         public Contracts.IPacketProvider PacketProvider { get; private set; }
 
@@ -89,7 +89,7 @@ namespace NVorbis.Ogg
             }
         }
 
-        public Memory<byte>[] GetPagePackets(uint pageIndex)
+        public ArraySegment<byte>[] GetPagePackets(uint pageIndex)
         {
             if (_cachedPagePackets != null && _lastPageIndex == pageIndex)
             {
