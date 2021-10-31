@@ -1,6 +1,7 @@
 ﻿using NVorbis.Contracts;
 using System;
 using System.IO;
+using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
@@ -111,22 +112,22 @@ namespace NVorbis
         {
             if (!ProcessHeaderPacket(
                 packet,
-                static (p, s) => s.LoadStreamHeader(p), 
+                static (p, s) => s.LoadStreamHeader(p),
                 static (_, s) => s._packetProvider.GetNextPacket().Done()))
             {
                 return false;
             }
 
             if (!ProcessHeaderPacket(
-                _packetProvider.GetNextPacket(), 
-                static (p, s) => s.LoadComments(p), 
+                _packetProvider.GetNextPacket(),
+                static (p, s) => s.LoadComments(p),
                 static (p, _) => p.Done()))
             {
                 return false;
             }
 
             if (!ProcessHeaderPacket(
-                _packetProvider.GetNextPacket(), 
+                _packetProvider.GetNextPacket(),
                 static (p, s) => s.LoadBooks(p),
                 static (p, _) => p.Done()))
             {
@@ -139,8 +140,8 @@ namespace NVorbis
         }
 
         private bool ProcessHeaderPacket(
-            DataPacket packet, 
-            Func<DataPacket, StreamDecoder, bool> processAction, 
+            DataPacket packet,
+            Func<DataPacket, StreamDecoder, bool> processAction,
             Action<DataPacket, StreamDecoder> doneAction)
         {
             if (packet != null)
@@ -596,11 +597,28 @@ namespace NVorbis
 
         private static void OverlapBuffers(float[][] previous, float[][] next, int prevStart, int prevLen, int nextStart, int channels)
         {
-            for (; prevStart < prevLen; prevStart++, nextStart++)
+            nint length = prevLen - prevStart;
+            for (var c = 0; c < channels; c++)
             {
-                for (var c = 0; c < channels; c++)
+                Span<float> prevSpan = previous[c].AsSpan(prevStart, (int)length);
+                Span<float> nextSpan = next[c].AsSpan(nextStart, (int)length);
+
+                ref float p = ref MemoryMarshal.GetReference(prevSpan);
+                ref float n = ref MemoryMarshal.GetReference(nextSpan);
+
+                nint i = 0;
+                if (Vector.IsHardwareAccelerated)
                 {
-                    next[c][nextStart] += previous[c][prevStart];
+                    for (; i + Vector<float>.Count <= length; i += Vector<float>.Count)
+                    {
+                        ref float ni = ref Add(ref n, i);
+                        ref float pi = ref Add(ref p, i);
+                        As<float, Vector<float>>(ref ni) += As<float, Vector<float>>(ref pi);
+                    }
+                }
+                for (; i < length; i++)
+                {
+                    Add(ref n, i) += Add(ref p, i);
                 }
             }
         }
