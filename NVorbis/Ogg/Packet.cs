@@ -45,7 +45,7 @@ namespace NVorbis.Ogg
         private PacketDataPart GetDataPart(int index)
         {
             if (index != 0 && _dataParts != null)
-                return _dataParts[index];
+                return _dataParts[index - 1];
             return _firstDataPart;
         }
 
