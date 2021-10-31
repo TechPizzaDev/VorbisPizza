@@ -71,7 +71,7 @@ namespace NVorbis.Ogg
             };
         }
 
-        public void Update(uint nextVal)
+        public void Update(byte nextVal)
         {
             ref uint table = ref MemoryMarshal.GetReference(_table);
             _crc = (_crc << 8) ^ Unsafe.Add(ref table, nextVal ^ (_crc >> 24));

@@ -38,8 +38,7 @@ namespace NVorbis.Ogg
             }
 
             var dataLen = 0;
-            int i;
-            for (i = 0; i < segCnt; i++)
+            for (int i = 0; i < segCnt; i++)
             {
                 dataLen += headerBuf[index + i + 27];
             }
@@ -48,20 +47,22 @@ namespace NVorbis.Ogg
             Buffer.BlockCopy(headerBuf, index, pageBuf, 0, segCnt + 27);
             bytesRead = EnsureRead(pageBuf, segCnt + 27, dataLen);
             if (bytesRead != dataLen) return false;
-            dataLen = pageBuf.Length;
 
             Crc crc = Crc.Create();
-            for (i = 0; i < 22; i++)
+            var pb0 = pageBuf.AsSpan(0, 22);
+            for (int i = 0; i < pb0.Length; i++)
             {
-                crc.Update(pageBuf[i]);
+                crc.Update(pb0[i]);
             }
             crc.Update(0);
             crc.Update(0);
             crc.Update(0);
             crc.Update(0);
-            for (i += 4; i < dataLen; i++)
+
+            var pb1 = pageBuf.AsSpan(26, pageBuf.Length - 26);
+            for (int i = 0; i < pb1.Length; i++)
             {
-                crc.Update(pageBuf[i]);
+                crc.Update(pb1[i]);
             }
             return crc.Test(BitConverter.ToUInt32(pageBuf, 22));
         }
