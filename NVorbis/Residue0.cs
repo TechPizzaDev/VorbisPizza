@@ -30,7 +30,7 @@ namespace NVorbis
 
         int[] _cascade;
         int[][] _decodeMap;
-
+        int[] _partWordCache;
 
         virtual public void Init(DataPacket packet, int channels, Codebook[] codebooks)
         {
@@ -122,7 +122,7 @@ namespace NVorbis
             // this is pretty well stolen directly from libvorbis...  BSD license
             var end = _end < blockSize / 2 ? _end : blockSize / 2;
             var n = end - _begin;
-
+            
             if (n > 0 && doNotDecodeChannel.IndexOf(false) != -1)
             {
                 var channels = _channels;
@@ -131,7 +131,10 @@ namespace NVorbis
 
                 var partitionWords = (partitionCount + _classBook.Dimensions - 1) / _classBook.Dimensions;
                 int cacheLength = channels * partitionWords;
-                Span<int> partWordCache = cacheLength < 512 ? stackalloc int[cacheLength] : new int[cacheLength];
+
+                if (_partWordCache == null || _partWordCache.Length < cacheLength)
+                    Array.Resize(ref _partWordCache, cacheLength);
+                Span<int> partWordCache = _partWordCache.AsSpan(0, cacheLength);
 
                 for (var stage = 0; stage < _maxStages; stage++)
                 {

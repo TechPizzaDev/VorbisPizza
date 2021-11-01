@@ -16,7 +16,7 @@ namespace NVorbis
     /// </summary>
     public sealed class StreamDecoder : IStreamDecoder
     {
-        private Contracts.IPacketProvider _packetProvider;
+        private IPacketProvider _packetProvider;
         private IFactory _factory;
         private StreamStats _stats;
 
@@ -45,13 +45,13 @@ namespace NVorbis
         /// <summary>
         /// Creates a new instance of <see cref="StreamDecoder"/>.
         /// </summary>
-        /// <param name="packetProvider">A <see cref="Contracts.IPacketProvider"/> instance for the decoder to read from.</param>
-        public StreamDecoder(Contracts.IPacketProvider packetProvider)
+        /// <param name="packetProvider">A <see cref="IPacketProvider"/> instance for the decoder to read from.</param>
+        public StreamDecoder(IPacketProvider packetProvider)
             : this(packetProvider, new Factory())
         {
         }
 
-        internal StreamDecoder(Contracts.IPacketProvider packetProvider, IFactory factory)
+        internal StreamDecoder(IPacketProvider packetProvider, IFactory factory)
         {
             _packetProvider = packetProvider ?? throw new ArgumentNullException(nameof(packetProvider));
             _factory = factory ?? throw new ArgumentNullException(nameof(factory));

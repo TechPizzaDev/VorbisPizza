@@ -7,15 +7,15 @@ using System.IO;
 namespace NVorbis.Ogg
 {
     /// <summary>
-    /// Implements <see cref="Contracts.IContainerReader"/> for Ogg format files for low memory cost.
+    /// Implements <see cref="IContainerReader"/> for Ogg format files for low memory cost.
     /// </summary>
-    public sealed class ContainerReader : Contracts.IContainerReader
+    public sealed class ContainerReader : IContainerReader
     {
-        internal static Func<Stream, bool, Func<Contracts.IPacketProvider, bool>, IPageReader> CreatePageReader { get; set; } = (s, cod, cb) => new PageReader(s, cod, cb);
-        internal static Func<Stream, bool, Func<Contracts.IPacketProvider, bool>, IPageReader> CreateForwardOnlyPageReader { get; set; } = (s, cod, cb) => new ForwardOnlyPageReader(s, cod, cb);
+        internal static Func<Stream, bool, Func<IPacketProvider, bool>, IPageReader> CreatePageReader { get; set; } = (s, cod, cb) => new PageReader(s, cod, cb);
+        internal static Func<Stream, bool, Func<IPacketProvider, bool>, IPageReader> CreateForwardOnlyPageReader { get; set; } = (s, cod, cb) => new ForwardOnlyPageReader(s, cod, cb);
 
         private IPageReader _reader;
-        private List<WeakReference<Contracts.IPacketProvider>> _packetProviders;
+        private List<WeakReference<IPacketProvider>> _packetProviders;
         private bool _foundStream;
 
         /// <summary>
@@ -26,9 +26,9 @@ namespace NVorbis.Ogg
         /// <summary>
         /// Returns a list of streams available from this container.
         /// </summary>
-        public IReadOnlyList<Contracts.IPacketProvider> GetStreams()
+        public IReadOnlyList<IPacketProvider> GetStreams()
         {
-            var list = new List<Contracts.IPacketProvider>(_packetProviders.Count);
+            var list = new List<IPacketProvider>(_packetProviders.Count);
             for (var i = 0; i < _packetProviders.Count; i++)
             {
                 if (_packetProviders[i].TryGetTarget(out var pp))
@@ -70,7 +70,7 @@ namespace NVorbis.Ogg
         {
             if (stream == null) throw new ArgumentNullException(nameof(stream));
 
-            _packetProviders = new List<WeakReference<Contracts.IPacketProvider>>();
+            _packetProviders = new List<WeakReference<IPacketProvider>>();
 
             if (stream.CanSeek)
             {
@@ -117,14 +117,14 @@ namespace NVorbis.Ogg
             }
         }
 
-        private bool ProcessNewStream(Contracts.IPacketProvider packetProvider)
+        private bool ProcessNewStream(IPacketProvider packetProvider)
         {
             var relock = _reader.Release();
             try
             {
                 if (NewStreamCallback?.Invoke(packetProvider) ?? true)
                 {
-                    _packetProviders.Add(new WeakReference<Contracts.IPacketProvider>(packetProvider));
+                    _packetProviders.Add(new WeakReference<IPacketProvider>(packetProvider));
                     _foundStream = true;
                     return true;
                 }

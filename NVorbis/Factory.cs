@@ -4,6 +4,8 @@ namespace NVorbis
 {
     class Factory : IFactory
     {
+        internal static Factory Instance { get; } = new();
+
         public Huffman CreateHuffman()
         {
             return new Huffman();
