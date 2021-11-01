@@ -41,13 +41,15 @@ namespace NVorbis
         public void Init(DataPacket packet, int channels, int block0Size, int block1Size, Codebook[] codebooks)
         {
             var maximum_class = -1;
-            _partitionClass = new int[(int)packet.ReadBits(5)];
-            for (int i = 0; i < _partitionClass.Length; i++)
+            var partitionClass = new int[(int)packet.ReadBits(5)];
+            _partitionClass = partitionClass;
+
+            for (int i = 0; i < partitionClass.Length; i++)
             {
-                _partitionClass[i] = (int)packet.ReadBits(4);
-                if (_partitionClass[i] > maximum_class)
+                partitionClass[i] = (int)packet.ReadBits(4);
+                if (partitionClass[i] > maximum_class)
                 {
-                    maximum_class = _partitionClass[i];
+                    maximum_class = partitionClass[i];
                 }
             }
 
@@ -85,25 +87,33 @@ namespace NVorbis
             ++_multiplier;
 
             var rangeBits = (int)packet.ReadBits(4);
+            int xListSize = 2;
 
-            var xList = new List<int>();
-            xList.Add(0);
-            xList.Add(1 << rangeBits);
-
-            for (int i = 0; i < _partitionClass.Length; i++)
+            for (int i = 0; i < partitionClass.Length; i++)
             {
-                var classNum = _partitionClass[i];
+                var classNum = partitionClass[i];
+                xListSize +=  _classDimensions[classNum];
+            }
+
+            var xList = new int[xListSize];
+            int xListOfs = 0;
+            xList[xListOfs++] = 0;
+            xList[xListOfs++] = 1 << rangeBits;
+
+            for (int i = 0; i < partitionClass.Length; i++)
+            {
+                var classNum = partitionClass[i];
                 for (int j = 0; j < _classDimensions[classNum]; j++)
                 {
-                    xList.Add((int)packet.ReadBits(rangeBits));
+                    xList[xListOfs++] = (int)packet.ReadBits(rangeBits);
                 }
             }
-            _xList = xList.ToArray();
+            _xList = xList;
 
             // precalc the low and high neighbors (and init the sort table)
-            _lNeigh = new int[xList.Count];
-            _hNeigh = new int[xList.Count];
-            _sortIdx = new int[xList.Count];
+            _lNeigh = new int[xList.Length];
+            _hNeigh = new int[xList.Length];
+            _sortIdx = new int[xList.Length];
             _sortIdx[0] = 0;
             _sortIdx[1] = 1;
             for (int i = 2; i < _lNeigh.Length; i++)
@@ -159,9 +169,10 @@ namespace NVorbis
                 data.Posts[0] = (int)packet.ReadBits(_yBits);
                 data.Posts[1] = (int)packet.ReadBits(_yBits);
 
-                for (int i = 0; i < _partitionClass.Length; i++)
+                var partitionClass = _partitionClass;
+                for (int i = 0; i < partitionClass.Length; i++)
                 {
-                    var clsNum = _partitionClass[i];
+                    var clsNum = partitionClass[i];
                     var cdim = _classDimensions[clsNum];
                     var cbits = _classSubclasses[clsNum];
                     var csub = (1 << cbits) - 1;
@@ -185,7 +196,7 @@ namespace NVorbis
                             {
                                 // we read a bad value... bail
                                 postCount = 0;
-                                i = _partitionClass.Length;
+                                i = partitionClass.Length;
                                 break;
                             }
                         }

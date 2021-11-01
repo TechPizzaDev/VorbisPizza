@@ -1,6 +1,7 @@
 ﻿using NVorbis.Contracts;
 using System;
 using System.IO;
+using System.Runtime.CompilerServices;
 
 namespace NVorbis
 {
@@ -28,10 +29,11 @@ namespace NVorbis
         Codebook[][] _books;
         Codebook _classBook;
 
-        int[] _cascade;
-        int[][] _decodeMap;
+        byte[] _cascade;
+        int[] _decodeMap; 
         int[] _partWordCache;
 
+        [SkipLocalsInit]
         virtual public void Init(DataPacket packet, int channels, Codebook[] codebooks)
         {
             // this is pretty well stolen directly from libvorbis...  BSD license
@@ -41,26 +43,28 @@ namespace NVorbis
             _classifications = (int)packet.ReadBits(6) + 1;
             _classBook = codebooks[(int)packet.ReadBits(8)];
 
-            _cascade = new int[_classifications];
+            var cascade = new byte[_classifications];
+            _cascade = cascade;
+
             var acc = 0;
-            for (int i = 0; i < _classifications; i++)
+            for (int i = 0; i < cascade.Length; i++)
             {
-                var low_bits = (int)packet.ReadBits(3);
+                var low_bits = (byte)packet.ReadBits(3);
                 if (packet.ReadBit())
                 {
-                    _cascade[i] = (int)packet.ReadBits(5) << 3 | low_bits;
+                    cascade[i] = (byte)(packet.ReadBits(5) << 3 | low_bits);
                 }
                 else
                 {
-                    _cascade[i] = low_bits;
+                    cascade[i] = low_bits;
                 }
-                acc += icount(_cascade[i]);
+                acc += icount(cascade[i]);
             }
 
-            var bookNums = new int[acc];
-            for (var i = 0; i < acc; i++)
+            var bookNums = acc < 1024 ? stackalloc byte[acc] : new byte[acc];
+            for (var i = 0; i < bookNums.Length; i++)
             {
-                bookNums[i] = (int)packet.ReadBits(8);
+                bookNums[i] = (byte)packet.ReadBits(8);
                 if (codebooks[bookNums[i]].MapType == 0) throw new InvalidDataException();
             }
 
@@ -80,16 +84,16 @@ namespace NVorbis
             acc = 0;
             var maxstage = 0;
             int stages;
-            for (int j = 0; j < _classifications; j++)
+            for (int j = 0; j < cascade.Length; j++)
             {
-                stages = Utils.ilog(_cascade[j]);
+                stages = Utils.ilog(cascade[j]);
                 _books[j] = new Codebook[stages];
                 if (stages > 0)
                 {
                     maxstage = Math.Max(maxstage, stages);
                     for (int k = 0; k < stages; k++)
                     {
-                        if ((_cascade[j] & (1 << k)) > 0)
+                        if ((cascade[j] & (1 << k)) > 0)
                         {
                             _books[j][k] = codebooks[bookNums[acc++]];
                         }
@@ -98,18 +102,17 @@ namespace NVorbis
             }
             _maxStages = maxstage;
 
-            _decodeMap = new int[partvals][];
+            _decodeMap = new int[partvals * _classBook.Dimensions];
             for (int j = 0; j < partvals; j++)
             {
                 var val = j;
                 var mult = partvals / _classifications;
-                _decodeMap[j] = new int[_classBook.Dimensions];
                 for (int k = 0; k < _classBook.Dimensions; k++)
                 {
                     var deco = val / mult;
                     val -= deco * mult;
                     mult /= _classifications;
-                    _decodeMap[j][k] = deco;
+                    _decodeMap[j * _classBook.Dimensions + k] = deco;
                 }
             }
 
@@ -127,6 +130,7 @@ namespace NVorbis
             {
                 var channels = _channels;
                 var decodeMap = _decodeMap;
+                var cascade = _cascade;
                 var partitionCount = n / _partitionSize;
 
                 var partitionWords = (partitionCount + _classBook.Dimensions - 1) / _classBook.Dimensions;
@@ -157,14 +161,15 @@ namespace NVorbis
                                 }
                             }
                         }
+
                         for (var dimensionIdx = 0; partitionIdx < partitionCount && dimensionIdx < _classBook.Dimensions; dimensionIdx++, partitionIdx++)
                         {
                             var offset = _begin + partitionIdx * _partitionSize;
                             for (var ch = 0; ch < channels; ch++)
                             {
-                                var map = decodeMap[partWordCache[ch * partitionWords + entryIdx]];
-                                var idx = map[dimensionIdx];
-                                if ((_cascade[idx] & (1 << stage)) != 0)
+                                var mapIndex = partWordCache[ch * partitionWords + entryIdx] * _classBook.Dimensions;
+                                var idx = decodeMap[mapIndex + dimensionIdx];
+                                if ((cascade[idx] & (1 << stage)) != 0)
                                 {
                                     var book = _books[idx][stage];
                                     if (book != null)

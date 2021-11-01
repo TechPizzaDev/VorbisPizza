@@ -237,10 +237,10 @@ namespace NVorbis
                 lookupValueCount = lookup1_values();
             }
 
-            var multiplicands = new uint[lookupValueCount];
-            for (var i = 0; i < lookupValueCount; i++)
+            var multiplicands = new ushort[lookupValueCount];
+            for (var i = 0; i < multiplicands.Length; i++)
             {
-                multiplicands[i] = (uint)packet.ReadBits(valueBits);
+                multiplicands[i] = (ushort)packet.ReadBits(valueBits);
             }
 
             // now that we have the initial data read in, calculate the entry tree
@@ -252,8 +252,8 @@ namespace NVorbis
                     var idxDiv = 1;
                     for (var i = 0; i < Dimensions; i++)
                     {
-                        var moff = (idx / idxDiv) % lookupValueCount;
-                        var value = (float)multiplicands[moff] * deltaValue + minValue + last;
+                        var moff = (idx / idxDiv) % multiplicands.Length;
+                        var value = multiplicands[moff] * deltaValue + minValue + last;
                         lookupTable[idx * Dimensions + i] = (float)value;
 
                         if (sequence_p) last = value;
