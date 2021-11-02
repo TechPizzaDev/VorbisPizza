@@ -1,5 +1,6 @@
 ﻿using NVorbis.Contracts.Ogg;
 using System;
+using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
@@ -24,7 +25,7 @@ namespace NVorbis.Ogg
             _newStreamCallback = newStreamCallback;
         }
 
-        private ushort ParsePageHeader(byte[] pageBuf, int? streamSerial, bool? isResync)
+        private ushort ParsePageHeader(ReadOnlySpan<byte> pageBuf, int? streamSerial, bool? isResync)
         {
             var segCnt = pageBuf[26];
             var dataLen = 0;
@@ -52,10 +53,10 @@ namespace NVorbis.Ogg
                 ++pktCnt;
             }
 
-            StreamSerial = streamSerial ?? BitConverter.ToInt32(pageBuf, 14);
-            SequenceNumber = BitConverter.ToInt32(pageBuf, 18);
+            StreamSerial = streamSerial ?? BinaryPrimitives.ReadInt32LittleEndian(pageBuf.Slice(14, sizeof(int)));
+            SequenceNumber = BinaryPrimitives.ReadInt32LittleEndian(pageBuf.Slice(18, sizeof(int)));
             PageFlags = (PageFlags)pageBuf[5];
-            GranulePosition = BitConverter.ToInt64(pageBuf, 6);
+            GranulePosition = BinaryPrimitives.ReadInt64LittleEndian(pageBuf.Slice(6, sizeof(long)));
             PacketCount = (ushort)pktCnt;
             IsResync = isResync;
             IsContinued = isContinued;
@@ -170,13 +171,13 @@ namespace NVorbis.Ogg
                 return true;
             }
 
-            var hdrBuf = new byte[282];
+            Span<byte> hdrBuf = stackalloc byte[282];
 
             SeekStream(offset);
-            var cnt = EnsureRead(hdrBuf, 0, 27);
+            var cnt = EnsureRead(hdrBuf.Slice(0, 27));
 
             PageOffset = offset;
-            if (VerifyHeader(hdrBuf, 0, ref cnt))
+            if (VerifyHeader(hdrBuf, ref cnt))
             {
                 // don't read the whole page yet; if our caller is seeking, they won't need packets anyway
                 _packets = null;
@@ -224,12 +225,12 @@ namespace NVorbis.Ogg
             {
                 var pageBuf = new byte[_pageSize];
                 SeekStream(PageOffset);
-                EnsureRead(pageBuf, 0, _pageSize);
+                EnsureRead(pageBuf);
 
                 var length = pageBuf[26];
                 _packets = ReadPackets(
-                    PacketCount, 
-                    pageBuf.AsSpan(27, length), 
+                    PacketCount,
+                    pageBuf.AsSpan(27, length),
                     new ArraySegment<byte>(pageBuf, 27 + length, pageBuf.Length - 27 - length));
             }
 
