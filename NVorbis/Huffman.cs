@@ -4,7 +4,7 @@ using System.Collections.Generic;
 
 namespace NVorbis
 {
-    class Huffman
+    struct Huffman
     {
         const int MAX_TABLE_BITS = 10;
 
@@ -12,7 +12,7 @@ namespace NVorbis
         public HuffmanListNode[] PrefixTree { get; private set; }
         public HuffmanListNode[] OverflowList { get; private set; }
 
-        public void GenerateTable<TList>(TList values, int[] lengthList, int[] codeList)
+        public static Huffman GenerateTable<TList>(TList values, int[] lengthList, int[] codeList)
             where TList : IReadOnlyList<int>
         {
             var list = new HuffmanListNode[lengthList.Length];
@@ -54,7 +54,7 @@ namespace NVorbis
                 else
                 {
                     var maxVal = 1 << (tableBits - itemBits);
-                    var item = list[i]; 
+                    var item = list[i];
                     for (int j = 0; j < maxVal; j++)
                     {
                         var idx = (j << itemBits) | item.Bits;
@@ -63,9 +63,12 @@ namespace NVorbis
                 }
             }
 
-            TableBits = tableBits;
-            PrefixTree = prefixList;
-            OverflowList = overflowList?.ToArray();
+            return new Huffman
+            {
+                TableBits = tableBits,
+                PrefixTree = prefixList,
+                OverflowList = overflowList?.ToArray()
+            };
         }
     }
 }

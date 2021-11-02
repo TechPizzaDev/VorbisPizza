@@ -51,7 +51,7 @@ namespace NVorbis
         int _prefixBitLength;
         int _maxBits;
 
-        public void Init(DataPacket packet, Huffman huffman)
+        public Codebook(DataPacket packet)
         {
             // first, check the sync pattern
             var chkVal = packet.ReadBits(24);
@@ -64,11 +64,11 @@ namespace NVorbis
             // init the storage
             _lengths = new int[Entries];
 
-            InitTree(packet, huffman);
+            InitTree(packet);
             InitLookupTable(packet);
         }
 
-        private void InitTree(DataPacket packet, Huffman huffman)
+        private void InitTree(DataPacket packet)
         {
             bool sparse;
             int total = 0;
@@ -157,10 +157,9 @@ namespace NVorbis
                     throw new InvalidDataException();
 
                 var lengthList = codewordLengths ?? _lengths;
-                if (values != null)
-                    huffman.GenerateTable(values, lengthList, codewords);
-                else
-                    huffman.GenerateTable(new FastRange(0, codewords.Length), lengthList, codewords);
+                Huffman huffman = values != null
+                    ? Huffman.GenerateTable(values, lengthList, codewords)
+                    : Huffman.GenerateTable(new FastRange(0, codewords.Length), lengthList, codewords);
 
                 _prefixList = huffman.PrefixTree;
                 _prefixBitLength = huffman.TableBits;

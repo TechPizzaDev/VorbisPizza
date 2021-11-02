@@ -4,19 +4,18 @@ using System.Runtime.CompilerServices;
 
 namespace NVorbis
 {
-    class Mapping : IMapping
+    class Mapping
     {
-        IMdct _mdct;
         int[] _couplingAngle;
         int[] _couplingMangitude;
         IFloor[] _submapFloor;
-        IResidue[] _submapResidue;
+        Residue0[] _submapResidue;
         IFloor[] _channelFloor;
-        IFloorData[] _channelFloorData;
-        IResidue[] _channelResidue;
+        FloorData[] _channelFloorData;
+        Residue0[] _channelResidue;
         float[] _buf2;
 
-        public void Init(DataPacket packet, int channels, IFloor[] floors, IResidue[] residues, IMdct mdct)
+        public Mapping(DataPacket packet, int channels, IFloor[] floors, Residue0[] residues)
         {
             var submapCount = 1;
             if (packet.ReadBit())
@@ -65,7 +64,7 @@ namespace NVorbis
             }
 
             _submapFloor = new IFloor[submapCount];
-            _submapResidue = new IResidue[submapCount];
+            _submapResidue = new Residue0[submapCount];
             for (var j = 0; j < submapCount; j++)
             {
                 packet.SkipBits(8); // unused placeholder
@@ -85,8 +84,8 @@ namespace NVorbis
             }
 
             _channelFloor = new IFloor[channels];
-            _channelFloorData = new IFloorData[channels];
-            _channelResidue = new IResidue[channels];
+            _channelFloorData = new FloorData[channels];
+            _channelResidue = new Residue0[channels];
             for (var c = 0; c < channels; c++)
             {
                 _channelFloor[c] = _submapFloor[mux[c]];
@@ -95,7 +94,6 @@ namespace NVorbis
             }
 
             _buf2 = Array.Empty<float>();
-            _mdct = mdct;
         }
 
         [SkipLocalsInit]
@@ -104,7 +102,7 @@ namespace NVorbis
             var halfBlockSize = blockSize >> 1;
 
             // read the noise floor data
-            IFloorData[] floorData = _channelFloorData;
+            FloorData[] floorData = _channelFloorData;
             Span<bool> noExecuteChannel = stackalloc bool[_channelFloor.Length];
             for (var i = 0; i < _channelFloor.Length; i++)
             {
@@ -198,7 +196,7 @@ namespace NVorbis
                 if (floorData[c].ExecuteChannel)
                 {
                     _channelFloor[c].Apply(floorData[c], blockSize, buffer[c]);
-                    _mdct.Reverse(buffer[c], _buf2, blockSize);
+                    Mdct.Reverse(buffer[c], _buf2, blockSize);
                 }
                 else
                 {

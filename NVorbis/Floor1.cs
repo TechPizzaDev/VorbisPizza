@@ -1,6 +1,5 @@
 ﻿using NVorbis.Contracts;
 using System;
-using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using static System.Runtime.CompilerServices.Unsafe;
 
@@ -10,17 +9,14 @@ namespace NVorbis
     // Draws a curve between each point to define the low-resolution spectral data.
     class Floor1 : IFloor
     {
-        class Data : IFloorData
+        sealed class Data : FloorData
         {
             internal int[] Posts = new int[64];
             internal int PostCount;
 
-            public bool ExecuteChannel => (ForceEnergy || PostCount > 0) && !ForceNoEnergy;
+            public override bool ExecuteChannel => (ForceEnergy || PostCount > 0) && !ForceNoEnergy;
 
-            public bool ForceEnergy { get; set; }
-            public bool ForceNoEnergy { get; set; }
-
-            public void Reset()
+            public override void Reset()
             {
                 Array.Clear(Posts);
                 PostCount = 0;
@@ -38,7 +34,7 @@ namespace NVorbis
         static readonly int[] _rangeLookup = { 256, 128, 86, 64 };
         static readonly int[] _yBitsLookup = { 8, 7, 7, 6 };
 
-        public void Init(DataPacket packet, int channels, int block0Size, int block1Size, Codebook[] codebooks)
+        public Floor1(DataPacket packet, Codebook[] codebooks)
         {
             var maximum_class = -1;
             var partitionClass = new int[(int)packet.ReadBits(5)];
@@ -153,12 +149,12 @@ namespace NVorbis
             }
         }
 
-        public IFloorData CreateFloorData()
+        public FloorData CreateFloorData()
         {
             return new Data();
         }
 
-        public void Unpack(DataPacket packet, IFloorData floorData, int blockSize, int channel)
+        public void Unpack(DataPacket packet, FloorData floorData, int blockSize, int channel)
         {
             var data = (Data)floorData;
 
@@ -209,7 +205,7 @@ namespace NVorbis
         }
 
         [SkipLocalsInit]
-        public void Apply(IFloorData floorData, int blockSize, float[] residue)
+        public void Apply(FloorData floorData, int blockSize, float[] residue)
         {
             var data = (Data)floorData;
 
@@ -256,6 +252,7 @@ namespace NVorbis
             stepFlags[0] = true;
             stepFlags[1] = true;
 
+            var xList = _xList;
             var finalY = data.Posts;
             finalY[0] = data.Posts[0];
             finalY[1] = data.Posts[1];
@@ -265,9 +262,9 @@ namespace NVorbis
                 var lowOfs = _lNeigh[i];
                 var highOfs = _hNeigh[i];
 
-                var predicted = RenderPoint(_xList[lowOfs], finalY[lowOfs], _xList[highOfs], finalY[highOfs], _xList[i]);
+                var predicted = RenderPoint(xList[lowOfs], finalY[lowOfs], xList[highOfs], finalY[highOfs], xList[i]);
 
-                var val = data.Posts[i];
+                var val = finalY[i];
                 var highroom = _range - predicted;
                 var lowroom = predicted;
                 int room;
@@ -318,7 +315,7 @@ namespace NVorbis
             }
         }
 
-        int RenderPoint(int x0, int y0, int x1, int y1, int X)
+        static int RenderPoint(int x0, int y0, int x1, int y1, int X)
         {
             var dy = y1 - y0;
             var adx = x1 - x0;
@@ -335,7 +332,7 @@ namespace NVorbis
             }
         }
 
-        void RenderLineMulti(int x0, int y0, int x1, int y1, ref float dbTable, ref float v)
+        static void RenderLineMulti(int x0, int y0, int x1, int y1, ref float dbTable, ref float v)
         {
             var dy = y1 - y0;
             var adx = x1 - x0;

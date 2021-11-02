@@ -1,5 +1,4 @@
 ﻿using System;
-using NVorbis.Contracts;
 
 namespace NVorbis
 {
@@ -8,10 +7,9 @@ namespace NVorbis
     {
         int _channels;
 
-        public override void Init(DataPacket packet, int channels, Codebook[] codebooks)
+        public Residue2(DataPacket packet, int channels, Codebook[] codebooks) : base(packet, 1, codebooks)
         {
             _channels = channels;
-            base.Init(packet, 1, codebooks);
         }
 
         public override void Decode(
@@ -22,7 +20,8 @@ namespace NVorbis
             base.Decode(packet, doNotDecodeChannel, blockSize * _channels, buffer);
         }
 
-        protected override bool WriteVectors(Codebook codebook, DataPacket packet, float[][] residue, int channel, int offset, int partitionSize)
+        protected override bool WriteVectors(
+            Codebook codebook, DataPacket packet, float[][] residue, int channel, int offset, int partitionSize)
         {
             nint ch = 0;
             nint channels = _channels;

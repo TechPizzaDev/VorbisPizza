@@ -1,24 +1,13 @@
-﻿using NVorbis.Contracts;
-using System;
+﻿using System;
 using System.IO;
+using System.Numerics;
 using System.Runtime.CompilerServices;
 
 namespace NVorbis
 {
     // each channel gets its own pass, one dimension at a time
-    class Residue0 : IResidue
+    class Residue0
     {
-        static int icount(int v)
-        {
-            var ret = 0;
-            while (v != 0)
-            {
-                ret += (v & 1);
-                v >>= 1;
-            }
-            return ret;
-        }
-
         int _channels;
         int _begin;
         int _end;
@@ -34,7 +23,7 @@ namespace NVorbis
         int[] _partWordCache;
 
         [SkipLocalsInit]
-        virtual public void Init(DataPacket packet, int channels, Codebook[] codebooks)
+        public Residue0(DataPacket packet, int channels, Codebook[] codebooks)
         {
             // this is pretty well stolen directly from libvorbis...  BSD license
             _begin = (int)packet.ReadBits(24);
@@ -58,7 +47,7 @@ namespace NVorbis
                 {
                     cascade[i] = low_bits;
                 }
-                acc += icount(cascade[i]);
+                acc += BitOperations.PopCount(cascade[i]);
             }
 
             var bookNums = acc < 1024 ? stackalloc byte[acc] : new byte[acc];

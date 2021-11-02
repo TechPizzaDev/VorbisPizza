@@ -11,7 +11,7 @@ namespace NVorbis
     public sealed class VorbisReader : IVorbisReader
     {
         internal static Func<Stream, bool, IContainerReader> CreateContainerReader { get; set; } = (s, cod) => new Ogg.ContainerReader(s, cod);
-        internal static Func<IPacketProvider, IStreamDecoder> CreateStreamDecoder { get; set; } = pp => new StreamDecoder(pp, Factory.Instance);
+        internal static Func<IPacketProvider, IStreamDecoder> CreateStreamDecoder { get; set; } = pp => new StreamDecoder(pp);
 
         private readonly List<IStreamDecoder> _decoders;
         private readonly IContainerReader _containerReader;
