@@ -153,7 +153,7 @@ namespace NVorbis
                     values = new int[sortedCount];
                 }
 
-                if (!ComputeCodewords(sparse, codewords, codewordLengths, _lengths.AsSpan(0, Entries), values)) 
+                if (!ComputeCodewords(sparse, codewords, codewordLengths, _lengths.AsSpan(0, Entries), values))
                     throw new InvalidDataException();
 
                 var lengthList = codewordLengths ?? _lengths;
@@ -178,7 +178,7 @@ namespace NVorbis
             for (k = 0; k < len.Length; ++k) if (len[k] > 0) break;
             if (k == len.Length) return true;
 
-            AddEntry(sparse, codewords, codewordLengths, 0, k, m++, len[k], values);
+            AddEntry(0, k, m++, len[k]);
 
             for (i = 1; i <= len[k]; ++i) available[i] = 1U << (32 - i);
 
@@ -192,7 +192,7 @@ namespace NVorbis
                 if (z == 0) return false;
                 res = available[z];
                 available[z] = 0;
-                AddEntry(sparse, codewords, codewordLengths, Utils.BitReverse(res), i, m++, len[i], values);
+                AddEntry(Utils.BitReverse(res), i, m++, len[i]);
 
                 if (z != len[i])
                 {
@@ -204,19 +204,19 @@ namespace NVorbis
             }
 
             return true;
-        }
 
-        void AddEntry(bool sparse, int[] codewords, int[] codewordLengths, uint huffCode, int symbol, int count, int len, int[] values)
-        {
-            if (sparse)
+            void AddEntry(uint huffCode, int symbol, int count, int len)
             {
-                codewords[count] = (int)huffCode;
-                codewordLengths[count] = len;
-                values[count] = symbol;
-            }
-            else
-            {
-                codewords[symbol] = (int)huffCode;
+                if (sparse)
+                {
+                    codewords[count] = (int)huffCode;
+                    codewordLengths[count] = len;
+                    values[count] = symbol;
+                }
+                else
+                {
+                    codewords[symbol] = (int)huffCode;
+                }
             }
         }
 
@@ -230,8 +230,12 @@ namespace NVorbis
             var valueBits = (int)packet.ReadBits(4) + 1;
             var sequence_p = packet.ReadBit();
 
-            var lookupValueCount = Entries * Dimensions;
+            int entries = Entries;
+            int dimensions = Dimensions;
+            var lookupValueCount = entries * dimensions;
             var lookupTable = new float[lookupValueCount];
+            ref float lookup = ref lookupTable[0];
+
             if (MapType == 1)
             {
                 lookupValueCount = lookup1_values();
@@ -242,19 +246,22 @@ namespace NVorbis
             {
                 multiplicands[i] = (ushort)packet.ReadBits(valueBits);
             }
+            ref ushort muls = ref multiplicands[0];
 
             // now that we have the initial data read in, calculate the entry tree
             if (MapType == 1)
             {
-                for (var idx = 0; idx < Entries; idx++)
+                for (var idx = 0; idx < entries; idx++)
                 {
-                    var last = 0.0;
+                    var last = 0f;
                     var idxDiv = 1;
-                    for (var i = 0; i < Dimensions; i++)
+                    ref float dimLookup = ref Unsafe.Add(ref lookup, idx * dimensions);
+
+                    for (var i = 0; i < dimensions; i++)
                     {
-                        var moff = (idx / idxDiv) % multiplicands.Length;
-                        var value = multiplicands[moff] * deltaValue + minValue + last;
-                        lookupTable[idx * Dimensions + i] = (float)value;
+                        var moff = (idx / idxDiv) % lookupValueCount;
+                        var value = Unsafe.Add(ref muls, moff) * deltaValue + minValue + last;
+                        Unsafe.Add(ref dimLookup, i) = value;
 
                         if (sequence_p) last = value;
 
@@ -264,14 +271,16 @@ namespace NVorbis
             }
             else
             {
-                for (var idx = 0; idx < Entries; idx++)
+                for (var idx = 0; idx < entries; idx++)
                 {
-                    var last = 0.0;
-                    var moff = idx * Dimensions;
-                    for (var i = 0; i < Dimensions; i++)
+                    var last = 0f;
+                    nint moff = idx * dimensions;
+                    ref float dimLookup = ref Unsafe.Add(ref lookup, idx * dimensions);
+
+                    for (var i = 0; i < dimensions; i++)
                     {
-                        var value = multiplicands[moff] * deltaValue + minValue + last;
-                        lookupTable[idx * Dimensions + i] = (float)value;
+                        var value = Unsafe.Add(ref muls, moff) * deltaValue + minValue + last;
+                        Unsafe.Add(ref dimLookup, i) = value;
 
                         if (sequence_p) last = value;
 
@@ -299,7 +308,7 @@ namespace NVorbis
 
             // try to get the value from the prefix list...
             var node = Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(_prefixList), data);
-            if (node.Length != -1)
+            if (node.Length != 0)
             {
                 packet.SkipBits(node.Length);
                 return node.Value;

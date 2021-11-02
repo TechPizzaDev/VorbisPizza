@@ -4,7 +4,7 @@ using System.Collections.Generic;
 
 namespace NVorbis
 {
-    class Huffman : IComparer<HuffmanListNode>
+    class Huffman
     {
         const int MAX_TABLE_BITS = 10;
 
@@ -33,15 +33,11 @@ namespace NVorbis
                 }
             }
 
-            Array.Sort(list, 0, list.Length, this);
+            Array.Sort(list, 0, list.Length);
 
             var tableBits = maxLen > MAX_TABLE_BITS ? MAX_TABLE_BITS : maxLen;
 
             var prefixList = new HuffmanListNode[1 << tableBits];
-            for (int i = 0; i < prefixList.Length; i++)
-            {
-                prefixList[i].Length = -1;
-            }
 
             List<HuffmanListNode> overflowList = null;
             for (int i = 0; i < list.Length && list[i].Length < 99999; i++)
@@ -70,16 +66,6 @@ namespace NVorbis
             TableBits = tableBits;
             PrefixTree = prefixList;
             OverflowList = overflowList?.ToArray();
-        }
-
-        public int Compare(HuffmanListNode x, HuffmanListNode y)
-        {
-            var len = x.Length - y.Length;
-            if (len == 0)
-            {
-                return x.Bits - y.Bits;
-            }
-            return len;
         }
     }
 }
