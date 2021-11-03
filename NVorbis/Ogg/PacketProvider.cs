@@ -1,7 +1,6 @@
 ﻿using NVorbis.Contracts;
 using NVorbis.Contracts.Ogg;
 using System;
-using System.Collections.Generic;
 
 namespace NVorbis.Ogg
 {
@@ -103,9 +102,8 @@ namespace NVorbis.Ogg
         private uint FindPacket(uint pageIndex, ref long granulePos, GetPacketGranuleCount getPacketGranuleCount)
         {
             // pageIndex is the correct page; we just need to figure out which packet
-            bool isContinued;
             int firstRealPacket = 0;
-            if (_reader.GetPage(pageIndex - 1, out _, out _, out _, out isContinued, out _, out _))
+            if (_reader.GetPage(pageIndex - 1, out _, out _, out _, out bool isContinued, out _, out _))
             {
                 if (isContinued)
                 {
@@ -356,7 +354,7 @@ namespace NVorbis.Ogg
             return packet;
         }
 
-        ArraySegment<byte> IPacketReader.GetPacketData(PacketDataPart dataPart)
+        public ArraySegment<byte> GetPacketData(PacketDataPart dataPart)
         {
             var pageIndex = dataPart.PageIndex;
             var packetIndex = dataPart.PacketIndex;

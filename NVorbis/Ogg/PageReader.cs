@@ -9,18 +9,16 @@ namespace NVorbis.Ogg
 {
     class PageReader : PageReaderBase, IPageData
     {
-        internal static Func<IPageData, int, IStreamPageReader> CreateStreamPageReader { get; set; } = (pr, ss) => new StreamPageReader(pr, ss);
-
         private readonly Dictionary<int, IStreamPageReader> _streamReaders = new Dictionary<int, IStreamPageReader>();
-        private readonly Func<Contracts.IPacketProvider, bool> _newStreamCallback;
+        private readonly NewStreamCallback _newStreamCallback;
         private readonly object _readLock = new object();
 
         private long _nextPageOffset;
         private ushort _pageSize;
         private ArraySegment<byte>[] _packets;
 
-        public PageReader(Stream stream, bool closeOnDispose, Func<Contracts.IPacketProvider, bool> newStreamCallback)
-            : base(stream, closeOnDispose)
+        public PageReader(Stream stream, bool leaveOpen, NewStreamCallback newStreamCallback)
+            : base(stream, leaveOpen)
         {
             _newStreamCallback = newStreamCallback;
         }
@@ -131,7 +129,10 @@ namespace NVorbis.Ogg
             // if the page doesn't have any packets, we can't use it
             if (PacketCount == 0) return false;
 
-            _packets = ReadPackets(PacketCount, new Span<byte>(pageBuf, 27, pageBuf[26]), new ArraySegment<byte>(pageBuf, 27 + pageBuf[26], pageBuf.Length - 27 - pageBuf[26]));
+            _packets = ReadPackets(
+                PacketCount,
+                new Span<byte>(pageBuf, 27, pageBuf[26]),
+                new ArraySegment<byte>(pageBuf, 27 + pageBuf[26], pageBuf.Length - 27 - pageBuf[26]));
 
             if (_streamReaders.TryGetValue(streamSerial, out var spr))
             {
@@ -146,7 +147,7 @@ namespace NVorbis.Ogg
             }
             else
             {
-                var streamReader = CreateStreamPageReader(this, StreamSerial);
+                var streamReader = new StreamPageReader(this, StreamSerial);
                 streamReader.AddPage();
                 _streamReaders.Add(StreamSerial, streamReader);
                 if (!_newStreamCallback(streamReader.PacketProvider))

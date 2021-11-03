@@ -11,9 +11,6 @@ namespace NVorbis.Ogg
     /// </summary>
     public sealed class ContainerReader : IContainerReader
     {
-        internal static Func<Stream, bool, Func<IPacketProvider, bool>, IPageReader> CreatePageReader { get; set; } = (s, cod, cb) => new PageReader(s, cod, cb);
-        internal static Func<Stream, bool, Func<IPacketProvider, bool>, IPageReader> CreateForwardOnlyPageReader { get; set; } = (s, cod, cb) => new ForwardOnlyPageReader(s, cod, cb);
-
         private IPageReader _reader;
         private List<WeakReference<IPacketProvider>> _packetProviders;
         private bool _foundStream;
@@ -43,30 +40,23 @@ namespace NVorbis.Ogg
             }
             return list;
         }
-
         /// <summary>
         /// Gets whether the underlying stream can seek.
         /// </summary>
         public bool CanSeek { get; }
 
-        /// <summary>
-        /// Gets the number of bits in the container that are not associated with a logical stream.
-        /// </summary>
+        /// <inheritdoc/>
         public long WasteBits => _reader.WasteBits;
 
-        /// <summary>
-        /// Gets the number of bits in the container that are strictly for framing of logical streams.
-        /// </summary>
+        /// <inheritdoc/>
         public long ContainerBits => _reader.ContainerBits;
-
 
         /// <summary>
         /// Creates a new instance of <see cref="ContainerReader"/>.
         /// </summary>
         /// <param name="stream">The <see cref="Stream"/> to read.</param>
-        /// <param name="closeOnDispose"><c>True</c> to close the stream when disposed, otherwise <c>false</c>.</param>
-        /// <exception cref="ArgumentException"><paramref name="stream"/>'s <see cref="Stream.CanSeek"/> is <c>False</c>.</exception>
-        public ContainerReader(Stream stream, bool closeOnDispose)
+        /// <param name="leaveOpen"><see langword="false"/> to close the stream when disposed, otherwise <see langword="true"/>.</param>
+        public ContainerReader(Stream stream, bool leaveOpen)
         {
             if (stream == null) throw new ArgumentNullException(nameof(stream));
 
@@ -74,12 +64,12 @@ namespace NVorbis.Ogg
 
             if (stream.CanSeek)
             {
-                _reader = CreatePageReader(stream, closeOnDispose, ProcessNewStream);
+                _reader = new PageReader(stream, leaveOpen, ProcessNewStream);
                 CanSeek = true;
             }
             else
             {
-                _reader = CreateForwardOnlyPageReader(stream, closeOnDispose, ProcessNewStream);
+                _reader = new ForwardOnlyPageReader(stream, leaveOpen, ProcessNewStream);
             }
         }
 
@@ -139,9 +129,7 @@ namespace NVorbis.Ogg
             }
         }
 
-        /// <summary>
-        /// Cleans up
-        /// </summary>
+        /// <inheritdoc/>
         public void Dispose()
         {
             _reader?.Dispose();

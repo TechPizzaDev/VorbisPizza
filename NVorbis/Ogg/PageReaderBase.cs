@@ -5,6 +5,8 @@ using System.IO;
 
 namespace NVorbis.Ogg
 {
+    delegate bool NewStreamCallback(Contracts.IPacketProvider packetProvider);
+
     abstract class PageReaderBase : IPageReader
     {
         private readonly HashSet<int> _ignoredSerials = new HashSet<int>();
@@ -12,12 +14,12 @@ namespace NVorbis.Ogg
         private int _overflowBufIndex;
 
         private Stream _stream;
-        private bool _closeOnDispose;
+        private bool _leaveOpen;
 
-        protected PageReaderBase(Stream stream, bool closeOnDispose)
+        protected PageReaderBase(Stream stream, bool leaveOpen)
         {
             _stream = stream;
-            _closeOnDispose = closeOnDispose;
+            _leaveOpen = leaveOpen;
         }
 
         protected long StreamPosition => _stream?.Position ?? throw new ObjectDisposedException(nameof(PageReaderBase));
@@ -297,7 +299,7 @@ namespace NVorbis.Ogg
         {
             SetEndOfStreams();
 
-            if (_closeOnDispose)
+            if (!_leaveOpen)
             {
                 _stream?.Dispose();
             }
