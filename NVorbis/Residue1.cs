@@ -1,11 +1,15 @@
-﻿using NVorbis.Contracts;
-
+﻿
 namespace NVorbis
 {
     // each channel gets its own pass, with the dimensions interleaved
     class Residue1 : Residue0
     {
-        protected override bool WriteVectors(Codebook codebook, DataPacket packet, float[][] residue, int channel, int offset, int partitionSize)
+        public Residue1(DataPacket packet, int channels, Codebook[] codebooks) : base(packet, channels, codebooks)
+        {
+        }
+
+        protected override bool WriteVectors(
+            Codebook codebook, DataPacket packet, float[][] residue, int channel, int offset, int partitionSize)
         {
             var res = residue[channel];
 

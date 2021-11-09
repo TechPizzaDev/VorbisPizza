@@ -4,7 +4,7 @@ using System.Collections.Generic;
 
 namespace NVorbis
 {
-    class Huffman : IComparer<HuffmanListNode>
+    struct Huffman
     {
         const int MAX_TABLE_BITS = 10;
 
@@ -12,7 +12,7 @@ namespace NVorbis
         public HuffmanListNode[] PrefixTree { get; private set; }
         public HuffmanListNode[] OverflowList { get; private set; }
 
-        public void GenerateTable<TList>(TList values, int[] lengthList, int[] codeList)
+        public static Huffman GenerateTable<TList>(TList values, int[] lengthList, int[] codeList)
             where TList : IReadOnlyList<int>
         {
             var list = new HuffmanListNode[lengthList.Length];
@@ -33,15 +33,11 @@ namespace NVorbis
                 }
             }
 
-            Array.Sort(list, 0, list.Length, this);
+            Array.Sort(list, 0, list.Length);
 
             var tableBits = maxLen > MAX_TABLE_BITS ? MAX_TABLE_BITS : maxLen;
 
             var prefixList = new HuffmanListNode[1 << tableBits];
-            for (int i = 0; i < prefixList.Length; i++)
-            {
-                prefixList[i].Length = -1;
-            }
 
             List<HuffmanListNode> overflowList = null;
             for (int i = 0; i < list.Length && list[i].Length < 99999; i++)
@@ -58,7 +54,7 @@ namespace NVorbis
                 else
                 {
                     var maxVal = 1 << (tableBits - itemBits);
-                    var item = list[i]; 
+                    var item = list[i];
                     for (int j = 0; j < maxVal; j++)
                     {
                         var idx = (j << itemBits) | item.Bits;
@@ -67,19 +63,12 @@ namespace NVorbis
                 }
             }
 
-            TableBits = tableBits;
-            PrefixTree = prefixList;
-            OverflowList = overflowList?.ToArray();
-        }
-
-        public int Compare(HuffmanListNode x, HuffmanListNode y)
-        {
-            var len = x.Length - y.Length;
-            if (len == 0)
+            return new Huffman
             {
-                return x.Bits - y.Bits;
-            }
-            return len;
+                TableBits = tableBits,
+                PrefixTree = prefixList,
+                OverflowList = overflowList?.ToArray()
+            };
         }
     }
 }

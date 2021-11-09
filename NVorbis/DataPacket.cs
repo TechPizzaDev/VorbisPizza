@@ -173,11 +173,6 @@ namespace NVorbis
         public ulong TryPeekBits(int count, out int bitsRead)
         {
             Debug.Assert((uint)count <= 64);
-            if (count == 0)
-            {
-                bitsRead = 0;
-                return 0UL;
-            }
 
             ulong value;
             while (_bitCount < count)

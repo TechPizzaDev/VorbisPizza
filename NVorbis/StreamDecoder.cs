@@ -17,14 +17,13 @@ namespace NVorbis
     public sealed class StreamDecoder : IStreamDecoder
     {
         private IPacketProvider _packetProvider;
-        private IFactory _factory;
         private StreamStats _stats;
 
         private byte _channels;
         private int _sampleRate;
         private int _block0Size;
         private int _block1Size;
-        private IMode[] _modes;
+        private Mode[] _modes;
         private int _modeFieldBits;
 
         private string _vendor;
@@ -47,14 +46,8 @@ namespace NVorbis
         /// </summary>
         /// <param name="packetProvider">A <see cref="IPacketProvider"/> instance for the decoder to read from.</param>
         public StreamDecoder(IPacketProvider packetProvider)
-            : this(packetProvider, new Factory())
-        {
-        }
-
-        internal StreamDecoder(IPacketProvider packetProvider, IFactory factory)
         {
             _packetProvider = packetProvider ?? throw new ArgumentNullException(nameof(packetProvider));
-            _factory = factory ?? throw new ArgumentNullException(nameof(factory));
 
             _stats = new StreamStats();
 
@@ -246,15 +239,11 @@ namespace NVorbis
                 return false;
             }
 
-            var mdct = _factory.CreateMdct();
-            var huffman = _factory.CreateHuffman();
-
             // read the books
             var books = new Codebook[packet.ReadBits(8) + 1];
             for (var i = 0; i < books.Length; i++)
             {
-                books[i] = _factory.CreateCodebook();
-                books[i].Init(packet, huffman);
+                books[i] = new Codebook(packet);
             }
 
             // Vorbis never used this feature, so we just skip the appropriate number of bits
@@ -265,32 +254,28 @@ namespace NVorbis
             var floors = new IFloor[packet.ReadBits(6) + 1];
             for (var i = 0; i < floors.Length; i++)
             {
-                floors[i] = _factory.CreateFloor(packet);
-                floors[i].Init(packet, _channels, _block0Size, _block1Size, books);
+                floors[i] = CreateFloor(packet, _block0Size, _block1Size, books);
             }
 
             // read the residues
-            var residues = new IResidue[packet.ReadBits(6) + 1];
+            var residues = new Residue0[packet.ReadBits(6) + 1];
             for (var i = 0; i < residues.Length; i++)
             {
-                residues[i] = _factory.CreateResidue(packet);
-                residues[i].Init(packet, _channels, books);
+                residues[i] = CreateResidue(packet, _channels, books);
             }
 
             // read the mappings
-            var mappings = new IMapping[packet.ReadBits(6) + 1];
+            var mappings = new Mapping[packet.ReadBits(6) + 1];
             for (var i = 0; i < mappings.Length; i++)
             {
-                mappings[i] = _factory.CreateMapping(packet);
-                mappings[i].Init(packet, _channels, floors, residues, mdct);
+                mappings[i] = CreateMapping(packet, _channels, floors, residues);
             }
 
             // read the modes
-            _modes = new IMode[packet.ReadBits(6) + 1];
+            _modes = new Mode[packet.ReadBits(6) + 1];
             for (var i = 0; i < _modes.Length; i++)
             {
-                _modes[i] = _factory.CreateMode();
-                _modes[i].Init(packet, _channels, _block0Size, _block1Size, mappings);
+                _modes[i] = new Mode(packet, _channels, _block0Size, _block1Size, mappings);
             }
 
             // verify the closing bit
@@ -302,6 +287,38 @@ namespace NVorbis
             _stats.AddPacket(-1, packet.BitsRead, packet.BitsRemaining, packet.ContainerOverheadBits);
 
             return true;
+        }
+
+        private static IFloor CreateFloor(DataPacket packet, int block0Size, int block1Size, Codebook[] codebooks)
+        {
+            var type = (int)packet.ReadBits(16);
+            switch (type)
+            {
+                case 0: return new Floor0(packet, block0Size, block1Size, codebooks);
+                case 1: return new Floor1(packet, codebooks);
+                default: throw new InvalidDataException("Invalid floor type!");
+            }
+        }
+
+        private static Mapping CreateMapping(DataPacket packet, int channels, IFloor[] floors, Residue0[] residues)
+        {
+            if (packet.ReadBits(16) != 0)
+            {
+                throw new InvalidDataException("Invalid mapping type!");
+            }
+            return new Mapping(packet, channels, floors, residues);
+        }
+
+        private static Residue0 CreateResidue(DataPacket packet, int channels, Codebook[] codebooks)
+        {
+            var type = (int)packet.ReadBits(16);
+            switch (type)
+            {
+                case 0: return new Residue0(packet, channels, codebooks);
+                case 1: return new Residue1(packet, channels, codebooks);
+                case 2: return new Residue2(packet, channels, codebooks);
+                default: throw new InvalidDataException("Invalid residue type!");
+            }
         }
 
         #endregion

@@ -31,12 +31,12 @@ namespace NVorbis.Contracts
         bool CanSeek { get; }
 
         /// <summary>
-        /// Gets the number of bits dedicated to container framing and overhead.
+        /// Gets the number of bits in the container that are strictly for framing of logical streams.
         /// </summary>
         long ContainerBits { get; }
 
         /// <summary>
-        /// Gets the number of bits that were skipped due to container framing and overhead.
+        /// Gets the number of bits in the container that are not associated with a logical stream.
         /// </summary>
         long WasteBits { get; }
 

@@ -8,17 +8,14 @@ namespace NVorbis
     // Packed LSP values on dB amplittude and Bark frequency scale.  Virtually unused (libvorbis did not use past beta 4).  Probably untested.
     class Floor0 : IFloor
     {
-        class Data : IFloorData
+        sealed class Data : FloorData
         {
             internal float[] Coeff;
             internal float Amp;
 
-            public bool ExecuteChannel => (ForceEnergy || Amp > 0f) && !ForceNoEnergy;
+            public override bool ExecuteChannel => (ForceEnergy || Amp > 0f) && !ForceNoEnergy;
 
-            public bool ForceEnergy { get; set; }
-            public bool ForceNoEnergy { get; set; }
-
-            public void Reset()
+            public override void Reset()
             {
                 Array.Clear(Coeff);
                 Amp = 0;
@@ -33,7 +30,7 @@ namespace NVorbis
         Dictionary<int, float[]> _wMap;
         Dictionary<int, int[]> _barkMaps;
 
-        public void Init(DataPacket packet, int channels, int block0Size, int block1Size, Codebook[] codebooks)
+        public Floor0(DataPacket packet, int block0Size, int block1Size, Codebook[] codebooks)
         {
             // this is pretty well stolen directly from libvorbis...  BSD license
             _order = (int)packet.ReadBits(8);
@@ -72,7 +69,7 @@ namespace NVorbis
             };
         }
 
-        public IFloorData CreateFloorData()
+        public FloorData CreateFloorData()
         {
             return new Data
             {
@@ -111,7 +108,7 @@ namespace NVorbis
             return map;
         }
 
-        public void Unpack(DataPacket packet, IFloorData floorData, int blockSize, int channel)
+        public void Unpack(DataPacket packet, FloorData floorData, int blockSize, int channel)
         {
             var data = (Data)floorData;
             
@@ -163,7 +160,7 @@ namespace NVorbis
             }
         }
 
-        public void Apply(IFloorData floorData, int blockSize, float[] residue)
+        public void Apply(FloorData floorData, int blockSize, float[] residue)
         {
             var data = (Data)floorData;
             var n = blockSize / 2;

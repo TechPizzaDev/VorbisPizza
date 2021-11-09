@@ -7,13 +7,11 @@ namespace NVorbis.Ogg
 {
     class ForwardOnlyPageReader : PageReaderBase
     {
-        internal static Func<IPageReader, int, IForwardOnlyPacketProvider> CreatePacketProvider { get; set; } = (pr, ss) => new ForwardOnlyPacketProvider(pr, ss);
-
         private readonly Dictionary<int, IForwardOnlyPacketProvider> _packetProviders = new Dictionary<int, IForwardOnlyPacketProvider>();
-        private readonly Func<Contracts.IPacketProvider, bool> _newStreamCallback;
+        private readonly NewStreamCallback _newStreamCallback;
 
-        public ForwardOnlyPageReader(Stream stream, bool closeOnDispose, Func<Contracts.IPacketProvider, bool> newStreamCallback)
-            : base(stream, closeOnDispose)
+        public ForwardOnlyPageReader(Stream stream, bool leaveOpen, NewStreamCallback newStreamCallback)
+            : base(stream, leaveOpen)
         {
             _newStreamCallback = newStreamCallback;
         }
@@ -37,7 +35,7 @@ namespace NVorbis.Ogg
             }
 
             // try to add the stream to the list.
-            pp = CreatePacketProvider(this, streamSerial);
+            pp = new ForwardOnlyPacketProvider(this, streamSerial);
             if (pp.AddPage(pageBuf, isResync))
             {
                 _packetProviders.Add(streamSerial, pp);

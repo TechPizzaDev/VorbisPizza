@@ -3,17 +3,15 @@ using System;
 
 namespace NVorbis
 {
-    class Mode : IMode
+    class Mode
     {
-        const float M_PI2 = 3.1415926539f / 2;
-
         int _channels;
         bool _blockFlag;
         int _block0Size;
         int _block1Size;
-        IMapping _mapping;
+        Mapping _mapping;
 
-        public void Init(DataPacket packet, int channels, int block0Size, int block1Size, IMapping[] mappings)
+        public Mode(DataPacket packet, int channels, int block0Size, int block1Size, Mapping[] mappings)
         {
             _channels = channels;
             _block0Size = block0Size;
@@ -72,9 +70,9 @@ namespace NVorbis
 
                 for (int i = 0; i < left; i++)
                 {
-                    var x = (float)Math.Sin((i + .5) / left * M_PI2);
+                    var x = Math.Sin((i + .5) / left * Math.PI / 2);
                     x *= x;
-                    array[leftbegin + i] = (float)Math.Sin(x * M_PI2);
+                    array[leftbegin + i] = (float)Math.Sin(x * Math.PI / 2);
                 }
 
                 for (int i = leftbegin + left; i < rightbegin; i++)
@@ -84,14 +82,22 @@ namespace NVorbis
 
                 for (int i = 0; i < right; i++)
                 {
-                    var x = (float)Math.Sin((right - i - .5) / right * M_PI2);
+                    var x = Math.Sin((right - i - .5) / right * Math.PI / 2);
                     x *= x;
-                    array[rightbegin + i] = (float)Math.Sin(x * M_PI2);
+                    array[rightbegin + i] = (float)Math.Sin(x * Math.PI / 2);
                 }
             }
         }
 
-        private bool GetPacketInfo(DataPacket packet, bool isLastInPage, out int blockSize, out int windowIndex, out int leftOverlapHalfSize, out int packetStartIndex, out int packetValidLength, out int packetTotalLength)
+        private bool GetPacketInfo(
+            DataPacket packet,
+            bool isLastInPage, 
+            out int blockSize,
+            out int windowIndex, 
+            out int leftOverlapHalfSize,
+            out int packetStartIndex,
+            out int packetValidLength,
+            out int packetTotalLength)
         {
             bool prevFlag, nextFlag;
             if (_blockFlag)
@@ -126,15 +132,29 @@ namespace NVorbis
 
             if (isLastInPage && _blockFlag && !nextFlag)
             {
-                // this fixes a bug in certain libvorbis versions where a long->short that crosses a page boundary doesn't get counted correctly in the first page's granulePos
+                // this fixes a bug in certain libvorbis versions where a long->short that crosses
+                // a page boundary doesn't get counted correctly in the first page's granulePos
                 packetValidLength -= _block1Size / 4 - _block0Size / 4;
             }
             return true;
         }
 
-        public bool Decode(DataPacket packet, float[][] buffer, out int packetStartindex, out int packetValidLength, out int packetTotalLength)
+        public bool Decode(
+            DataPacket packet, 
+            float[][] buffer, 
+            out int packetStartindex,
+            out int packetValidLength,
+            out int packetTotalLength)
         {
-            if (GetPacketInfo(packet, false, out var blockSize, out var windowIndex, out _, out packetStartindex, out packetValidLength, out packetTotalLength))
+            if (GetPacketInfo(
+                packet, 
+                isLastInPage: false, 
+                out var blockSize,
+                out var windowIndex, 
+                out _,
+                out packetStartindex,
+                out packetValidLength,
+                out packetTotalLength))
             {
                 _mapping.DecodePacket(packet, blockSize, _channels, buffer);
 

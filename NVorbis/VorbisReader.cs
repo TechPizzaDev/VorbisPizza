@@ -10,12 +10,9 @@ namespace NVorbis
     /// </summary>
     public sealed class VorbisReader : IVorbisReader
     {
-        internal static Func<Stream, bool, IContainerReader> CreateContainerReader { get; set; } = (s, cod) => new Ogg.ContainerReader(s, cod);
-        internal static Func<IPacketProvider, IStreamDecoder> CreateStreamDecoder { get; set; } = pp => new StreamDecoder(pp, Factory.Instance);
-
         private readonly List<IStreamDecoder> _decoders;
         private readonly IContainerReader _containerReader;
-        private readonly bool _closeOnDispose;
+        private readonly bool _leaveOpen;
 
         private IStreamDecoder _streamDecoder;
 
@@ -37,12 +34,12 @@ namespace NVorbis
         /// Creates a new instance of <see cref="VorbisReader"/> reading from the specified stream, optionally taking ownership of it.
         /// </summary>
         /// <param name="stream">The <see cref="Stream"/> to read from.</param>
-        /// <param name="closeOnDispose"><see langword="true"/> to take ownership and clean up the instance when disposed, otherwise <see langword="false"/>.</param>
-        public VorbisReader(Stream stream, bool closeOnDispose = true)
+        /// <param name="leaveOpen"><see langword="false"/> to dispose the stream when disposed, otherwise <see langword="true"/>.</param>
+        public VorbisReader(Stream stream, bool leaveOpen)
         {
             _decoders = new List<IStreamDecoder>();
 
-            var containerReader = CreateContainerReader(stream, closeOnDispose);
+            var containerReader = new Ogg.ContainerReader(stream, leaveOpen);
             containerReader.NewStreamCallback = ProcessNewStream;
 
             if (!containerReader.TryInit() || _decoders.Count == 0)
@@ -50,21 +47,21 @@ namespace NVorbis
                 containerReader.NewStreamCallback = null;
                 containerReader.Dispose();
 
-                if (closeOnDispose)
+                if (!leaveOpen)
                 {
                     stream.Dispose();
                 }
 
                 throw new ArgumentException("Could not load the specified container!", nameof(containerReader));
             }
-            _closeOnDispose = closeOnDispose;
+            _leaveOpen = leaveOpen;
             _containerReader = containerReader;
             _streamDecoder = _decoders[0];
         }
-        
+
         private bool ProcessNewStream(IPacketProvider packetProvider)
         {
-            var decoder = CreateStreamDecoder(packetProvider);
+            var decoder = new StreamDecoder(packetProvider);
             decoder.ClipSamples = true;
 
             var ea = new NewStreamEventArgs(decoder);
@@ -94,7 +91,7 @@ namespace NVorbis
             if (_containerReader != null)
             {
                 _containerReader.NewStreamCallback = null;
-                if (_closeOnDispose)
+                if (!_leaveOpen)
                 {
                     _containerReader.Dispose();
                 }

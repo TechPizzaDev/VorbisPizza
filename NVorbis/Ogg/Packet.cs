@@ -9,10 +9,6 @@ namespace NVorbis.Ogg
     {
         private static byte[] _oneByte = new byte[1];
 
-        // size with 1-2 packet segments (> 2 packet segments should be very uncommon):
-        //   x86:  68 bytes
-        //   x64: 104 bytes
-
         // this is the list of pages & packets in packed 24:8 format
         // in theory, this is good for up to 1016 GiB of Ogg file
         // in practice, probably closer to 300 days @ 160k bps
@@ -21,8 +17,8 @@ namespace NVorbis.Ogg
 
         private IPacketReader _packetReader;
         private int _dataCount;
-        private ArraySegment<byte> _data;
-        private int _dataIndex;
+        private byte[] _data;
+        private int _dataPartIndex;
         private int _dataOfs;
         private int _dataEnd;
 
@@ -53,14 +49,14 @@ namespace NVorbis.Ogg
 
         private void SetData(ArraySegment<byte> data)
         {
-            _data = data;
+            _data = data.Array;
             _dataOfs = data.Offset;
             _dataEnd = data.Offset + data.Count;
         }
 
         protected override int ReadNextByte()
         {
-            int b = Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(_data.Array), _dataOfs);
+            int b = Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(_data), _dataOfs);
 
             if (++_dataOfs == _dataEnd)
             {
@@ -72,30 +68,32 @@ namespace NVorbis.Ogg
 
         private void GetNextPacketData(ref int b)
         {
-            if (++_dataIndex < GetDataPartCount())
+            if (++_dataPartIndex < GetDataPartCount())
             {
-                SetData(_packetReader.GetPacketData(GetDataPart(_dataIndex)));
-                _dataCount += _data.Count * 8;
+                var data = _packetReader.GetPacketData(GetDataPart(_dataPartIndex));
+                SetData(data);
+                _dataCount += data.Count * 8;
             }
             else
             {
                 // Data is already the special array;
                 // there was an attempt to read past the end of the packet so invalidate the read.
-                if (_data.Array == _oneByte)
+                if (_data == _oneByte)
                     b = -1;
 
                 SetData(_oneByte);
 
                 // Restore to previous index to not overflow ever
-                _dataIndex--;
+                _dataPartIndex--;
             }
         }
 
         public override void Reset()
         {
-            _dataIndex = 0;
-            SetData(_packetReader.GetPacketData(_firstDataPart));
-            _dataCount = _data.Count * 8;
+            _dataPartIndex = 0;
+            var data = _packetReader.GetPacketData(_firstDataPart);
+            SetData(data);
+            _dataCount = data.Count * 8;
 
             base.Reset();
         }
