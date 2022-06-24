@@ -25,10 +25,10 @@ namespace NVorbis.Ogg
         /// </summary>
         public IReadOnlyList<IPacketProvider> GetStreams()
         {
-            var list = new List<IPacketProvider>(_packetProviders.Count);
-            for (var i = 0; i < _packetProviders.Count; i++)
+            List<IPacketProvider> list = new List<IPacketProvider>(_packetProviders.Count);
+            for (int i = 0; i < _packetProviders.Count; i++)
             {
-                if (_packetProviders[i].TryGetTarget(out var pp))
+                if (_packetProviders[i].TryGetTarget(out IPacketProvider pp))
                 {
                     list.Add(pp);
                 }
@@ -109,7 +109,7 @@ namespace NVorbis.Ogg
 
         private bool ProcessNewStream(IPacketProvider packetProvider)
         {
-            var relock = _reader.Release();
+            bool relock = _reader.Release();
             try
             {
                 if (NewStreamCallback?.Invoke(packetProvider) ?? true)

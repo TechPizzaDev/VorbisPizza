@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -31,7 +31,7 @@ namespace TestApp
             // samplerate
             _writer.Write(sampleRate);
             // averagebytespersecond
-            var blockAlign = channels * sizeof(float);
+            int blockAlign = channels * sizeof(float);
             _writer.Write(blockAlign * sampleRate);
             // blockalign
             _writer.Write((short)blockAlign);
@@ -45,7 +45,7 @@ namespace TestApp
 
         public void WriteSamples(float[] buf, int offset, int count)
         {
-            for (var i = 0; i < count; i++, offset++)
+            for (int i = 0; i < count; i++, offset++)
             {
                 _writer.Write(buf[offset]);
             }

@@ -17,7 +17,7 @@ namespace NVorbis
         {
             for (int i = 0; i < buffer.Length; i++)
             {
-                var value = (byte)packet.TryPeekBits(8, out var bitsRead);
+                byte value = (byte)packet.TryPeekBits(8, out int bitsRead);
                 if (bitsRead == 0)
                 {
                     return i;
@@ -36,11 +36,11 @@ namespace NVorbis
         /// <returns>A byte array holding the data read.</returns>
         public static byte[] ReadBytes(this DataPacket packet, int count)
         {
-            var buf = new byte[count];
-            var cnt = Read(packet, buf.AsSpan(0, count));
+            byte[] buf = new byte[count];
+            int cnt = Read(packet, buf.AsSpan(0, count));
             if (cnt < count)
             {
-                var temp = new byte[cnt];
+                byte[] temp = new byte[cnt];
                 Buffer.BlockCopy(buf, 0, temp, 0, cnt);
                 return temp;
             }

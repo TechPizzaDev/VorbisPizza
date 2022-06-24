@@ -15,9 +15,9 @@ namespace NVorbis
         public static Huffman GenerateTable<TList>(TList values, int[] lengthList, int[] codeList)
             where TList : IReadOnlyList<int>
         {
-            var list = new HuffmanListNode[lengthList.Length];
+            HuffmanListNode[] list = new HuffmanListNode[lengthList.Length];
 
-            var maxLen = 0;
+            int maxLen = 0;
             for (int i = 0; i < list.Length; i++)
             {
                 list[i] = new HuffmanListNode
@@ -35,14 +35,14 @@ namespace NVorbis
 
             Array.Sort(list, 0, list.Length);
 
-            var tableBits = maxLen > MAX_TABLE_BITS ? MAX_TABLE_BITS : maxLen;
+            int tableBits = maxLen > MAX_TABLE_BITS ? MAX_TABLE_BITS : maxLen;
 
-            var prefixList = new HuffmanListNode[1 << tableBits];
+            HuffmanListNode[] prefixList = new HuffmanListNode[1 << tableBits];
 
             List<HuffmanListNode> overflowList = null;
             for (int i = 0; i < list.Length && list[i].Length < 99999; i++)
             {
-                var itemBits = list[i].Length;
+                int itemBits = list[i].Length;
                 if (itemBits > tableBits)
                 {
                     overflowList = new List<HuffmanListNode>(list.Length - i);
@@ -53,11 +53,11 @@ namespace NVorbis
                 }
                 else
                 {
-                    var maxVal = 1 << (tableBits - itemBits);
-                    var item = list[i];
+                    int maxVal = 1 << (tableBits - itemBits);
+                    HuffmanListNode item = list[i];
                     for (int j = 0; j < maxVal; j++)
                     {
-                        var idx = (j << itemBits) | item.Bits;
+                        int idx = (j << itemBits) | item.Bits;
                         prefixList[idx] = item;
                     }
                 }

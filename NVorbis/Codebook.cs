@@ -1,4 +1,4 @@
-﻿using NVorbis.Contracts;
+using NVorbis.Contracts;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -54,7 +54,7 @@ namespace NVorbis
         public Codebook(DataPacket packet)
         {
             // first, check the sync pattern
-            var chkVal = packet.ReadBits(24);
+            ulong chkVal = packet.ReadBits(24);
             if (chkVal != 0x564342UL) throw new InvalidDataException("Book header had invalid signature!");
 
             // get the counts
@@ -77,10 +77,10 @@ namespace NVorbis
             if (packet.ReadBit())
             {
                 // ordered
-                var len = (int)packet.ReadBits(5) + 1;
-                for (var i = 0; i < Entries;)
+                int len = (int)packet.ReadBits(5) + 1;
+                for (int i = 0; i < Entries;)
                 {
-                    var cnt = (int)packet.ReadBits(Utils.ilog(Entries - i));
+                    int cnt = (int)packet.ReadBits(Utils.ilog(Entries - i));
 
                     while (--cnt >= 0)
                     {
@@ -98,7 +98,7 @@ namespace NVorbis
                 // unordered
                 maxLen = -1;
                 sparse = packet.ReadBit();
-                for (var i = 0; i < Entries; i++)
+                for (int i = 0; i < Entries; i++)
                 {
                     if (!sparse || packet.ReadBit())
                     {
@@ -156,7 +156,7 @@ namespace NVorbis
                 if (!ComputeCodewords(sparse, codewords, codewordLengths, _lengths.AsSpan(0, Entries), values))
                     throw new InvalidDataException();
 
-                var lengthList = codewordLengths ?? _lengths;
+                int[] lengthList = codewordLengths ?? _lengths;
                 Huffman huffman = values != null
                     ? Huffman.GenerateTable(values, lengthList, codewords)
                     : Huffman.GenerateTable(new FastRange(0, codewords.Length), lengthList, codewords);
@@ -224,15 +224,15 @@ namespace NVorbis
             MapType = (int)packet.ReadBits(4);
             if (MapType == 0) return;
 
-            var minValue = Utils.ConvertFromVorbisFloat32((uint)packet.ReadBits(32));
-            var deltaValue = Utils.ConvertFromVorbisFloat32((uint)packet.ReadBits(32));
-            var valueBits = (int)packet.ReadBits(4) + 1;
-            var sequence_p = packet.ReadBit();
+            float minValue = Utils.ConvertFromVorbisFloat32((uint)packet.ReadBits(32));
+            float deltaValue = Utils.ConvertFromVorbisFloat32((uint)packet.ReadBits(32));
+            int valueBits = (int)packet.ReadBits(4) + 1;
+            bool sequence_p = packet.ReadBit();
 
             int entries = Entries;
             int dimensions = Dimensions;
-            var lookupValueCount = entries * dimensions;
-            var lookupTable = new float[lookupValueCount];
+            int lookupValueCount = entries * dimensions;
+            float[] lookupTable = new float[lookupValueCount];
             ref float lookup = ref lookupTable[0];
 
             if (MapType == 1)
@@ -240,8 +240,8 @@ namespace NVorbis
                 lookupValueCount = lookup1_values();
             }
 
-            var multiplicands = new ushort[lookupValueCount];
-            for (var i = 0; i < multiplicands.Length; i++)
+            ushort[] multiplicands = new ushort[lookupValueCount];
+            for (int i = 0; i < multiplicands.Length; i++)
             {
                 multiplicands[i] = (ushort)packet.ReadBits(valueBits);
             }
@@ -250,16 +250,16 @@ namespace NVorbis
             // now that we have the initial data read in, calculate the entry tree
             if (MapType == 1)
             {
-                for (var idx = 0; idx < entries; idx++)
+                for (int idx = 0; idx < entries; idx++)
                 {
-                    var last = 0f;
-                    var idxDiv = 1;
+                    float last = 0f;
+                    int idxDiv = 1;
                     ref float dimLookup = ref Unsafe.Add(ref lookup, idx * dimensions);
 
-                    for (var i = 0; i < dimensions; i++)
+                    for (int i = 0; i < dimensions; i++)
                     {
-                        var moff = (idx / idxDiv) % lookupValueCount;
-                        var value = Unsafe.Add(ref muls, moff) * deltaValue + minValue + last;
+                        int moff = (idx / idxDiv) % lookupValueCount;
+                        float value = Unsafe.Add(ref muls, moff) * deltaValue + minValue + last;
                         Unsafe.Add(ref dimLookup, i) = value;
 
                         if (sequence_p) last = value;
@@ -270,15 +270,15 @@ namespace NVorbis
             }
             else
             {
-                for (var idx = 0; idx < entries; idx++)
+                for (int idx = 0; idx < entries; idx++)
                 {
-                    var last = 0f;
+                    float last = 0f;
                     nint moff = idx * dimensions;
                     ref float dimLookup = ref Unsafe.Add(ref lookup, idx * dimensions);
 
-                    for (var i = 0; i < dimensions; i++)
+                    for (int i = 0; i < dimensions; i++)
                     {
-                        var value = Unsafe.Add(ref muls, moff) * deltaValue + minValue + last;
+                        float value = Unsafe.Add(ref muls, moff) * deltaValue + minValue + last;
                         Unsafe.Add(ref dimLookup, i) = value;
 
                         if (sequence_p) last = value;
@@ -293,7 +293,7 @@ namespace NVorbis
 
         int lookup1_values()
         {
-            var r = (int)Math.Floor(Math.Exp(Math.Log(Entries) / Dimensions));
+            int r = (int)Math.Floor(Math.Exp(Math.Log(Entries) / Dimensions));
 
             if (Math.Floor(Math.Pow(r + 1, Dimensions)) <= Entries) ++r;
 
@@ -302,11 +302,11 @@ namespace NVorbis
 
         public int DecodeScalar(DataPacket packet)
         {
-            var data = (int)packet.TryPeekBits(_prefixBitLength, out var bitsRead);
+            int data = (int)packet.TryPeekBits(_prefixBitLength, out int bitsRead);
             if (bitsRead == 0) return -1;
 
             // try to get the value from the prefix list...
-            var node = Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(_prefixList), data);
+            HuffmanListNode node = Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(_prefixList), data);
             if (node.Length != 0)
             {
                 packet.SkipBits(node.Length);
@@ -319,12 +319,12 @@ namespace NVorbis
 
         private int DecodeOverflowScalar(DataPacket packet)
         {
-            var data = (int)packet.TryPeekBits(_maxBits, out _);
+            int data = (int)packet.TryPeekBits(_maxBits, out _);
 
-            var overflowList = _overflowList;
-            for (var i = 0; i < overflowList.Length; i++)
+            HuffmanListNode[] overflowList = _overflowList;
+            for (int i = 0; i < overflowList.Length; i++)
             {
-                ref var node = ref overflowList[i];
+                ref HuffmanListNode node = ref overflowList[i];
                 if (node.Bits == (data & node.Mask))
                 {
                     packet.SkipBits(node.Length);

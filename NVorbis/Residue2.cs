@@ -28,14 +28,14 @@ namespace NVorbis
             nint o = offset / channels;
             for (int c = 0; c < partitionSize;)
             {
-                var entry = codebook.DecodeScalar(packet);
+                int entry = codebook.DecodeScalar(packet);
                 if (entry == -1)
                 {
                     return true;
                 }
 
-                var lookup = codebook.GetLookup(entry);
-                for (var d = 0; d < lookup.Length; d++, c++)
+                ReadOnlySpan<float> lookup = codebook.GetLookup(entry);
+                for (int d = 0; d < lookup.Length; d++, c++)
                 {
                     residue[ch][o] += lookup[d];
                     if (++ch == channels)

@@ -11,7 +11,7 @@ namespace NVorbis.Contracts
 
         public int CompareTo(HuffmanListNode y)
         {
-            var len = Length - y.Length;
+            int len = Length - y.Length;
             if (len == 0)
             {
                 return Bits - y.Bits;

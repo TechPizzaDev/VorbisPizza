@@ -48,14 +48,14 @@ namespace NVorbis.Ogg
             else
             {
                 // check the sequence number
-                var seqNo = BitConverter.ToInt32(buf, 18);
+                int seqNo = BitConverter.ToInt32(buf, 18);
                 isResync |= seqNo != _lastSeqNo + 1;
                 _lastSeqNo = seqNo;
             }
 
             // there must be at least one packet with data
-            var ttl = 0;
-            for (var i = 0; i < buf[26]; i++)
+            int ttl = 0;
+            for (int i = 0; i < buf[26]; i++)
             {
                 ttl += buf[27 + i];
             }
@@ -143,8 +143,8 @@ namespace NVorbis.Ogg
             }
 
             // first, set flags from the start page
-            var contOverhead = dataStart;
-            var isFirst = packetIndex == 27;
+            int contOverhead = dataStart;
+            bool isFirst = packetIndex == 27;
             if (isCont)
             {
                 if (isFirst)
@@ -169,12 +169,12 @@ namespace NVorbis.Ogg
             }
 
             // second, determine how long the packet is
-            var dataLen = GetPacketLength(pageBuf, ref packetIndex);
-            var packetBuf = new Memory<byte>(pageBuf, dataStart, dataLen);
+            int dataLen = GetPacketLength(pageBuf, ref packetIndex);
+            Memory<byte> packetBuf = new Memory<byte>(pageBuf, dataStart, dataLen);
             dataStart += dataLen;
 
             // third, determine if the packet is the last one in the page
-            var isLast = packetIndex == 27 + pageBuf[26];
+            bool isLast = packetIndex == 27 + pageBuf[26];
             if (isCntd)
             {
                 if (isLast)
@@ -185,14 +185,14 @@ namespace NVorbis.Ogg
                 else
                 {
                     // whelp, not quite...  gotta account for the continued packet
-                    var pi = packetIndex;
+                    int pi = packetIndex;
                     GetPacketLength(pageBuf, ref pi);
                     isLast = pi == 27 + pageBuf[26];
                 }
             }
 
             // forth, if it is the last one, process continuations or flags & granulePos
-            var isEos = false;
+            bool isEos = false;
             long? granulePos = null;
             if (isLast)
             {
@@ -216,10 +216,10 @@ namespace NVorbis.Ogg
                         contOverhead += 27 + pageBuf[26];
 
                         // save off the previous buffer data
-                        var prevBuf = packetBuf;
+                        Memory<byte> prevBuf = packetBuf;
 
                         // get the size of this page's portion
-                        var contSz = GetPacketLength(pageBuf, ref packetIndex);
+                        int contSz = GetPacketLength(pageBuf, ref packetIndex);
 
                         // set up the new buffer and fill it
                         packetBuf = new Memory<byte>(new byte[prevBuf.Length + contSz]);
@@ -268,7 +268,7 @@ namespace NVorbis.Ogg
                 }
             }
 
-            var temp = _pageQueue.Dequeue();
+            (byte[] buf, bool isResync) temp = _pageQueue.Dequeue();
             pageBuf = temp.buf;
             isResync = temp.isResync;
 
@@ -281,7 +281,7 @@ namespace NVorbis.Ogg
 
         private int GetPacketLength(byte[] pageBuf, ref int packetIndex)
         {
-            var len = 0;
+            int len = 0;
             while (pageBuf[packetIndex] == 255 && packetIndex < pageBuf[26] + 27)
             {
                 len += pageBuf[packetIndex];

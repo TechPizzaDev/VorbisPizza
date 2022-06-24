@@ -23,7 +23,7 @@ namespace NVorbis
                 throw new System.IO.InvalidDataException("Mode header had invalid window or transform type!");
             }
 
-            var mappingIdx = (int)packet.ReadBits(8);
+            int mappingIdx = (int)packet.ReadBits(8);
             if (mappingIdx >= mappings.Length)
             {
                 throw new System.IO.InvalidDataException("Mode header had invalid mapping index!");
@@ -59,18 +59,18 @@ namespace NVorbis
 
             for (int idx = 0; idx < Windows.Length; idx++)
             {
-                var array = Windows[idx];
+                float[] array = Windows[idx];
 
-                var left = ((idx & 1) == 0 ? _block0Size : _block1Size) / 2;
-                var wnd = BlockSize;
-                var right = ((idx & 2) == 0 ? _block0Size : _block1Size) / 2;
+                int left = ((idx & 1) == 0 ? _block0Size : _block1Size) / 2;
+                int wnd = BlockSize;
+                int right = ((idx & 2) == 0 ? _block0Size : _block1Size) / 2;
 
-                var leftbegin = wnd / 4 - left / 2;
-                var rightbegin = wnd - wnd / 4 - right / 2;
+                int leftbegin = wnd / 4 - left / 2;
+                int rightbegin = wnd - wnd / 4 - right / 2;
 
                 for (int i = 0; i < left; i++)
                 {
-                    var x = Math.Sin((i + .5) / left * Math.PI / 2);
+                    double x = Math.Sin((i + .5) / left * Math.PI / 2);
                     x *= x;
                     array[leftbegin + i] = (float)Math.Sin(x * Math.PI / 2);
                 }
@@ -82,7 +82,7 @@ namespace NVorbis
 
                 for (int i = 0; i < right; i++)
                 {
-                    var x = Math.Sin((right - i - .5) / right * Math.PI / 2);
+                    double x = Math.Sin((right - i - .5) / right * Math.PI / 2);
                     x *= x;
                     array[rightbegin + i] = (float)Math.Sin(x * Math.PI / 2);
                 }
@@ -122,7 +122,7 @@ namespace NVorbis
                 return false;
             }
 
-            var rightOverlapHalfSize = (nextFlag ? _block1Size : _block0Size) / 4;
+            int rightOverlapHalfSize = (nextFlag ? _block1Size : _block0Size) / 4;
 
             windowIndex = (prevFlag ? 1 : 0) + (nextFlag ? 2 : 0);
             leftOverlapHalfSize = (prevFlag ? _block1Size : _block0Size) / 4;
@@ -149,8 +149,8 @@ namespace NVorbis
             if (GetPacketInfo(
                 packet, 
                 isLastInPage: false, 
-                out var blockSize,
-                out var windowIndex, 
+                out int blockSize,
+                out int windowIndex, 
                 out _,
                 out packetStartindex,
                 out packetValidLength,
@@ -159,7 +159,7 @@ namespace NVorbis
                 _mapping.DecodePacket(packet, blockSize, _channels, buffer);
 
                 nint channels = _channels;
-                var window = Windows[windowIndex].AsSpan(0, blockSize);
+                Span<float> window = Windows[windowIndex].AsSpan(0, blockSize);
                 for (int i = 0; i < window.Length; i++)
                 {
                     float v = window[i];
@@ -175,7 +175,7 @@ namespace NVorbis
 
         public int GetPacketSampleCount(DataPacket packet, bool isLastInPage)
         {
-            GetPacketInfo(packet, isLastInPage, out _, out _, out _, out var packetStartIndex, out var packetValidLength, out _);
+            GetPacketInfo(packet, isLastInPage, out _, out _, out _, out int packetStartIndex, out int packetValidLength, out _);
             return packetValidLength - packetStartIndex;
         }
 

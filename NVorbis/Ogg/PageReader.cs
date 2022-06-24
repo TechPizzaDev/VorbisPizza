@@ -25,15 +25,15 @@ namespace NVorbis.Ogg
 
         private ushort ParsePageHeader(ReadOnlySpan<byte> pageBuf, int? streamSerial, bool? isResync)
         {
-            var segCnt = pageBuf[26];
-            var dataLen = 0;
-            var pktCnt = 0;
-            var isContinued = false;
+            byte segCnt = pageBuf[26];
+            int dataLen = 0;
+            int pktCnt = 0;
+            bool isContinued = false;
 
-            var size = 0;
+            int size = 0;
             for (int i = 0, idx = 27; i < segCnt; i++, idx++)
             {
-                var seg = pageBuf[idx];
+                byte seg = pageBuf[idx];
                 size += seg;
                 dataLen += seg;
                 if (seg < 255)
@@ -64,14 +64,14 @@ namespace NVorbis.Ogg
 
         private static ArraySegment<byte>[] ReadPackets(int packetCount, Span<byte> segments, ArraySegment<byte> dataBuffer)
         {
-            var list = new ArraySegment<byte>[packetCount];
-            var listIdx = 0;
-            var dataIdx = 0;
-            var size = 0;
+            ArraySegment<byte>[] list = new ArraySegment<byte>[packetCount];
+            int listIdx = 0;
+            int dataIdx = 0;
+            int size = 0;
 
-            for (var i = 0; i < segments.Length; i++)
+            for (int i = 0; i < segments.Length; i++)
             {
-                var seg = segments[i];
+                byte seg = segments[i];
                 size += seg;
                 if (seg < 255)
                 {
@@ -134,7 +134,7 @@ namespace NVorbis.Ogg
                 new Span<byte>(pageBuf, 27, pageBuf[26]),
                 new ArraySegment<byte>(pageBuf, 27 + pageBuf[26], pageBuf.Length - 27 - pageBuf[26]));
 
-            if (_streamReaders.TryGetValue(streamSerial, out var spr))
+            if (_streamReaders.TryGetValue(streamSerial, out IStreamPageReader spr))
             {
                 spr.AddPage();
 
@@ -147,7 +147,7 @@ namespace NVorbis.Ogg
             }
             else
             {
-                var streamReader = new StreamPageReader(this, StreamSerial);
+                StreamPageReader streamReader = new StreamPageReader(this, StreamSerial);
                 streamReader.AddPage();
                 _streamReaders.Add(StreamSerial, streamReader);
                 if (!_newStreamCallback(streamReader.PacketProvider))
@@ -175,7 +175,7 @@ namespace NVorbis.Ogg
             Span<byte> hdrBuf = stackalloc byte[282];
 
             SeekStream(offset);
-            var cnt = EnsureRead(hdrBuf.Slice(0, 27));
+            int cnt = EnsureRead(hdrBuf.Slice(0, 27));
 
             PageOffset = offset;
             if (VerifyHeader(hdrBuf, ref cnt))
@@ -190,7 +190,7 @@ namespace NVorbis.Ogg
 
         protected override void SetEndOfStreams()
         {
-            foreach (var kvp in _streamReaders)
+            foreach (KeyValuePair<int, IStreamPageReader> kvp in _streamReaders)
             {
                 kvp.Value.SetEndOfStream();
             }
@@ -224,11 +224,11 @@ namespace NVorbis.Ogg
 
             if (_packets == null)
             {
-                var pageBuf = new byte[_pageSize];
+                byte[] pageBuf = new byte[_pageSize];
                 SeekStream(PageOffset);
                 EnsureRead(pageBuf);
 
-                var length = pageBuf[26];
+                byte length = pageBuf[26];
                 _packets = ReadPackets(
                     PacketCount,
                     pageBuf.AsSpan(27, length),

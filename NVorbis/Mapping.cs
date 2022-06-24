@@ -17,26 +17,26 @@ namespace NVorbis
 
         public Mapping(DataPacket packet, int channels, IFloor[] floors, Residue0[] residues)
         {
-            var submapCount = 1;
+            int submapCount = 1;
             if (packet.ReadBit())
             {
                 submapCount += (int)packet.ReadBits(4);
             }
 
             // square polar mapping
-            var couplingSteps = 0;
+            int couplingSteps = 0;
             if (packet.ReadBit())
             {
                 couplingSteps = (int)packet.ReadBits(8) + 1;
             }
 
-            var couplingBits = Utils.ilog(channels - 1);
+            int couplingBits = Utils.ilog(channels - 1);
             _couplingAngle = new int[couplingSteps];
             _couplingMangitude = new int[couplingSteps];
-            for (var j = 0; j < couplingSteps; j++)
+            for (int j = 0; j < couplingSteps; j++)
             {
-                var magnitude = (int)packet.ReadBits(couplingBits);
-                var angle = (int)packet.ReadBits(couplingBits);
+                int magnitude = (int)packet.ReadBits(couplingBits);
+                int angle = (int)packet.ReadBits(couplingBits);
                 if (magnitude == angle || magnitude > channels - 1 || angle > channels - 1)
                 {
                     throw new System.IO.InvalidDataException("Invalid magnitude or angle in mapping header!");
@@ -50,10 +50,10 @@ namespace NVorbis
                 throw new System.IO.InvalidDataException("Reserved bits not 0 in mapping header.");
             }
 
-            var mux = new int[channels];
+            int[] mux = new int[channels];
             if (submapCount > 1)
             {
-                for (var c = 0; c < channels; c++)
+                for (int c = 0; c < channels; c++)
                 {
                     mux[c] = (int)packet.ReadBits(4);
                     if (mux[c] > submapCount)
@@ -65,15 +65,15 @@ namespace NVorbis
 
             _submapFloor = new IFloor[submapCount];
             _submapResidue = new Residue0[submapCount];
-            for (var j = 0; j < submapCount; j++)
+            for (int j = 0; j < submapCount; j++)
             {
                 packet.SkipBits(8); // unused placeholder
-                var floorNum = (int)packet.ReadBits(8);
+                int floorNum = (int)packet.ReadBits(8);
                 if (floorNum >= floors.Length)
                 {
                     throw new System.IO.InvalidDataException("Invalid floor number in mapping header!");
                 }
-                var residueNum = (int)packet.ReadBits(8);
+                int residueNum = (int)packet.ReadBits(8);
                 if (residueNum >= residues.Length)
                 {
                     throw new System.IO.InvalidDataException("Invalid residue number in mapping header!");
@@ -86,7 +86,7 @@ namespace NVorbis
             _channelFloor = new IFloor[channels];
             _channelFloorData = new FloorData[channels];
             _channelResidue = new Residue0[channels];
-            for (var c = 0; c < channels; c++)
+            for (int c = 0; c < channels; c++)
             {
                 _channelFloor[c] = _submapFloor[mux[c]];
                 _channelFloorData[c] = _channelFloor[c].CreateFloorData();
@@ -99,12 +99,12 @@ namespace NVorbis
         [SkipLocalsInit]
         public void DecodePacket(DataPacket packet, int blockSize, int channels, float[][] buffer)
         {
-            var halfBlockSize = blockSize >> 1;
+            int halfBlockSize = blockSize >> 1;
 
             // read the noise floor data
             FloorData[] floorData = _channelFloorData;
             Span<bool> noExecuteChannel = stackalloc bool[_channelFloor.Length];
-            for (var i = 0; i < _channelFloor.Length; i++)
+            for (int i = 0; i < _channelFloor.Length; i++)
             {
                 floorData[i].Reset();
                 _channelFloor[i].Unpack(packet, floorData[i], blockSize, i);
@@ -115,7 +115,7 @@ namespace NVorbis
             }
 
             // make sure we handle no-energy channels correctly given the couplings..
-            for (var i = 0; i < _couplingAngle.Length; i++)
+            for (int i = 0; i < _couplingAngle.Length; i++)
             {
                 if (floorData[_couplingAngle[i]].ExecuteChannel || floorData[_couplingMangitude[i]].ExecuteChannel)
                 {
@@ -125,9 +125,9 @@ namespace NVorbis
             }
 
             // decode the submaps into the residue buffer
-            for (var i = 0; i < _submapFloor.Length; i++)
+            for (int i = 0; i < _submapFloor.Length; i++)
             {
-                for (var j = 0; j < _channelFloor.Length; j++)
+                for (int j = 0; j < _channelFloor.Length; j++)
                 {
                     if (_submapFloor[i] != _channelFloor[j] || _submapResidue[i] != _channelResidue[j])
                     {
@@ -140,20 +140,20 @@ namespace NVorbis
             }
 
             // inverse coupling
-            for (var i = _couplingAngle.Length - 1; i >= 0; i--)
+            for (int i = _couplingAngle.Length - 1; i >= 0; i--)
             {
                 if (floorData[_couplingAngle[i]].ExecuteChannel || floorData[_couplingMangitude[i]].ExecuteChannel)
                 {
-                    var magnitude = buffer[_couplingMangitude[i]];
-                    var angle = buffer[_couplingAngle[i]];
+                    float[] magnitude = buffer[_couplingMangitude[i]];
+                    float[] angle = buffer[_couplingAngle[i]];
 
                     // we only have to do the first half; MDCT ignores the last half
-                    for (var j = 0; j < halfBlockSize; j++)
+                    for (int j = 0; j < halfBlockSize; j++)
                     {
                         float newM, newA;
 
-                        var oldM = magnitude[j];
-                        var oldA = angle[j];
+                        float oldM = magnitude[j];
+                        float oldA = angle[j];
                         if (oldM > 0)
                         {
                             if (oldA > 0)
@@ -191,7 +191,7 @@ namespace NVorbis
                 Array.Resize(ref _buf2, halfBlockSize);
 
             // apply floor / dot product / MDCT (only run if we have sound energy in that channel)
-            for (var c = 0; c < _channelFloor.Length; c++)
+            for (int c = 0; c < _channelFloor.Length; c++)
             {
                 if (floorData[c].ExecuteChannel)
                 {

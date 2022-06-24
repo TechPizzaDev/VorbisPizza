@@ -94,7 +94,7 @@ namespace NVorbis.Ogg
                 return _cachedPagePackets;
             }
 
-            var pageOffset = _pageOffsets[(int)pageIndex];
+            long pageOffset = _pageOffsets[(int)pageIndex];
             if (pageOffset < 0)
             {
                 pageOffset = -pageOffset;
@@ -104,7 +104,7 @@ namespace NVorbis.Ogg
             try
             {
                 _reader.ReadPageAt(pageOffset);
-                var packets = _reader.GetPackets();
+                ArraySegment<byte>[] packets = _reader.GetPackets();
                 if (pageIndex == _lastPageIndex)
                 {
                     _cachedPagePackets = packets;
@@ -128,8 +128,8 @@ namespace NVorbis.Ogg
             else
             {
                 // start by looking at the last read page's position...
-                var lastPageIndex = (uint)(_pageOffsets.Count - 1);
-                if (GetPageRaw(lastPageIndex, out var pageGP))
+                uint lastPageIndex = (uint)(_pageOffsets.Count - 1);
+                if (GetPageRaw(lastPageIndex, out long pageGP))
                 {
                     // most likely, we can look at previous pages for the appropriate one...
                     if (granulePos < pageGP)
@@ -197,7 +197,7 @@ namespace NVorbis.Ogg
 
         private bool GetNextPageGranulePos(out long granulePos)
         {
-            var pageCount = _pageOffsets.Count;
+            int pageCount = _pageOffsets.Count;
             while (pageCount == _pageOffsets.Count && !HasAllPages)
             {
                 _reader.Lock();
@@ -227,15 +227,15 @@ namespace NVorbis.Ogg
         private uint FindPageBisection(long granulePos, uint low, uint high, long highGranulePos)
         {
             // we can treat low as always being before the first sample; later work will correct that if needed
-            var lowGranulePos = 0L;
+            long lowGranulePos = 0L;
             uint dist;
             while ((dist = high - low) > 0)
             {
                 // try to find the right page by assumming they are all about the same size
-                var index = low + (uint)(dist * ((granulePos - lowGranulePos) / (double)(highGranulePos - lowGranulePos)));
+                uint index = low + (uint)(dist * ((granulePos - lowGranulePos) / (double)(highGranulePos - lowGranulePos)));
 
                 // go get the actual position of the selected page
-                if (!GetPageRaw(index, out var idxGranulePos))
+                if (!GetPageRaw(index, out long idxGranulePos))
                 {
                     return uint.MaxValue;
                 }
@@ -264,7 +264,7 @@ namespace NVorbis.Ogg
 
         private bool GetPageRaw(uint pageIndex, out long pageGranulePos)
         {
-            var offset = _pageOffsets[(int)pageIndex];
+            long offset = _pageOffsets[(int)pageIndex];
             if (offset < 0)
             {
                 offset = -offset;
@@ -328,7 +328,7 @@ namespace NVorbis.Ogg
 
             if (pageIndex < _pageOffsets.Count)
             {
-                var offset = _pageOffsets[(int)pageIndex];
+                long offset = _pageOffsets[(int)pageIndex];
                 if (offset < 0)
                 {
                     isResync = true;

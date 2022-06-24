@@ -157,7 +157,7 @@ namespace NVorbis
             // short-circuit 0
             if (count == 0) return 0UL;
 
-            var value = TryPeekBits(count, out _);
+            ulong value = TryPeekBits(count, out _);
 
             SkipBits(count);
 
@@ -177,7 +177,7 @@ namespace NVorbis
             ulong value;
             while (_bitCount < count)
             {
-                var val = ReadNextByte();
+                int val = ReadNextByte();
                 if (val == -1)
                 {
                     bitsRead = _bitCount;
@@ -225,7 +225,7 @@ namespace NVorbis
                     }
                     if (_bitCount > 64)
                     {
-                        var overflowCount = _bitCount - 64;
+                        int overflowCount = _bitCount - 64;
                         _bitBucket |= (ulong)_overflowBits << (_bitCount - count - overflowCount);
 
                         if (overflowCount > count)
@@ -266,7 +266,7 @@ namespace NVorbis
 
                     if (count > 0)
                     {
-                        var temp = ReadNextByte();
+                        int temp = ReadNextByte();
                         if (temp == -1)
                         {
                             IsShort = true;

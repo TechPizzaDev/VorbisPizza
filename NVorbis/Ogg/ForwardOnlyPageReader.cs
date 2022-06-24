@@ -18,7 +18,7 @@ namespace NVorbis.Ogg
 
         protected override bool AddPage(int streamSerial, byte[] pageBuf, bool isResync)
         {
-            if (_packetProviders.TryGetValue(streamSerial, out var pp))
+            if (_packetProviders.TryGetValue(streamSerial, out IForwardOnlyPacketProvider pp))
             {
                 // try to add the page...
                 if (pp.AddPage(pageBuf, isResync))
@@ -53,7 +53,7 @@ namespace NVorbis.Ogg
 
         protected override void SetEndOfStreams()
         {
-            foreach (var kvp in _packetProviders)
+            foreach (KeyValuePair<int, IForwardOnlyPacketProvider> kvp in _packetProviders)
             {
                 kvp.Value.SetEndOfStream();
             }

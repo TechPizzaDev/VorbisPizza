@@ -39,7 +39,7 @@ namespace NVorbis
         {
             _decoders = new List<IStreamDecoder>();
 
-            var containerReader = new Ogg.ContainerReader(stream, leaveOpen);
+            Ogg.ContainerReader containerReader = new Ogg.ContainerReader(stream, leaveOpen);
             containerReader.NewStreamCallback = ProcessNewStream;
 
             if (!containerReader.TryInit() || _decoders.Count == 0)
@@ -61,10 +61,10 @@ namespace NVorbis
 
         private bool ProcessNewStream(IPacketProvider packetProvider)
         {
-            var decoder = new StreamDecoder(packetProvider);
+            StreamDecoder decoder = new StreamDecoder(packetProvider);
             decoder.ClipSamples = true;
 
-            var ea = new NewStreamEventArgs(decoder);
+            NewStreamEventArgs ea = new NewStreamEventArgs(decoder);
             NewStream?.Invoke(this, ea);
             if (!ea.IgnoreStream)
             {
@@ -81,7 +81,7 @@ namespace NVorbis
         {
             if (_decoders != null)
             {
-                foreach (var decoder in _decoders)
+                foreach (IStreamDecoder decoder in _decoders)
                 {
                     decoder.Dispose();
                 }
@@ -230,8 +230,8 @@ namespace NVorbis
         {
             if (index < 0 || index >= _decoders.Count) throw new ArgumentOutOfRangeException(nameof(index));
 
-            var newDecoder = _decoders[index];
-            var oldDecoder = _streamDecoder;
+            IStreamDecoder newDecoder = _decoders[index];
+            IStreamDecoder oldDecoder = _streamDecoder;
             if (newDecoder == oldDecoder) return false;
 
             // carry-through the clipping setting

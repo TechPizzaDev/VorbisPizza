@@ -10,7 +10,7 @@ namespace NVorbis
 
         public static void Reverse(float[] samples, float[] buf2, int sampleCount)
         {
-            var impl = _setupCache.GetOrAdd(sampleCount, static (c) => new MdctImpl(c));
+            MdctImpl impl = _setupCache.GetOrAdd(sampleCount, static (c) => new MdctImpl(c));
             impl.CalcReverse(ref samples[0], ref buf2[0]);
         }
 
@@ -147,9 +147,9 @@ namespace NVorbis
                 int l = 2;
                 for (; l < (_ld - 3) >> 1; ++l)
                 {
-                    var k0 = _n >> (l + 2);
+                    int k0 = _n >> (l + 2);
                     nint k0_2 = -(k0 >> 1);
-                    var lim = 1 << (l + 1);
+                    int lim = 1 << (l + 1);
 
                     for (int i = 0; i < lim; ++i)
                     {
@@ -163,8 +163,8 @@ namespace NVorbis
                     nint k0 = _n >> (l + 2);
                     nint k1 = 1 << (l + 3);
                     nint k0_2 = -(k0 >> 1);
-                    var rlim = _n >> (l + 6);
-                    var lim = 1 << l + 1;
+                    int rlim = _n >> (l + 6);
+                    int lim = 1 << l + 1;
                     nint i_off = _n2 - 1;
                     nint A0 = 0;
 
@@ -413,14 +413,14 @@ namespace NVorbis
             static void step3_inner_s_loop(
                 int n, ref float e, nint i_off, nint k_off, nint a, nint a_off, nint k0, ref float aa)
             {
-                var A0 = Add(ref aa, a);
-                var A1 = Add(ref aa, a + 1);
-                var A2 = Add(ref aa, a + a_off);
-                var A3 = Add(ref aa, a + a_off + 1);
-                var A4 = Add(ref aa, a + a_off * 2);
-                var A5 = Add(ref aa, a + a_off * 2 + 1);
-                var A6 = Add(ref aa, a + a_off * 3);
-                var A7 = Add(ref aa, a + a_off * 3 + 1);
+                float A0 = Add(ref aa, a);
+                float A1 = Add(ref aa, a + 1);
+                float A2 = Add(ref aa, a + a_off);
+                float A3 = Add(ref aa, a + a_off + 1);
+                float A4 = Add(ref aa, a + a_off * 2);
+                float A5 = Add(ref aa, a + a_off * 2 + 1);
+                float A6 = Add(ref aa, a + a_off * 3);
+                float A7 = Add(ref aa, a + a_off * 3 + 1);
 
                 float k00, k11;
 
@@ -464,8 +464,8 @@ namespace NVorbis
 
             static void step3_inner_s_loop_ld654(int n, ref float e, int i_off, int base_n, ref float aa)
             {
-                var a_off = base_n >> 3;
-                var A2 = Add(ref aa, a_off);
+                int a_off = base_n >> 3;
+                float A2 = Add(ref aa, a_off);
                 nint z = i_off;          // e
                 nint @base = z - 16 * n; // e
 

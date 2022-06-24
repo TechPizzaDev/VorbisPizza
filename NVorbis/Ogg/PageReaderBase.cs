@@ -30,7 +30,7 @@ namespace NVorbis.Ogg
 
         private bool VerifyPage(ReadOnlySpan<byte> headerBuf, out byte[] pageBuf, out int bytesRead)
         {
-            var segCnt = headerBuf[26];
+            byte segCnt = headerBuf[26];
             if (headerBuf.Length < 27 + segCnt)
             {
                 pageBuf = null;
@@ -38,7 +38,7 @@ namespace NVorbis.Ogg
                 return false;
             }
 
-            var dataLen = 0;
+            int dataLen = 0;
             for (int i = 0; i < segCnt; i++)
             {
                 dataLen += headerBuf[i + 27];
@@ -50,7 +50,7 @@ namespace NVorbis.Ogg
             if (bytesRead != dataLen) return false;
 
             Crc crc = Crc.Create();
-            var pb0 = pageBuf.AsSpan(0, 22);
+            Span<byte> pb0 = pageBuf.AsSpan(0, 22);
             for (int i = 0; i < pb0.Length; i++)
             {
                 crc.Update(pb0[i]);
@@ -60,7 +60,7 @@ namespace NVorbis.Ogg
             crc.Update(0);
             crc.Update(0);
 
-            var pb1 = pageBuf.AsSpan(26, pageBuf.Length - 26);
+            Span<byte> pb1 = pageBuf.AsSpan(26, pageBuf.Length - 26);
             for (int i = 0; i < pb1.Length; i++)
             {
                 crc.Update(pb1[i]);
@@ -70,7 +70,7 @@ namespace NVorbis.Ogg
 
         private bool AddPage(byte[] pageBuf, bool isResync)
         {
-            var streamSerial = BitConverter.ToInt32(pageBuf, 14);
+            int streamSerial = BitConverter.ToInt32(pageBuf, 14);
             if (!_ignoredSerials.Contains(streamSerial))
             {
                 if (AddPage(streamSerial, pageBuf, isResync))
@@ -87,9 +87,9 @@ namespace NVorbis.Ogg
         {
             if (_overflowBuf != null)
             {
-                var newBuf = new byte[_overflowBuf.Length - _overflowBufIndex + count];
+                byte[] newBuf = new byte[_overflowBuf.Length - _overflowBufIndex + count];
                 Buffer.BlockCopy(_overflowBuf, _overflowBufIndex, newBuf, 0, newBuf.Length - count);
-                var index = buf.Length - count;
+                int index = buf.Length - count;
                 Buffer.BlockCopy(buf, index, newBuf, newBuf.Length - count, count);
                 _overflowBufIndex = 0;
             }
@@ -110,7 +110,7 @@ namespace NVorbis.Ogg
 
         private int FillHeader(Span<byte> buf, int maxTries = 10)
         {
-            var copyCount = 0;
+            int copyCount = 0;
             if (_overflowBuf != null)
             {
                 copyCount = Math.Min(_overflowBuf.Length - _overflowBufIndex, buf.Length);
@@ -146,7 +146,7 @@ namespace NVorbis.Ogg
 
                 if (cnt >= 27)
                 {
-                    var segCnt = buffer[26];
+                    byte segCnt = buffer[26];
                     if (isFromReadNextPage)
                     {
                         cnt += FillHeader(buffer.Slice(27, segCnt));
@@ -171,11 +171,11 @@ namespace NVorbis.Ogg
         // a short read.
         protected int EnsureRead(Span<byte> buf, int maxTries = 10)
         {
-            var read = 0;
-            var tries = 0;
+            int read = 0;
+            int tries = 0;
             do
             {
-                var cnt = _stream.Read(buf.Slice(read, buf.Length - read));
+                int cnt = _stream.Read(buf.Slice(read, buf.Length - read));
                 if (cnt == 0 && ++tries == maxTries)
                 {
                     break;
@@ -228,22 +228,22 @@ namespace NVorbis.Ogg
             // make sure we're locked; no sense reading if we aren't
             if (!CheckLock()) throw new InvalidOperationException("Must be locked prior to reading!");
 
-            var isResync = false;
+            bool isResync = false;
 
             // 27 - 4 + 27 + 255 (found sync at end of first buffer, and found page has full segment count)
             Span<byte> headerBuf = stackalloc byte[305];
 
-            var ofs = 0;
+            int ofs = 0;
             int cnt;
             PrepareStreamForNextPage();
             while ((cnt = FillHeader(headerBuf.Slice(ofs, 27 - ofs))) > 0)
             {
                 cnt += ofs;
-                for (var i = 0; i < cnt - 4; i++)
+                for (int i = 0; i < cnt - 4; i++)
                 {
                     if (VerifyHeader(headerBuf.Slice(i), ref cnt, true))
                     {
-                        if (VerifyPage(headerBuf.Slice(i, cnt), out var pageBuf, out var bytesRead))
+                        if (VerifyPage(headerBuf.Slice(i, cnt), out byte[] pageBuf, out int bytesRead))
                         {
                             // one way or the other, we have to clear out the page's bytes from the queue (if queued)
                             ClearEnqueuedData(bytesRead);

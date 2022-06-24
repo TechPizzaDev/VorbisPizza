@@ -49,11 +49,11 @@ namespace NVorbis
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         static internal Vector128<float> ClipValue(Vector128<float> value, ref Vector128<float> clipped)
         {
-            var upper = Vector128.Create(0.99999994f);
-            var lower = Vector128.Create(-0.99999994f);
+            Vector128<float> upper = Vector128.Create(0.99999994f);
+            Vector128<float> lower = Vector128.Create(-0.99999994f);
 
-            var gt = Sse.CompareGreaterThan(value, upper);
-            var lt = Sse.CompareLessThan(value, lower);
+            Vector128<float> gt = Sse.CompareGreaterThan(value, upper);
+            Vector128<float> lt = Sse.CompareLessThan(value, lower);
             clipped = Sse.Or(clipped, Sse.Or(gt, lt));
 
             if (Sse41.IsSupported)
@@ -72,9 +72,9 @@ namespace NVorbis
         static internal float ConvertFromVorbisFloat32(uint bits)
         {
             // do as much as possible with bit tricks in integer math
-            var sign = ((int)bits >> 31);   // sign-extend to the full 32-bits
-            var exponent = (double)((int)((bits & 0x7fe00000) >> 21) - 788);  // grab the exponent, remove the bias, store as double (for the call to System.Math.Pow(...))
-            var mantissa = (float)(((bits & 0x1fffff) ^ sign) + (sign & 1));  // grab the mantissa and apply the sign bit.  store as float
+            int sign = ((int)bits >> 31);   // sign-extend to the full 32-bits
+            double exponent = (double)((int)((bits & 0x7fe00000) >> 21) - 788);  // grab the exponent, remove the bias, store as double (for the call to System.Math.Pow(...))
+            float mantissa = (float)(((bits & 0x1fffff) ^ sign) + (sign & 1));  // grab the mantissa and apply the sign bit.  store as float
 
             // NB: We could use bit tricks to calc the exponent, but it can't be more than 63 in either direction.
             //     This creates an issue, since the exponent field allows for a *lot* more than that.

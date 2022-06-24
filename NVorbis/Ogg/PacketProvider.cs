@@ -47,8 +47,8 @@ namespace NVorbis.Ogg
 
         public DataPacket PeekNextPacket()
         {
-            var pageIndex = _pageIndex;
-            var packetIndex = _packetIndex;
+            uint pageIndex = _pageIndex;
+            uint packetIndex = _packetIndex;
             return GetNextPacket(ref pageIndex, ref packetIndex);
         }
 
@@ -116,7 +116,7 @@ namespace NVorbis.Ogg
             }
 
             // now get the ending granule of the page
-            if (!_reader.GetPage(pageIndex, out var pageGranulePos, out var isResync, out var isContinuation, out isContinued, out var packetCount, out _))
+            if (!_reader.GetPage(pageIndex, out long pageGranulePos, out bool isResync, out bool isContinuation, out isContinued, out uint packetCount, out _))
             {
                 throw new System.IO.InvalidDataException("Could not get found page?!");
             }
@@ -127,14 +127,14 @@ namespace NVorbis.Ogg
                 packetCount--;
             }
 
-            var packetIndex = packetCount;
-            var isLastInPage = !isContinued;
-            var endGP = pageGranulePos;
+            uint packetIndex = packetCount;
+            bool isLastInPage = !isContinued;
+            long endGP = pageGranulePos;
             while (endGP > granulePos && --packetIndex >= firstRealPacket)
             {
                 // it would be nice to pass false instead of isContinued, but (hypothetically) we don't know if getPacketGranuleCount(...) needs the whole thing...
                 // Vorbis doesn't, but someone might decide to try to use us for another purpose so we'll be good here.
-                var packet = CreatePacket(ref pageIndex, ref packetIndex, false, pageGranulePos, packetIndex == 0 && isResync, isContinued, packetCount, 0);
+                Packet packet = CreatePacket(ref pageIndex, ref packetIndex, false, pageGranulePos, packetIndex == 0 && isResync, isContinued, packetCount, 0);
                 if (packet == null)
                 {
                     throw new System.IO.InvalidDataException("Could not find end of continuation!");
@@ -147,13 +147,13 @@ namespace NVorbis.Ogg
             {
                 // either it's a continued packet OR we've hit the "long->short over page boundary" bug.
                 // in both cases we'll just return the last packet of the previous page.
-                var prevPageIndex = pageIndex;
-                var prevPacketIndex = uint.MaxValue;
+                uint prevPageIndex = pageIndex;
+                uint prevPacketIndex = uint.MaxValue;
                 if (!NormalizePacketIndex(ref prevPageIndex, ref prevPacketIndex))
                 {
                     throw new System.IO.InvalidDataException("Failed to normalize packet index?");
                 }
-                var packet = CreatePacket(ref prevPageIndex, ref prevPacketIndex, false, endGP, false, isContinuation, prevPacketIndex + 1, 0);
+                Packet packet = CreatePacket(ref prevPageIndex, ref prevPacketIndex, false, endGP, false, isContinuation, prevPacketIndex + 1, 0);
                 if (packet == null)
                 {
                     throw new System.IO.InvalidDataException("Could not load previous packet!");
@@ -171,13 +171,13 @@ namespace NVorbis.Ogg
         // if packet index is larger than the current page allows, we just return it as-is
         private bool NormalizePacketIndex(ref uint pageIndex, ref uint packetIndex)
         {
-            if (!_reader.GetPage(pageIndex, out _, out var isResync, out var isContinuation, out _, out _, out _))
+            if (!_reader.GetPage(pageIndex, out _, out bool isResync, out bool isContinuation, out _, out _, out _))
             {
                 return false;
             }
 
-            var pgIdx = pageIndex;
-            var pktIdx = packetIndex;
+            uint pgIdx = pageIndex;
+            uint pktIdx = packetIndex;
 
             while (pktIdx < (isContinuation ? 1 : 0))
             {
@@ -185,8 +185,8 @@ namespace NVorbis.Ogg
                 if (isContinuation && isResync) return false;
 
                 // get the previous packet
-                var wasContinuation = isContinuation;
-                if (!_reader.GetPage(--pgIdx, out _, out isResync, out isContinuation, out var isContinued, out var packetCount, out _))
+                bool wasContinuation = isContinuation;
+                if (!_reader.GetPage(--pgIdx, out _, out isResync, out isContinuation, out bool isContinued, out uint packetCount, out _))
                 {
                     return false;
                 }
@@ -211,7 +211,7 @@ namespace NVorbis.Ogg
             {
                 _lastPacket = null;
 
-                while (_reader.GetPage(pageIndex, out var granulePos, out var isResync, out _, out var isContinued, out var packetCount, out var pageOverhead))
+                while (_reader.GetPage(pageIndex, out long granulePos, out bool isResync, out _, out bool isContinued, out uint packetCount, out int pageOverhead))
                 {
                     _lastPacketPageIndex = pageIndex;
                     _lastPacketPacketIndex = packetIndex;
@@ -232,13 +232,13 @@ namespace NVorbis.Ogg
         private Packet CreatePacket(ref uint pageIndex, ref uint packetIndex, bool advance, long granulePos, bool isResync, bool isContinued, uint packetCount, int pageOverhead)
         {
             // create the packet list and add the item to it
-            var firstDataPart = new PacketDataPart(pageIndex, (byte)packetIndex);
+            PacketDataPart firstDataPart = new PacketDataPart(pageIndex, (byte)packetIndex);
             PacketDataPart[] dataParts = null;
 
             // make sure we handle continuations
             bool isLastPacket;
             bool isFirstPacket;
-            var finalPage = pageIndex;
+            uint finalPage = pageIndex;
             if (isContinued && packetIndex == packetCount - 1)
             {
                 // by definition, it's the first packet in the page it ends on
@@ -251,10 +251,10 @@ namespace NVorbis.Ogg
                 }
 
                 // go read the next page(s) that include this packet
-                var contPageIdx = pageIndex;
+                uint contPageIdx = pageIndex;
                 while (isContinued)
                 {
-                    if (!_reader.GetPage(++contPageIdx, out granulePos, out isResync, out var isContinuation, out isContinued, out packetCount, out var contPageOverhead))
+                    if (!_reader.GetPage(++contPageIdx, out granulePos, out isResync, out bool isContinuation, out isContinued, out packetCount, out int contPageOverhead))
                     {
                         // no more pages?  In any case, we can't satify the request
                         return null;
@@ -301,7 +301,7 @@ namespace NVorbis.Ogg
             }
 
             // create the packet instance and populate it with the appropriate initial data
-            var packet = new Packet(firstDataPart, dataParts, this)
+            Packet packet = new Packet(firstDataPart, dataParts, this)
             {
                 IsResync = isResync
             };
@@ -356,10 +356,10 @@ namespace NVorbis.Ogg
 
         public ArraySegment<byte> GetPacketData(PacketDataPart dataPart)
         {
-            var pageIndex = dataPart.PageIndex;
-            var packetIndex = dataPart.PacketIndex;
+            uint pageIndex = dataPart.PageIndex;
+            byte packetIndex = dataPart.PacketIndex;
 
-            var packets = _reader.GetPagePackets(pageIndex);
+            ArraySegment<byte>[] packets = _reader.GetPagePackets(pageIndex);
             if (packetIndex < packets.Length)
             {
                 return packets[packetIndex];

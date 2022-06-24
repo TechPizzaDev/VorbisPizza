@@ -70,7 +70,7 @@ namespace NVorbis.Ogg
         {
             if (++_dataPartIndex < GetDataPartCount())
             {
-                var data = _packetReader.GetPacketData(GetDataPart(_dataPartIndex));
+                ArraySegment<byte> data = _packetReader.GetPacketData(GetDataPart(_dataPartIndex));
                 SetData(data);
                 _dataCount += data.Count * 8;
             }
@@ -91,7 +91,7 @@ namespace NVorbis.Ogg
         public override void Reset()
         {
             _dataPartIndex = 0;
-            var data = _packetReader.GetPacketData(_firstDataPart);
+            ArraySegment<byte> data = _packetReader.GetPacketData(_firstDataPart);
             SetData(data);
             _dataCount = data.Count * 8;
 

@@ -36,8 +36,8 @@ namespace NVorbis
 
         public Floor1(DataPacket packet, Codebook[] codebooks)
         {
-            var maximum_class = -1;
-            var partitionClass = new int[(int)packet.ReadBits(5)];
+            int maximum_class = -1;
+            int[] partitionClass = new int[(int)packet.ReadBits(5)];
             _partitionClass = partitionClass;
 
             for (int i = 0; i < partitionClass.Length; i++)
@@ -69,7 +69,7 @@ namespace NVorbis
                 _subclassBookIndex[i] = new int[_subclassBooks[i].Length];
                 for (int j = 0; j < _subclassBooks[i].Length; j++)
                 {
-                    var bookNum = (int)packet.ReadBits(8) - 1;
+                    int bookNum = (int)packet.ReadBits(8) - 1;
                     if (bookNum >= 0) _subclassBooks[i][j] = codebooks[bookNum];
                     _subclassBookIndex[i][j] = bookNum;
                 }
@@ -82,23 +82,23 @@ namespace NVorbis
 
             ++_multiplier;
 
-            var rangeBits = (int)packet.ReadBits(4);
+            int rangeBits = (int)packet.ReadBits(4);
             int xListSize = 2;
 
             for (int i = 0; i < partitionClass.Length; i++)
             {
-                var classNum = partitionClass[i];
+                int classNum = partitionClass[i];
                 xListSize +=  _classDimensions[classNum];
             }
 
-            var xList = new int[xListSize];
+            int[] xList = new int[xListSize];
             int xListOfs = 0;
             xList[xListOfs++] = 0;
             xList[xListOfs++] = 1 << rangeBits;
 
             for (int i = 0; i < partitionClass.Length; i++)
             {
-                var classNum = partitionClass[i];
+                int classNum = partitionClass[i];
                 for (int j = 0; j < _classDimensions[classNum]; j++)
                 {
                     xList[xListOfs++] = (int)packet.ReadBits(rangeBits);
@@ -119,7 +119,7 @@ namespace NVorbis
                 _sortIdx[i] = i;
                 for (int j = 2; j < i; j++)
                 {
-                    var temp = _xList[j];
+                    int temp = _xList[j];
                     if (temp < _xList[i])
                     {
                         if (temp > _xList[_lNeigh[i]]) _lNeigh[i] = j;
@@ -141,7 +141,7 @@ namespace NVorbis
                     if (_xList[_sortIdx[i]] > _xList[_sortIdx[j]])
                     {
                         // swap the sort indexes
-                        var temp = _sortIdx[i];
+                        int temp = _sortIdx[i];
                         _sortIdx[i] = _sortIdx[j];
                         _sortIdx[j] = temp;
                     }
@@ -156,23 +156,23 @@ namespace NVorbis
 
         public void Unpack(DataPacket packet, FloorData floorData, int blockSize, int channel)
         {
-            var data = (Data)floorData;
+            Data data = (Data)floorData;
 
             // hoist ReadPosts to here since that's all we're doing...
             if (packet.ReadBit())
             {
-                var postCount = 2;
+                int postCount = 2;
                 data.Posts[0] = (int)packet.ReadBits(_yBits);
                 data.Posts[1] = (int)packet.ReadBits(_yBits);
 
-                var partitionClass = _partitionClass;
+                int[] partitionClass = _partitionClass;
                 for (int i = 0; i < partitionClass.Length; i++)
                 {
-                    var clsNum = partitionClass[i];
-                    var cdim = _classDimensions[clsNum];
-                    var cbits = _classSubclasses[clsNum];
-                    var csub = (1 << cbits) - 1;
-                    var cval = 0U;
+                    int clsNum = partitionClass[i];
+                    int cdim = _classDimensions[clsNum];
+                    int cbits = _classSubclasses[clsNum];
+                    int csub = (1 << cbits) - 1;
+                    uint cval = 0U;
                     if (cbits > 0)
                     {
                         if ((cval = (uint)_classMasterbooks[clsNum].DecodeScalar(packet)) == uint.MaxValue)
@@ -184,7 +184,7 @@ namespace NVorbis
                     }
                     for (int j = 0; j < cdim; j++)
                     {
-                        var book = _subclassBooks[clsNum][cval & csub];
+                        Codebook book = _subclassBooks[clsNum][cval & csub];
                         cval >>= cbits;
                         if (book != null)
                         {
@@ -207,9 +207,9 @@ namespace NVorbis
         [SkipLocalsInit]
         public void Apply(FloorData floorData, int blockSize, float[] residue)
         {
-            var data = (Data)floorData;
+            Data data = (Data)floorData;
 
-            var n = blockSize / 2;
+            int n = blockSize / 2;
 
             if (data.PostCount > 0)
             {
@@ -219,16 +219,16 @@ namespace NVorbis
                 ref float dbTable = ref inverse_dB_table[0];
                 ref float res = ref residue[0];
 
-                var lx = 0;
-                var ly = data.Posts[0] * _multiplier;
+                int lx = 0;
+                int ly = data.Posts[0] * _multiplier;
                 for (int i = 1; i < data.PostCount; i++)
                 {
-                    var idx = _sortIdx[i];
+                    int idx = _sortIdx[i];
 
                     if (stepFlags[idx])
                     {
-                        var hx = _xList[idx];
-                        var hy = data.Posts[idx] * _multiplier;
+                        int hx = _xList[idx];
+                        int hy = data.Posts[idx] * _multiplier;
                         if (lx < n) RenderLineMulti(lx, ly, Math.Min(hx, n), hy, ref dbTable, ref res);
                         lx = hx;
                         ly = hy;
@@ -252,21 +252,21 @@ namespace NVorbis
             stepFlags[0] = true;
             stepFlags[1] = true;
 
-            var xList = _xList;
-            var finalY = data.Posts;
+            int[] xList = _xList;
+            int[] finalY = data.Posts;
             finalY[0] = data.Posts[0];
             finalY[1] = data.Posts[1];
 
             for (int i = 2; i < data.PostCount; i++)
             {
-                var lowOfs = _lNeigh[i];
-                var highOfs = _hNeigh[i];
+                int lowOfs = _lNeigh[i];
+                int highOfs = _hNeigh[i];
 
-                var predicted = RenderPoint(xList[lowOfs], finalY[lowOfs], xList[highOfs], finalY[highOfs], xList[i]);
+                int predicted = RenderPoint(xList[lowOfs], finalY[lowOfs], xList[highOfs], finalY[highOfs], xList[i]);
 
-                var val = finalY[i];
-                var highroom = _range - predicted;
-                var lowroom = predicted;
+                int val = finalY[i];
+                int highroom = _range - predicted;
+                int lowroom = predicted;
                 int room;
                 if (highroom < lowroom)
                 {
@@ -317,11 +317,11 @@ namespace NVorbis
 
         static int RenderPoint(int x0, int y0, int x1, int y1, int X)
         {
-            var dy = y1 - y0;
-            var adx = x1 - x0;
-            var ady = Math.Abs(dy);
-            var err = ady * (X - x0);
-            var off = err / adx;
+            int dy = y1 - y0;
+            int adx = x1 - x0;
+            int ady = Math.Abs(dy);
+            int err = ady * (X - x0);
+            int off = err / adx;
             if (dy < 0)
             {
                 return y0 - off;
@@ -334,14 +334,14 @@ namespace NVorbis
 
         static void RenderLineMulti(int x0, int y0, int x1, int y1, ref float dbTable, ref float v)
         {
-            var dy = y1 - y0;
-            var adx = x1 - x0;
-            var ady = Math.Abs(dy);
-            var sy = 1 - (((dy >> 31) & 1) * 2);
-            var b = dy / adx;
-            var x = (nint)x0;
-            var y = (nint)y0;
-            var err = -adx;
+            int dy = y1 - y0;
+            int adx = x1 - x0;
+            int ady = Math.Abs(dy);
+            int sy = 1 - (((dy >> 31) & 1) * 2);
+            int b = dy / adx;
+            nint x = (nint)x0;
+            nint y = (nint)y0;
+            int err = -adx;
 
             Add(ref v, x) *= Add(ref dbTable, y);
             ady -= Math.Abs(b) * adx;

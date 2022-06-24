@@ -15,16 +15,16 @@ namespace NVorbis
         {
             EncoderVendor = vendor;
 
-            var tags = new Dictionary<string, IReadOnlyList<string>>();
-            for (var i = 0; i < comments.Length; i++)
+            Dictionary<string, IReadOnlyList<string>> tags = new Dictionary<string, IReadOnlyList<string>>();
+            for (int i = 0; i < comments.Length; i++)
             {
-                var parts = comments[i].Split('=');
+                string[] parts = comments[i].Split('=');
                 if (parts.Length == 1)
                 {
                     parts = new[] { parts[0], string.Empty };
                 }
 
-                var bktIdx = parts[0].IndexOf('[');
+                int bktIdx = parts[0].IndexOf('[');
                 if (bktIdx > -1)
                 {
                     parts[1] = parts[0].Substring(bktIdx + 1, parts[0].Length - bktIdx - 2)
@@ -34,7 +34,7 @@ namespace NVorbis
                     parts[0] = parts[0].Substring(0, bktIdx);
                 }
 
-                if (tags.TryGetValue(parts[0].ToUpperInvariant(), out var list))
+                if (tags.TryGetValue(parts[0].ToUpperInvariant(), out IReadOnlyList<string> list))
                 {
                     ((List<string>)list).Add(parts[1]);
                 }
@@ -48,7 +48,7 @@ namespace NVorbis
 
         public string GetTagSingle(string key, bool concatenate = false)
         {
-            var values = GetTagMulti(key);
+            IReadOnlyList<string> values = GetTagMulti(key);
             if (values.Count > 0)
             {
                 if (concatenate)
@@ -62,7 +62,7 @@ namespace NVorbis
 
         public IReadOnlyList<string> GetTagMulti(string key)
         {
-            if (_tags.TryGetValue(key.ToUpperInvariant(), out var values))
+            if (_tags.TryGetValue(key.ToUpperInvariant(), out IReadOnlyList<string> values))
             {
                 return values;
             }
