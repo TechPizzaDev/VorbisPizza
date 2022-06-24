@@ -1,13 +1,13 @@
-﻿using NVorbis.Contracts.Ogg;
-using System;
+﻿using System;
 using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
+using NVorbis.Contracts.Ogg;
 
 namespace NVorbis.Ogg
 {
-    class PageReader : PageReaderBase, IPageData
+    internal class PageReader : PageReaderBase, IPageData
     {
         private readonly Dictionary<int, IStreamPageReader> _streamReaders = new Dictionary<int, IStreamPageReader>();
         private readonly NewStreamCallback _newStreamCallback;

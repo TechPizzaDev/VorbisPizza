@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 
 namespace NVorbis.Contracts
@@ -24,7 +24,8 @@ namespace NVorbis.Contracts
         int UpperBitrate { get; }
 
         /// <summary>
-        /// Gets the nominal bitrate of the stream, if specified.  May be calculated from <see cref="LowerBitrate"/> and <see cref="UpperBitrate"/>.
+        /// Gets the nominal bitrate of the stream, if specified. 
+        /// May be calculated from <see cref="LowerBitrate"/> and <see cref="UpperBitrate"/>.
         /// </summary>
         int NominalBitrate { get; }
 
@@ -95,9 +96,16 @@ namespace NVorbis.Contracts
         /// <summary>
         /// Reads samples into the specified buffer.
         /// </summary>
-        /// <param name="buffer">The buffer to read the samples into. Length must be a multiple of <see cref="Channels"/>.</param>
-        /// <exception cref="ArgumentException">Thrown when the buffer is too small or the length is not a multiple of <see cref="Channels"/>.</exception>
-        /// <remarks>The data populated into <paramref name="buffer"/> is interleaved by channel in normal PCM fashion: Left, Right, Left, Right, Left, Right</remarks>
+        /// <param name="buffer">
+        /// The buffer to read the samples into. Length must be a multiple of <see cref="Channels"/>.
+        /// </param>
+        /// <exception cref="ArgumentException">
+        /// Thrown when the buffer is too small or the length is not a multiple of <see cref="Channels"/>.
+        /// </exception>
+        /// <remarks>
+        /// The data populated into <paramref name="buffer"/> is interleaved by channel in normal PCM fashion: 
+        /// Left, Right, Left, Right, Left, Right
+        /// </remarks>
         int Read(Span<float> buffer);
     }
 }

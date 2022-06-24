@@ -4,7 +4,7 @@ using NVorbis.Contracts.Ogg;
 
 namespace NVorbis.Ogg
 {
-    class StreamPageReader : IStreamPageReader
+    internal class StreamPageReader : IStreamPageReader
     {
         private readonly IPageData _reader;
         private readonly List<long> _pageOffsets = new List<long>();

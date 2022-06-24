@@ -1,6 +1,6 @@
 ﻿namespace NVorbis.Contracts.Ogg
 {
-    interface IForwardOnlyPacketProvider : IPacketProvider
+    internal interface IForwardOnlyPacketProvider : IPacketProvider
     {
         bool AddPage(byte[] buf, bool isResync);
         void SetEndOfStream();

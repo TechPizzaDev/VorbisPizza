@@ -4,9 +4,9 @@ using System.Runtime.Intrinsics.X86;
 
 namespace NVorbis
 {
-    static class Utils
+    internal static class Utils
     {
-        static internal int ilog(int x)
+        internal static int ilog(int x)
         {
             int cnt = 0;
             while (x > 0)
@@ -17,12 +17,12 @@ namespace NVorbis
             return cnt;
         }
 
-        static internal uint BitReverse(uint n)
+        internal static uint BitReverse(uint n)
         {
             return BitReverse(n, 32);
         }
 
-        static internal uint BitReverse(uint n, int bits)
+        internal static uint BitReverse(uint n, int bits)
         {
             n = ((n & 0xAAAAAAAA) >> 1) | ((n & 0x55555555) << 1);
             n = ((n & 0xCCCCCCCC) >> 2) | ((n & 0x33333333) << 2);
@@ -31,7 +31,7 @@ namespace NVorbis
             return ((n >> 16) | (n << 16)) >> (32 - bits);
         }
 
-        static internal float ClipValue(float value, ref bool clipped)
+        internal static float ClipValue(float value, ref bool clipped)
         {
             if (value > .99999994f)
             {
@@ -47,7 +47,7 @@ namespace NVorbis
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        static internal Vector128<float> ClipValue(Vector128<float> value, ref Vector128<float> clipped)
+        internal static Vector128<float> ClipValue(Vector128<float> value, ref Vector128<float> clipped)
         {
             Vector128<float> upper = Vector128.Create(0.99999994f);
             Vector128<float> lower = Vector128.Create(-0.99999994f);
@@ -69,7 +69,7 @@ namespace NVorbis
             return value;
         }
 
-        static internal float ConvertFromVorbisFloat32(uint bits)
+        internal static float ConvertFromVorbisFloat32(uint bits)
         {
             // do as much as possible with bit tricks in integer math
             int sign = ((int)bits >> 31);   // sign-extend to the full 32-bits

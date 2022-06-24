@@ -6,7 +6,7 @@ namespace NVorbis
     /// <summary>
     /// Describes an abstract packet of data from a data stream.
     /// </summary>
-    abstract public class DataPacket
+    public abstract class DataPacket
     {
         /// <summary>
         /// Defines flags to apply to the current packet
@@ -50,11 +50,11 @@ namespace NVorbis
             User4 = 0x80,
         }
 
-        ulong _bitBucket;
-        int _bitCount;
-        byte _overflowBits;
-        PacketFlags _packetFlags;
-        int _readBits;
+        private ulong _bitBucket;
+        private int _bitCount;
+        private byte _overflowBits;
+        private PacketFlags _packetFlags;
+        private int _readBits;
 
         /// <summary>
         /// Gets the number of container overhead bits associated with this packet.
@@ -106,11 +106,11 @@ namespace NVorbis
         /// <summary>
         /// Gets the total number of bits in the packet.
         /// </summary>
-        abstract protected int TotalBits { get; }
+        protected abstract int TotalBits { get; }
 
-        bool GetFlag(PacketFlags flag) => _packetFlags.HasFlag(flag);
+        private bool GetFlag(PacketFlags flag) => _packetFlags.HasFlag(flag);
 
-        void SetFlag(PacketFlags flag, bool value)
+        private void SetFlag(PacketFlags flag, bool value)
         {
             if (value)
             {
@@ -126,12 +126,12 @@ namespace NVorbis
         /// Reads the next byte in the packet.
         /// </summary>
         /// <returns>The next byte in the packet, or <c>-1</c> if no more data is available.</returns>
-        abstract protected int ReadNextByte();
+        protected abstract int ReadNextByte();
 
         /// <summary>
         /// Frees the buffers and caching for the packet instance.
         /// </summary>
-        virtual public void Done()
+        public virtual void Done()
         {
             // no-op for base
         }
@@ -139,7 +139,7 @@ namespace NVorbis
         /// <summary>
         /// Resets the read buffers to the beginning of the packet.
         /// </summary>
-        virtual public void Reset()
+        public virtual void Reset()
         {
             _bitBucket = 0;
             _bitCount = 0;

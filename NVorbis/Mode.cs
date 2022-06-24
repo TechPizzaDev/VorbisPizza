@@ -1,15 +1,14 @@
-﻿using NVorbis.Contracts;
-using System;
+﻿using System;
 
 namespace NVorbis
 {
-    class Mode
+    internal class Mode
     {
-        int _channels;
-        bool _blockFlag;
-        int _block0Size;
-        int _block1Size;
-        Mapping _mapping;
+        private int _channels;
+        private bool _blockFlag;
+        private int _block0Size;
+        private int _block1Size;
+        private Mapping _mapping;
 
         public Mode(DataPacket packet, int channels, int block0Size, int block1Size, Mapping[] mappings)
         {
@@ -91,9 +90,9 @@ namespace NVorbis
 
         private bool GetPacketInfo(
             DataPacket packet,
-            bool isLastInPage, 
+            bool isLastInPage,
             out int blockSize,
-            out int windowIndex, 
+            out int windowIndex,
             out int leftOverlapHalfSize,
             out int packetStartIndex,
             out int packetValidLength,
@@ -140,17 +139,17 @@ namespace NVorbis
         }
 
         public bool Decode(
-            DataPacket packet, 
-            float[][] buffer, 
+            DataPacket packet,
+            float[][] buffer,
             out int packetStartindex,
             out int packetValidLength,
             out int packetTotalLength)
         {
             if (GetPacketInfo(
-                packet, 
-                isLastInPage: false, 
+                packet,
+                isLastInPage: false,
                 out int blockSize,
-                out int windowIndex, 
+                out int windowIndex,
                 out _,
                 out packetStartindex,
                 out packetValidLength,

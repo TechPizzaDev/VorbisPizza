@@ -1,12 +1,12 @@
-﻿using System;
+using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace NVorbis.Ogg
 {
-    ref struct Crc
+    internal ref struct Crc
     {
-        static readonly uint[] s_crcTable = new uint[256]
+        private static readonly uint[] s_crcTable = new uint[256]
         {
             0, 79764919, 159529838, 222504665, 319059676, 398814059, 445009330, 507990021,
             638119352, 583659535, 797628118, 726387553, 890018660, 835552979, 1015980042, 944750013,
@@ -59,8 +59,8 @@ namespace NVorbis.Ogg
         //    s_crcTable = crcTable;
         //}
 
-        uint _crc;
-        Span<uint> _table;
+        private uint _crc;
+        private Span<uint> _table;
 
         public static Crc Create()
         {

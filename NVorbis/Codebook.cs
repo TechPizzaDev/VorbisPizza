@@ -1,4 +1,3 @@
-using NVorbis.Contracts;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -6,15 +5,16 @@ using System.Diagnostics;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using NVorbis.Contracts;
 
 namespace NVorbis
 {
-    class Codebook
+    internal class Codebook
     {
-        struct FastRange : IReadOnlyList<int>
+        private struct FastRange : IReadOnlyList<int>
         {
-            int _start;
-            int _count;
+            private int _start;
+            private int _count;
 
             public FastRange(int start, int count)
             {
@@ -44,12 +44,12 @@ namespace NVorbis
             }
         }
 
-        int[] _lengths;
-        float[] _lookupTable;
-        HuffmanListNode[] _overflowList;
-        HuffmanListNode[] _prefixList;
-        int _prefixBitLength;
-        int _maxBits;
+        private int[] _lengths;
+        private float[] _lookupTable;
+        private HuffmanListNode[] _overflowList;
+        private HuffmanListNode[] _prefixList;
+        private int _prefixBitLength;
+        private int _maxBits;
 
         public Codebook(DataPacket packet)
         {
@@ -168,7 +168,7 @@ namespace NVorbis
         }
 
         [SkipLocalsInit]
-        bool ComputeCodewords(bool sparse, int[] codewords, int[] codewordLengths, ReadOnlySpan<int> len, int[] values)
+        private bool ComputeCodewords(bool sparse, int[] codewords, int[] codewordLengths, ReadOnlySpan<int> len, int[] values)
         {
             int i, k, m = 0;
             Span<uint> available = stackalloc uint[32];
@@ -291,7 +291,7 @@ namespace NVorbis
             _lookupTable = lookupTable;
         }
 
-        int lookup1_values()
+        private int lookup1_values()
         {
             int r = (int)Math.Floor(Math.Exp(Math.Log(Entries) / Dimensions));
 
@@ -302,33 +302,35 @@ namespace NVorbis
 
         public int DecodeScalar(DataPacket packet)
         {
-            int data = (int)packet.TryPeekBits(_prefixBitLength, out int bitsRead);
-            if (bitsRead == 0) return -1;
-
-            // try to get the value from the prefix list...
-            HuffmanListNode node = Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(_prefixList), data);
-            if (node.Length != 0)
+            ulong data = packet.TryPeekBits(_prefixBitLength, out int bitsRead);
+            if (bitsRead != 0)
             {
-                packet.SkipBits(node.Length);
-                return node.Value;
+                // try to get the value from the prefix list...
+                ref HuffmanListNode node = ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(_prefixList), (nuint)data);
+                if (node.Length != 0)
+                {
+                    packet.SkipBits(node.Length);
+                    return node.Value;
+                }
             }
-
             // nope, not possible... run through the overflow nodes
             return DecodeOverflowScalar(packet);
         }
 
         private int DecodeOverflowScalar(DataPacket packet)
         {
-            int data = (int)packet.TryPeekBits(_maxBits, out _);
-
-            HuffmanListNode[] overflowList = _overflowList;
-            for (int i = 0; i < overflowList.Length; i++)
+            int data = (int)packet.TryPeekBits(_maxBits, out int bitsRead);
+            if (bitsRead != 0)
             {
-                ref HuffmanListNode node = ref overflowList[i];
-                if (node.Bits == (data & node.Mask))
+                HuffmanListNode[] overflowList = _overflowList;
+                for (int i = 0; i < overflowList.Length; i++)
                 {
-                    packet.SkipBits(node.Length);
-                    return node.Value;
+                    ref HuffmanListNode node = ref overflowList[i];
+                    if (node.Bits == (data & node.Mask))
+                    {
+                        packet.SkipBits(node.Length);
+                        return node.Value;
+                    }
                 }
             }
             return -1;

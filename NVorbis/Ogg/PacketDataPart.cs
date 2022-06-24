@@ -1,9 +1,9 @@
-﻿namespace NVorbis.Contracts.Ogg
+namespace NVorbis.Contracts.Ogg
 {
     internal readonly struct PacketDataPart
     {
-        public uint PageIndex { get; }
-        public byte PacketIndex { get; }
+        public readonly uint PageIndex;
+        public readonly byte PacketIndex;
 
         public PacketDataPart(uint pageIndex, byte packetIndex)
         {

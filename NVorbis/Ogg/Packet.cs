@@ -1,7 +1,7 @@
-﻿using NVorbis.Contracts.Ogg;
-using System;
+﻿using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using NVorbis.Contracts.Ogg;
 
 namespace NVorbis.Ogg
 {

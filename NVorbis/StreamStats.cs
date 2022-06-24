@@ -2,7 +2,7 @@
 
 namespace NVorbis
 {
-    class StreamStats : IStreamStats
+    internal class StreamStats : IStreamStats
     {
         private int _sampleRate;
 

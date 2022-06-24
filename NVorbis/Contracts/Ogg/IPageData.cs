@@ -2,7 +2,7 @@
 
 namespace NVorbis.Contracts.Ogg
 {
-    interface IPageData : IPageReader
+    internal interface IPageData : IPageReader
     {
         long PageOffset { get; }
         int StreamSerial { get; }

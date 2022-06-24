@@ -1,6 +1,6 @@
 ﻿namespace NVorbis.Contracts
 {
-    interface IFloor
+    internal interface IFloor
     {
         FloorData CreateFloorData();
 

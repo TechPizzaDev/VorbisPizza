@@ -1,12 +1,12 @@
-﻿using NVorbis.Contracts;
-using System;
+﻿using System;
 using System.Collections.Generic;
+using NVorbis.Contracts;
 
 namespace NVorbis
 {
-    struct Huffman
+    internal struct Huffman
     {
-        const int MAX_TABLE_BITS = 10;
+        private const int MAX_TABLE_BITS = 10;
 
         public int TableBits { get; private set; }
         public HuffmanListNode[] PrefixTree { get; private set; }

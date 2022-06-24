@@ -1,11 +1,11 @@
-﻿using System;
+using System;
 
 namespace NVorbis
 {
     // all channels in one pass, interleaved
-    class Residue2 : Residue0
+    internal class Residue2 : Residue0
     {
-        int _channels;
+        private int _channels;
 
         public Residue2(DataPacket packet, int channels, Codebook[] codebooks) : base(packet, 1, codebooks)
         {
@@ -35,7 +35,7 @@ namespace NVorbis
                 }
 
                 ReadOnlySpan<float> lookup = codebook.GetLookup(entry);
-                for (int d = 0; d < lookup.Length; d++, c++)
+                for (int d = 0; d < lookup.Length; d++)
                 {
                     residue[ch][o] += lookup[d];
                     if (++ch == channels)
@@ -44,6 +44,7 @@ namespace NVorbis
                         o++;
                     }
                 }
+                c += lookup.Length;
             }
 
             return false;

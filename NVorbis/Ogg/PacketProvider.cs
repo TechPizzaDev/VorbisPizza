@@ -1,10 +1,10 @@
-﻿using NVorbis.Contracts;
+﻿using System;
+using NVorbis.Contracts;
 using NVorbis.Contracts.Ogg;
-using System;
 
 namespace NVorbis.Ogg
 {
-    class PacketProvider : IPacketProvider, IPacketReader
+    internal class PacketProvider : IPacketProvider, IPacketReader
     {
         private IStreamPageReader _reader;
 

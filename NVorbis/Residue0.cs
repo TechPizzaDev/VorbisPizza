@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Numerics;
 using System.Runtime.CompilerServices;
@@ -6,21 +6,21 @@ using System.Runtime.CompilerServices;
 namespace NVorbis
 {
     // each channel gets its own pass, one dimension at a time
-    class Residue0
+    internal class Residue0
     {
-        int _channels;
-        int _begin;
-        int _end;
-        int _partitionSize;
-        int _classifications;
-        int _maxStages;
+        private int _channels;
+        private int _begin;
+        private int _end;
+        private int _partitionSize;
+        private int _classifications;
+        private int _maxStages;
 
-        Codebook[][] _books;
-        Codebook _classBook;
+        private Codebook[][] _books;
+        private Codebook _classBook;
 
-        byte[] _cascade;
-        int[] _decodeMap; 
-        int[] _partWordCache;
+        private byte[] _cascade;
+        private int[] _decodeMap;
+        private int[] _partWordCache;
 
         [SkipLocalsInit]
         public Residue0(DataPacket packet, int channels, Codebook[] codebooks)
@@ -50,7 +50,12 @@ namespace NVorbis
                 acc += BitOperations.PopCount(cascade[i]);
             }
 
-            Span<byte> bookNums = acc < 1024 ? stackalloc byte[acc] : new byte[acc];
+            Span<byte> bookNums = stackalloc byte[1024];
+            if (acc > bookNums.Length)
+                bookNums = new byte[acc];
+            else
+                bookNums = bookNums.Slice(0, acc);
+
             for (int i = 0; i < bookNums.Length; i++)
             {
                 bookNums[i] = (byte)packet.ReadBits(8);
@@ -108,13 +113,13 @@ namespace NVorbis
             _channels = channels;
         }
 
-        virtual public void Decode(
+        public virtual void Decode(
             DataPacket packet, ReadOnlySpan<bool> doNotDecodeChannel, int blockSize, float[][] buffer)
         {
             // this is pretty well stolen directly from libvorbis...  BSD license
             int end = _end < blockSize / 2 ? _end : blockSize / 2;
             int n = end - _begin;
-            
+
             if (n > 0 && doNotDecodeChannel.IndexOf(false) != -1)
             {
                 int channels = _channels;
@@ -179,7 +184,7 @@ namespace NVorbis
             }
         }
 
-        virtual protected bool WriteVectors(Codebook codebook, DataPacket packet, float[][] residue, int channel, int offset, int partitionSize)
+        protected virtual bool WriteVectors(Codebook codebook, DataPacket packet, float[][] residue, int channel, int offset, int partitionSize)
         {
             float[] res = residue[channel];
             int steps = partitionSize / codebook.Dimensions;

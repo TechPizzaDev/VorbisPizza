@@ -1,5 +1,4 @@
-﻿using NVorbis.Contracts;
-using System;
+﻿using System;
 using System.IO;
 using System.Numerics;
 using System.Runtime.CompilerServices;
@@ -7,6 +6,7 @@ using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 using System.Text;
+using NVorbis.Contracts;
 using static System.Runtime.CompilerServices.Unsafe;
 
 namespace NVorbis
@@ -151,11 +151,11 @@ namespace NVorbis
             return false;
         }
 
-        static private ReadOnlySpan<byte> PacketSignatureStream => new byte[] { 0x01, 0x76, 0x6f, 0x72, 0x62, 0x69, 0x73, 0x00, 0x00, 0x00, 0x00 };
-        static private ReadOnlySpan<byte> PacketSignatureComments => new byte[] { 0x03, 0x76, 0x6f, 0x72, 0x62, 0x69, 0x73 };
-        static private ReadOnlySpan<byte> PacketSignatureBooks => new byte[] { 0x05, 0x76, 0x6f, 0x72, 0x62, 0x69, 0x73 };
+        private static ReadOnlySpan<byte> PacketSignatureStream => new byte[] { 0x01, 0x76, 0x6f, 0x72, 0x62, 0x69, 0x73, 0x00, 0x00, 0x00, 0x00 };
+        private static ReadOnlySpan<byte> PacketSignatureComments => new byte[] { 0x03, 0x76, 0x6f, 0x72, 0x62, 0x69, 0x73 };
+        private static ReadOnlySpan<byte> PacketSignatureBooks => new byte[] { 0x05, 0x76, 0x6f, 0x72, 0x62, 0x69, 0x73 };
 
-        static private bool ValidateHeader(DataPacket packet, ReadOnlySpan<byte> expected)
+        private static bool ValidateHeader(DataPacket packet, ReadOnlySpan<byte> expected)
         {
             for (int i = 0; i < expected.Length; i++)
             {
@@ -167,7 +167,7 @@ namespace NVorbis
             return true;
         }
 
-        static private string ReadString(DataPacket packet)
+        private static string ReadString(DataPacket packet)
         {
             int len = (int)packet.ReadBits(32);
 

@@ -1,11 +1,11 @@
-﻿using NVorbis.Contracts;
-using NVorbis.Contracts.Ogg;
 using System;
 using System.Collections.Generic;
+using NVorbis.Contracts;
+using NVorbis.Contracts.Ogg;
 
 namespace NVorbis.Ogg
 {
-    sealed class ForwardOnlyPacketProvider : DataPacket, IForwardOnlyPacketProvider
+    internal sealed class ForwardOnlyPacketProvider : DataPacket, IForwardOnlyPacketProvider
     {
         private int _lastSeqNo;
         private readonly Queue<(byte[] buf, bool isResync)> _pageQueue = new Queue<(byte[] buf, bool isResync)>();
@@ -17,7 +17,7 @@ namespace NVorbis.Ogg
         private int _dataStart;
         private bool _lastWasPeek;
 
-        private Memory<byte> _packetBuf;
+        private ArraySegment<byte> _packetBuf;
 
         private int _dataIndex;
 
@@ -76,7 +76,7 @@ namespace NVorbis.Ogg
         public DataPacket GetNextPacket()
         {
             // if not done...
-            if (_packetBuf.Length > 0)
+            if (_packetBuf.Count > 0)
             {
                 // only allow if last call was for peek
                 if (!_lastWasPeek) throw new InvalidOperationException("Must call Done() on previous packet first.");
@@ -98,7 +98,7 @@ namespace NVorbis.Ogg
         public DataPacket PeekNextPacket()
         {
             // if not done...
-            if (_packetBuf.Length > 0)
+            if (_packetBuf.Count > 0)
             {
                 // only allow if last call was for peek
                 if (!_lastWasPeek) throw new InvalidOperationException("Must call Done() on previous packet first.");
@@ -170,7 +170,7 @@ namespace NVorbis.Ogg
 
             // second, determine how long the packet is
             int dataLen = GetPacketLength(pageBuf, ref packetIndex);
-            Memory<byte> packetBuf = new Memory<byte>(pageBuf, dataStart, dataLen);
+            ArraySegment<byte> packetBuf = new(pageBuf, dataStart, dataLen);
             dataStart += dataLen;
 
             // third, determine if the packet is the last one in the page
@@ -222,9 +222,9 @@ namespace NVorbis.Ogg
                         int contSz = GetPacketLength(pageBuf, ref packetIndex);
 
                         // set up the new buffer and fill it
-                        packetBuf = new Memory<byte>(new byte[prevBuf.Length + contSz]);
+                        packetBuf = new(new byte[prevBuf.Length + contSz]);
                         prevBuf.CopyTo(packetBuf);
-                        (new Memory<byte>(pageBuf, dataStart, contSz)).CopyTo(packetBuf.Slice(prevBuf.Length));
+                        pageBuf.AsSpan(dataStart, contSz).CopyTo(packetBuf.Slice(prevBuf.Length));
 
                         // now that we've read, update our start position
                         dataStart += contSz;
@@ -295,13 +295,13 @@ namespace NVorbis.Ogg
             return len;
         }
 
-        protected override int TotalBits => _packetBuf.Length * 8;
+        protected override int TotalBits => _packetBuf.Count * 8;
 
         protected override int ReadNextByte()
         {
-            if (_dataIndex < _packetBuf.Length)
+            if (_dataIndex < _packetBuf.Count)
             {
-                return _packetBuf.Span[_dataIndex++];
+                return _packetBuf.Array[_packetBuf.Offset + _dataIndex++];
             }
             return -1;
         }
@@ -314,7 +314,7 @@ namespace NVorbis.Ogg
 
         public override void Done()
         {
-            _packetBuf = Memory<byte>.Empty;
+            _packetBuf = ArraySegment<byte>.Empty;
             base.Done();
         }
 

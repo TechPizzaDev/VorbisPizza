@@ -1,15 +1,16 @@
-﻿using NVorbis.Contracts;
 using System;
 using System.Runtime.CompilerServices;
-using static System.Runtime.CompilerServices.Unsafe;
+using NVorbis.Contracts;
 
 namespace NVorbis
 {
-    // Linear interpolated values on dB amplitude and linear frequency scale.
-    // Draws a curve between each point to define the low-resolution spectral data.
-    class Floor1 : IFloor
+    /// <summary>
+    /// Linear interpolated values on dB amplitude and linear frequency scale.
+    /// Draws a curve between each point to define the low-resolution spectral data.
+    /// </summary>
+    internal unsafe sealed class Floor1 : IFloor
     {
-        sealed class Data : FloorData
+        private sealed class Data : FloorData
         {
             internal int[] Posts = new int[64];
             internal int PostCount;
@@ -25,14 +26,14 @@ namespace NVorbis
             }
         }
 
-        int[] _partitionClass, _classDimensions, _classSubclasses, _xList, _classMasterBookIndex, _hNeigh, _lNeigh, _sortIdx;
-        int _multiplier, _range, _yBits;
-        Codebook[] _classMasterbooks;
-        Codebook[][] _subclassBooks;
-        int[][] _subclassBookIndex;
+        private int[] _partitionClass, _classDimensions, _classSubclasses, _xList, _classMasterBookIndex, _hNeigh, _lNeigh, _sortIdx;
+        private int _multiplier, _range, _yBits;
+        private Codebook[] _classMasterbooks;
+        private Codebook[][] _subclassBooks;
+        private int[][] _subclassBookIndex;
 
-        static readonly int[] _rangeLookup = { 256, 128, 86, 64 };
-        static readonly int[] _yBitsLookup = { 8, 7, 7, 6 };
+        private static readonly int[] _rangeLookup = { 256, 128, 86, 64 };
+        private static readonly int[] _yBitsLookup = { 8, 7, 7, 6 };
 
         public Floor1(DataPacket packet, Codebook[] codebooks)
         {
@@ -88,7 +89,7 @@ namespace NVorbis
             for (int i = 0; i < partitionClass.Length; i++)
             {
                 int classNum = partitionClass[i];
-                xListSize +=  _classDimensions[classNum];
+                xListSize += _classDimensions[classNum];
             }
 
             int[] xList = new int[xListSize];
@@ -210,35 +211,36 @@ namespace NVorbis
             Data data = (Data)floorData;
 
             int n = blockSize / 2;
+            Span<bool> stepFlags = stackalloc bool[64];
 
             if (data.PostCount > 0)
             {
-                Span<bool> stepFlags = stackalloc bool[64];
                 UnwrapPosts(stepFlags, data);
 
-                ref float dbTable = ref inverse_dB_table[0];
-                ref float res = ref residue[0];
-
-                int lx = 0;
-                int ly = data.Posts[0] * _multiplier;
-                for (int i = 1; i < data.PostCount; i++)
+                fixed (float* dbTable = inverse_dB_table)
+                fixed (float* res = residue)
                 {
-                    int idx = _sortIdx[i];
-
-                    if (stepFlags[idx])
+                    int lx = 0;
+                    int ly = data.Posts[0] * _multiplier;
+                    for (int i = 1; i < data.PostCount; i++)
                     {
-                        int hx = _xList[idx];
-                        int hy = data.Posts[idx] * _multiplier;
-                        if (lx < n) RenderLineMulti(lx, ly, Math.Min(hx, n), hy, ref dbTable, ref res);
-                        lx = hx;
-                        ly = hy;
-                    }
-                    if (lx >= n) break;
-                }
+                        int idx = _sortIdx[i];
 
-                if (lx < n)
-                {
-                    RenderLineMulti(lx, ly, n, ly, ref dbTable, ref res);
+                        if (stepFlags[idx])
+                        {
+                            int hx = _xList[idx];
+                            int hy = data.Posts[idx] * _multiplier;
+                            if (lx < n) RenderLineMulti(lx, ly, Math.Min(hx, n), hy, dbTable, res);
+                            lx = hx;
+                            ly = hy;
+                        }
+                        if (lx >= n) break;
+                    }
+
+                    if (lx < n)
+                    {
+                        RenderLineMulti(lx, ly, n, ly, dbTable, res);
+                    }
                 }
             }
             else
@@ -247,7 +249,7 @@ namespace NVorbis
             }
         }
 
-        void UnwrapPosts(Span<bool> stepFlags, Data data)
+        private void UnwrapPosts(Span<bool> stepFlags, Data data)
         {
             stepFlags[0] = true;
             stepFlags[1] = true;
@@ -315,11 +317,11 @@ namespace NVorbis
             }
         }
 
-        static int RenderPoint(int x0, int y0, int x1, int y1, int X)
+        private static int RenderPoint(int x0, int y0, int x1, int y1, int X)
         {
             int dy = y1 - y0;
             int adx = x1 - x0;
-            int ady = Math.Abs(dy);
+            int ady = Abs(dy);
             int err = ady * (X - x0);
             int off = err / adx;
             if (dy < 0)
@@ -332,19 +334,19 @@ namespace NVorbis
             }
         }
 
-        static void RenderLineMulti(int x0, int y0, int x1, int y1, ref float dbTable, ref float v)
+        private static void RenderLineMulti(int x0, int y0, int x1, int y1, float* dbTable, float* v)
         {
             int dy = y1 - y0;
             int adx = x1 - x0;
-            int ady = Math.Abs(dy);
+            int ady = Abs(dy);
             int sy = 1 - (((dy >> 31) & 1) * 2);
             int b = dy / adx;
-            nint x = (nint)x0;
-            nint y = (nint)y0;
+            nint x = x0;
+            nint y = y0;
             int err = -adx;
 
-            Add(ref v, x) *= Add(ref dbTable, y);
-            ady -= Math.Abs(b) * adx;
+            v[x] *= dbTable[y];
+            ady -= Abs(b) * adx;
 
             while (++x < x1)
             {
@@ -355,13 +357,20 @@ namespace NVorbis
                     err -= adx;
                     y += sy;
                 }
-                Add(ref v, x) *= Add(ref dbTable, y);
+                v[x] *= dbTable[y];
             }
+        }
+
+        private static int Abs(int x)
+        {
+            int sign = x >> 31;
+            return (x ^ sign) - sign;
         }
 
         #region dB inversion table
 
-        static readonly float[] inverse_dB_table = {
+        private static readonly float[] inverse_dB_table =
+        {
             1.0649863e-07f, 1.1341951e-07f, 1.2079015e-07f, 1.2863978e-07f,
             1.3699951e-07f, 1.4590251e-07f, 1.5538408e-07f, 1.6548181e-07f,
             1.7623575e-07f, 1.8768855e-07f, 1.9988561e-07f, 2.1287530e-07f,

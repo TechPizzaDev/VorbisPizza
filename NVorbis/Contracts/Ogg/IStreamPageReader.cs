@@ -2,7 +2,7 @@
 
 namespace NVorbis.Contracts.Ogg
 {
-    interface IStreamPageReader
+    internal interface IStreamPageReader
     {
         IPacketProvider PacketProvider { get; }
 

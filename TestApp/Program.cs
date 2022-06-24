@@ -1,4 +1,4 @@
-﻿using NVorbis;
+using NVorbis;
 using System.Diagnostics;
 using System.IO;
 
@@ -12,18 +12,21 @@ namespace TestApp
 
         static void Main()
         {
-            var wavFileName = Path.ChangeExtension(Path.GetFileName(OGG_FILE), "wav");
+            string wavFileName = Path.ChangeExtension(Path.GetFileName(OGG_FILE), "wav");
 
-            using (var fs = File.OpenRead(OGG_FILE))
-            //using (var fwdStream = new ForwardOnlyStream(fs))
-            using (var vorbRead = new VorbisReader(fs, false))
-            using (var waveWriter = new WaveWriter(wavFileName, vorbRead.SampleRate, vorbRead.Channels))
+            float[] sampleBuf = new float[48000 * 2];
+            for (int i = 0; i < 1; i++)
             {
-                var sampleBuf = new float[vorbRead.SampleRate * vorbRead.Channels * 4];
-                int cnt;
-                while ((cnt = vorbRead.ReadSamples(sampleBuf, 0, sampleBuf.Length)) > 0)
+                using (FileStream fs = File.OpenRead(OGG_FILE))
+                //using (ForwardOnlyStream fwdStream = new(fs))
+                using (VorbisReader vorbRead = new(fs, false))
+                using (WaveWriter waveWriter = new(wavFileName, vorbRead.SampleRate, vorbRead.Channels))
                 {
-                    waveWriter.WriteSamples(sampleBuf, 0, cnt);
+                    int cnt;
+                    while ((cnt = vorbRead.ReadSamples(sampleBuf, 0, sampleBuf.Length)) > 0)
+                    {
+                        waveWriter.WriteSamples(sampleBuf, 0, cnt);
+                    }
                 }
             }
             //Process.Start(wavFileName);

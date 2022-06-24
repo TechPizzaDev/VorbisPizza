@@ -1,13 +1,13 @@
-﻿using NVorbis.Contracts.Ogg;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using NVorbis.Contracts.Ogg;
 
 namespace NVorbis.Ogg
 {
-    delegate bool NewStreamCallback(Contracts.IPacketProvider packetProvider);
+    internal delegate bool NewStreamCallback(Contracts.IPacketProvider packetProvider);
 
-    abstract class PageReaderBase : IPageReader
+    internal abstract class PageReaderBase : IPageReader
     {
         private readonly HashSet<int> _ignoredSerials = new HashSet<int>();
         private byte[] _overflowBuf;
@@ -209,19 +209,31 @@ namespace NVorbis.Ogg
             return _stream.Seek(offset, SeekOrigin.Begin);
         }
 
-        virtual protected void PrepareStreamForNextPage() { }
+        protected virtual void PrepareStreamForNextPage()
+        {
+        }
 
-        virtual protected void SaveNextPageSearch() { }
+        protected virtual void SaveNextPageSearch()
+        {
+        }
 
-        abstract protected bool AddPage(int streamSerial, byte[] pageBuf, bool isResync);
+        protected abstract bool AddPage(int streamSerial, byte[] pageBuf, bool isResync);
 
-        abstract protected void SetEndOfStreams();
+        protected abstract void SetEndOfStreams();
 
-        virtual public void Lock() { }
+        public virtual void Lock()
+        {
+        }
 
-        virtual protected bool CheckLock() => true;
+        protected virtual bool CheckLock()
+        {
+            return true;
+        }
 
-        virtual public bool Release() => false;
+        public virtual bool Release()
+        {
+            return false;
+        }
 
         public bool ReadNextPage()
         {
@@ -293,7 +305,7 @@ namespace NVorbis.Ogg
             return false;
         }
 
-        abstract public bool ReadPageAt(long offset);
+        public abstract bool ReadPageAt(long offset);
 
         public void Dispose()
         {

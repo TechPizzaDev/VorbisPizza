@@ -1,6 +1,6 @@
 ﻿namespace NVorbis
 {
-    abstract class FloorData
+    internal abstract class FloorData
     {
         public abstract bool ExecuteChannel { get; }
         public bool ForceEnergy { get; set; }

@@ -1,15 +1,14 @@
-﻿using NVorbis.Contracts;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using NVorbis.Contracts;
 
 namespace NVorbis
 {
     internal class TagData : ITagData
     {
-        static IReadOnlyList<string> s_emptyList = new List<string>();
-
-        Dictionary<string, IReadOnlyList<string>> _tags;
+        private static IReadOnlyList<string> s_emptyList = new List<string>();
+        private Dictionary<string, IReadOnlyList<string>> _tags;
 
         public TagData(string vendor, string[] comments)
         {

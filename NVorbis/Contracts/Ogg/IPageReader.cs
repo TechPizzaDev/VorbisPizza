@@ -2,7 +2,7 @@
 
 namespace NVorbis.Contracts.Ogg
 {
-    interface IPageReader : IDisposable
+    internal interface IPageReader : IDisposable
     {
         void Lock();
         bool Release();

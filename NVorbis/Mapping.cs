@@ -1,19 +1,19 @@
-﻿using NVorbis.Contracts;
 using System;
 using System.Runtime.CompilerServices;
+using NVorbis.Contracts;
 
 namespace NVorbis
 {
-    class Mapping
+    internal class Mapping
     {
-        int[] _couplingAngle;
-        int[] _couplingMangitude;
-        IFloor[] _submapFloor;
-        Residue0[] _submapResidue;
-        IFloor[] _channelFloor;
-        FloorData[] _channelFloorData;
-        Residue0[] _channelResidue;
-        float[] _buf2;
+        private int[] _couplingAngle;
+        private int[] _couplingMangitude;
+        private IFloor[] _submapFloor;
+        private Residue0[] _submapResidue;
+        private IFloor[] _channelFloor;
+        private FloorData[] _channelFloorData;
+        private Residue0[] _channelResidue;
+        private float[] _buf2;
 
         public Mapping(DataPacket packet, int channels, IFloor[] floors, Residue0[] residues)
         {
@@ -103,7 +103,8 @@ namespace NVorbis
 
             // read the noise floor data
             FloorData[] floorData = _channelFloorData;
-            Span<bool> noExecuteChannel = stackalloc bool[_channelFloor.Length];
+            int channelCount = _channelFloor.Length;
+            Span<bool> noExecuteChannel = stackalloc bool[256].Slice(0, channelCount);
             for (int i = 0; i < _channelFloor.Length; i++)
             {
                 floorData[i].Reset();

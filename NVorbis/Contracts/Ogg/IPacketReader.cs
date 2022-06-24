@@ -2,7 +2,7 @@
 
 namespace NVorbis.Contracts.Ogg
 {
-    interface IPacketReader
+    internal interface IPacketReader
     {
         ArraySegment<byte> GetPacketData(PacketDataPart dataPart);
 

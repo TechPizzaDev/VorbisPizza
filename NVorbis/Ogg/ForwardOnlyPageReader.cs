@@ -1,11 +1,11 @@
-﻿using NVorbis.Contracts.Ogg;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using NVorbis.Contracts.Ogg;
 
 namespace NVorbis.Ogg
 {
-    class ForwardOnlyPageReader : PageReaderBase
+    internal class ForwardOnlyPageReader : PageReaderBase
     {
         private readonly Dictionary<int, IForwardOnlyPacketProvider> _packetProviders = new Dictionary<int, IForwardOnlyPacketProvider>();
         private readonly NewStreamCallback _newStreamCallback;

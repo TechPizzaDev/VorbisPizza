@@ -1,14 +1,14 @@
-﻿using NVorbis.Contracts;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using NVorbis.Contracts;
 
 namespace NVorbis
 {
     // Packed LSP values on dB amplittude and Bark frequency scale.  Virtually unused (libvorbis did not use past beta 4).  Probably untested.
-    class Floor0 : IFloor
+    internal class Floor0 : IFloor
     {
-        sealed class Data : FloorData
+        private sealed class Data : FloorData
         {
             internal float[] Coeff;
             internal float Amp;
@@ -24,11 +24,11 @@ namespace NVorbis
             }
         }
 
-        int _order, _rate, _bark_map_size, _ampBits, _ampOfs, _ampDiv;
-        Codebook[] _books;
-        int _bookBits;
-        Dictionary<int, float[]> _wMap;
-        Dictionary<int, int[]> _barkMaps;
+        private int _order, _rate, _bark_map_size, _ampBits, _ampOfs, _ampDiv;
+        private Codebook[] _books;
+        private int _bookBits;
+        private Dictionary<int, float[]> _wMap;
+        private Dictionary<int, int[]> _barkMaps;
 
         public Floor0(DataPacket packet, int block0Size, int block1Size, Codebook[] codebooks)
         {
@@ -77,7 +77,7 @@ namespace NVorbis
             };
         }
 
-        int[] SynthesizeBarkCurve(int n)
+        private int[] SynthesizeBarkCurve(int n)
         {
             float scale = _bark_map_size / toBARK(_rate / 2);
 
@@ -91,12 +91,12 @@ namespace NVorbis
             return map;
         }
 
-        static float toBARK(double lsp)
+        private static float toBARK(double lsp)
         {
             return (float)(13.1 * Math.Atan(0.00074 * lsp) + 2.24 * Math.Atan(0.0000000185 * lsp * lsp) + .0001 * lsp);
         }
 
-        float[] SynthesizeWDelMap(int n)
+        private float[] SynthesizeWDelMap(int n)
         {
             float wdel = (float)(Math.PI / _bark_map_size);
 
@@ -111,7 +111,7 @@ namespace NVorbis
         public void Unpack(DataPacket packet, FloorData floorData, int blockSize, int channel)
         {
             Data data = (Data)floorData;
-            
+
             data.Amp = packet.ReadBits(_ampBits);
             if (data.Amp > 0f)
             {

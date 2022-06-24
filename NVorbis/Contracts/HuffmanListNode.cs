@@ -2,7 +2,7 @@
 
 namespace NVorbis.Contracts
 {
-    struct HuffmanListNode : IComparable<HuffmanListNode>
+    internal struct HuffmanListNode : IComparable<HuffmanListNode>
     {
         public int Value;
         public int Length;
