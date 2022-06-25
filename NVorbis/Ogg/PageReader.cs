@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.IO;
@@ -161,6 +161,8 @@ namespace NVorbis.Ogg
 
         public override bool ReadPageAt(long offset)
         {
+            Span<byte> hdrBuf = stackalloc byte[282];
+
             // make sure we're locked; no sense reading if we aren't
             if (!CheckLock()) throw new InvalidOperationException("Must be locked prior to reading!");
 
@@ -171,8 +173,6 @@ namespace NVorbis.Ogg
                 // short circuit for when we've already loaded the page
                 return true;
             }
-
-            Span<byte> hdrBuf = stackalloc byte[282];
 
             SeekStream(offset);
             int cnt = EnsureRead(hdrBuf.Slice(0, 27));

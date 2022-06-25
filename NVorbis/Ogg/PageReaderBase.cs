@@ -1,4 +1,5 @@
 using System;
+using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.IO;
 using NVorbis.Contracts.Ogg;
@@ -51,21 +52,15 @@ namespace NVorbis.Ogg
 
             Crc crc = Crc.Create();
             Span<byte> pb0 = pageBuf.AsSpan(0, 22);
-            for (int i = 0; i < pb0.Length; i++)
-            {
-                crc.Update(pb0[i]);
-            }
+            crc.Update(pb0);
             crc.Update(0);
             crc.Update(0);
             crc.Update(0);
             crc.Update(0);
 
             Span<byte> pb1 = pageBuf.AsSpan(26, pageBuf.Length - 26);
-            for (int i = 0; i < pb1.Length; i++)
-            {
-                crc.Update(pb1[i]);
-            }
-            return crc.Test(BitConverter.ToUInt32(pageBuf, 22));
+            crc.Update(pb1);
+            return crc.Test(BinaryPrimitives.ReadUInt32BigEndian(pageBuf.AsSpan(22, 4)));
         }
 
         private bool AddPage(byte[] pageBuf, bool isResync)
@@ -237,13 +232,13 @@ namespace NVorbis.Ogg
 
         public bool ReadNextPage()
         {
+            // 27 - 4 + 27 + 255 (found sync at end of first buffer, and found page has full segment count)
+            Span<byte> headerBuf = stackalloc byte[305];
+
             // make sure we're locked; no sense reading if we aren't
             if (!CheckLock()) throw new InvalidOperationException("Must be locked prior to reading!");
 
             bool isResync = false;
-
-            // 27 - 4 + 27 + 255 (found sync at end of first buffer, and found page has full segment count)
-            Span<byte> headerBuf = stackalloc byte[305];
 
             int ofs = 0;
             int cnt;

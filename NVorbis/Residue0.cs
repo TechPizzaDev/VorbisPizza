@@ -25,6 +25,8 @@ namespace NVorbis
         [SkipLocalsInit]
         public Residue0(DataPacket packet, int channels, Codebook[] codebooks)
         {
+            Span<byte> bookNums = stackalloc byte[1024];
+
             // this is pretty well stolen directly from libvorbis...  BSD license
             _begin = (int)packet.ReadBits(24);
             _end = (int)packet.ReadBits(24);
@@ -50,7 +52,6 @@ namespace NVorbis
                 acc += BitOperations.PopCount(cascade[i]);
             }
 
-            Span<byte> bookNums = stackalloc byte[1024];
             if (acc > bookNums.Length)
                 bookNums = new byte[acc];
             else

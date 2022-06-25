@@ -99,12 +99,13 @@ namespace NVorbis
         [SkipLocalsInit]
         public void DecodePacket(DataPacket packet, int blockSize, int channels, float[][] buffer)
         {
+            Span<bool> noExecuteChannel = stackalloc bool[256];
             int halfBlockSize = blockSize >> 1;
 
             // read the noise floor data
             FloorData[] floorData = _channelFloorData;
             int channelCount = _channelFloor.Length;
-            Span<bool> noExecuteChannel = stackalloc bool[256].Slice(0, channelCount);
+            noExecuteChannel = noExecuteChannel.Slice(0, channelCount);
             for (int i = 0; i < _channelFloor.Length; i++)
             {
                 floorData[i].Reset();

@@ -208,10 +208,10 @@ namespace NVorbis
         [SkipLocalsInit]
         public void Apply(FloorData floorData, int blockSize, float[] residue)
         {
-            Data data = (Data)floorData;
+            Span<bool> stepFlags = stackalloc bool[64];
 
             int n = blockSize / 2;
-            Span<bool> stepFlags = stackalloc bool[64];
+            Data data = (Data)floorData;
 
             if (data.PostCount > 0)
             {
