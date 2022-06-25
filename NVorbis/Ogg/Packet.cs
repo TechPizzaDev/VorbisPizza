@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using NVorbis.Contracts.Ogg;
@@ -54,38 +54,47 @@ namespace NVorbis.Ogg
             _dataEnd = data.Offset + data.Count;
         }
 
-        protected override int ReadNextByte()
+        protected override int ReadBytes(Span<byte> destination)
         {
-            int b = Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(_data), _dataOfs);
-
-            if (++_dataOfs == _dataEnd)
+            int length = destination.Length;
+            do
             {
-                GetNextPacketData(ref b);
-            }
+                int left = _dataEnd - _dataOfs;
+                int toRead = Math.Min(left, destination.Length);
+                _data.AsSpan(_dataOfs, toRead).CopyTo(destination);
+                destination = destination.Slice(toRead);
 
-            return b;
+                _dataOfs += toRead;
+                if (_dataOfs == _dataEnd)
+                {
+                    if (!GetNextPacketData())
+                        break;
+                }
+            }
+            while (destination.Length > 0);
+
+            return length - destination.Length;
         }
 
-        private void GetNextPacketData(ref int b)
+        private bool GetNextPacketData()
         {
             if (++_dataPartIndex < GetDataPartCount())
             {
                 ArraySegment<byte> data = _packetReader.GetPacketData(GetDataPart(_dataPartIndex));
                 SetData(data);
                 _dataCount += data.Count * 8;
+                return true;
             }
-            else
-            {
-                // Data is already the special array;
-                // there was an attempt to read past the end of the packet so invalidate the read.
-                if (_data == _oneByte)
-                    b = -1;
 
-                SetData(_oneByte);
+            byte[] oldData = _data;
+            SetData(_oneByte);
 
-                // Restore to previous index to not overflow ever
-                _dataPartIndex--;
-            }
+            // Restore to previous index to not overflow ever
+            _dataPartIndex--;
+
+            // If data was already the special one-byte array,
+            // there was an attempt to read past the end of the packet so invalidate the read.
+            return oldData != _oneByte;
         }
 
         public override void Reset()

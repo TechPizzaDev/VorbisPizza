@@ -297,13 +297,13 @@ namespace NVorbis.Ogg
 
         protected override int TotalBits => _packetBuf.Count * 8;
 
-        protected override int ReadNextByte()
+        protected override int ReadBytes(Span<byte> destination)
         {
-            if (_dataIndex < _packetBuf.Count)
-            {
-                return _packetBuf.Array[_packetBuf.Offset + _dataIndex++];
-            }
-            return -1;
+            int left = _packetBuf.Count - _dataIndex;
+            int toRead = Math.Min(left, destination.Length);
+            _packetBuf.AsSpan(_dataIndex, toRead).CopyTo(destination);
+            _dataIndex += toRead;
+            return toRead;
         }
 
         public override void Reset()

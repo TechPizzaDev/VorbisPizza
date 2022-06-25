@@ -1,5 +1,6 @@
-﻿using System;
+using System;
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 
 namespace NVorbis
 {
@@ -123,10 +124,10 @@ namespace NVorbis
         }
 
         /// <summary>
-        /// Reads the next byte in the packet.
+        /// Reads the next bytes in the packet.
         /// </summary>
-        /// <returns>The next byte in the packet, or <c>-1</c> if no more data is available.</returns>
-        protected abstract int ReadNextByte();
+        /// <returns>The amount of read bytes, or <c>0</c> if no more data is available.</returns>
+        protected abstract int ReadBytes(Span<byte> destination);
 
         /// <summary>
         /// Frees the buffers and caching for the packet instance.
@@ -164,43 +165,77 @@ namespace NVorbis
             return value;
         }
 
+        private ulong RefillBits1(ref int count)
+        {
+            Span<byte> tmp = stackalloc byte[1];
+            while (_bitCount < 64)
+            {
+                if (ReadBytes(tmp) == 0)
+                    break;
+
+                byte val = tmp[0];
+                _bitBucket |= (ulong)val << _bitCount;
+                _bitCount += 8;
+
+                if (_bitCount > 64)
+                    _overflowBits = (byte)(val >> (72 - _bitCount));
+            }
+
+            if (count > _bitCount)
+                count = _bitCount;
+
+            ulong value = _bitBucket;
+            if (count < 64)
+                value &= (1UL << count) - 1;
+
+            return value;
+        }
+
+        private unsafe ulong RefillBits(ref int count)
+        {
+            byte* buffer = stackalloc byte[8];
+            uint toRead = (71 - (uint)_bitCount) / 8;
+            Span<byte> span = new(buffer, (int)toRead);
+            int bytesRead = ReadBytes(span);
+
+            for (int i = 0; i < bytesRead; i++)
+            {
+                _bitBucket |= (ulong)buffer[i] << _bitCount;
+                _bitCount += 8;
+            }
+
+            if (_bitCount > 64 && bytesRead > 0)
+                _overflowBits = (byte)(buffer[bytesRead - 1] >> (72 - _bitCount));
+
+            if (count > _bitCount)
+                count = _bitCount;
+
+            ulong value = _bitBucket;
+            if (count < 64)
+                value &= (1UL << count) - 1;
+
+            return value;
+        }
+
         /// <summary>
         /// Attempts to read the specified number of bits from the packet. Does not advance the read position.
         /// </summary>
         /// <param name="count">The number of bits to read.</param>
         /// <param name="bitsRead">Outputs the actual number of bits read.</param>
         /// <returns>The value of the bits read.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ulong TryPeekBits(int count, out int bitsRead)
         {
             Debug.Assert((uint)count <= 64);
 
-            ulong value;
-            while (_bitCount < count)
-            {
-                int val = ReadNextByte();
-                if (val == -1)
-                {
-                    bitsRead = _bitCount;
-                    value = _bitBucket;
-                    return value;
-                }
-                _bitBucket |= (ulong)val << _bitCount;
-                _bitCount += 8;
-
-                if (_bitCount > 64)
-                {
-                    _overflowBits = (byte)(val >> (72 - _bitCount));
-                }
-            }
-
-            value = _bitBucket;
-
-            if (count < 64)
-            {
-                value &= (1UL << count) - 1;
-            }
-
             bitsRead = count;
+            if (_bitCount < count)
+                return RefillBits(ref bitsRead);
+
+            ulong value = _bitBucket;
+            if (count < 64)
+                value &= (1UL << count) - 1;
+
             return value;
         }
 
@@ -208,76 +243,86 @@ namespace NVorbis
         /// Advances the read position by the the specified number of bits.
         /// </summary>
         /// <param name="count">The number of bits to skip reading.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void SkipBits(int count)
         {
+            if (_bitCount > count)
+            {
+                // we still have bits left over...
+                if (count > 63)
+                {
+                    _bitBucket = 0;
+                }
+                else
+                {
+                    _bitBucket >>= count;
+                }
+
+                if (_bitCount > 64)
+                {
+                    int overflowCount = _bitCount - 64;
+                    _bitBucket |= (ulong)_overflowBits << (_bitCount - count - overflowCount);
+
+                    if (overflowCount > count)
+                    {
+                        // ugh, we have to keep bits in overflow
+                        _overflowBits >>= count;
+                    }
+                }
+
+                _bitCount -= count;
+                _readBits += count;
+            }
+            else if (_bitCount == count)
+            {
+                _bitBucket = 0UL;
+                _bitCount = 0;
+                _readBits += count;
+            }
+            else //  _bitCount < count
+            {
+                // we have to move more bits than we have available...
+                SkipExtraBits(count);
+            }
+        }
+
+        private void SkipExtraBits(int count)
+        {
+            Span<byte> tmp = stackalloc byte[1];
+            if (count <= 0)
+            {
+                return;
+            }
+
+            count -= _bitCount;
+            _readBits += _bitCount;
+            _bitCount = 0;
+            _bitBucket = 0;
+
+            while (count > 8)
+            {
+                if (ReadBytes(tmp) == 0)
+                {
+                    count = 0;
+                    IsShort = true;
+                    break;
+                }
+                count -= 8;
+                _readBits += 8;
+            }
+
             if (count > 0)
             {
-                if (_bitCount > count)
+                int r = ReadBytes(tmp);
+                if (r == 0)
                 {
-                    // we still have bits left over...
-                    if (count > 63)
-                    {
-                        _bitBucket = 0;
-                    }
-                    else
-                    {
-                        _bitBucket >>= count;
-                    }
-                    if (_bitCount > 64)
-                    {
-                        int overflowCount = _bitCount - 64;
-                        _bitBucket |= (ulong)_overflowBits << (_bitCount - count - overflowCount);
-
-                        if (overflowCount > count)
-                        {
-                            // ugh, we have to keep bits in overflow
-                            _overflowBits >>= count;
-                        }
-                    }
-
-                    _bitCount -= count;
-                    _readBits += count;
+                    IsShort = true;
                 }
-                else if (_bitCount == count)
+                else
                 {
-                    _bitBucket = 0UL;
-                    _bitCount = 0;
+                    _bitBucket = (ulong)(tmp[0] >> count);
+                    _bitCount = 8 - count;
                     _readBits += count;
-                }
-                else //  _bitCount < count
-                {
-                    // we have to move more bits than we have available...
-                    count -= _bitCount;
-                    _readBits += _bitCount;
-                    _bitCount = 0;
-                    _bitBucket = 0;
-
-                    while (count > 8)
-                    {
-                        if (ReadNextByte() == -1)
-                        {
-                            count = 0;
-                            IsShort = true;
-                            break;
-                        }
-                        count -= 8;
-                        _readBits += 8;
-                    }
-
-                    if (count > 0)
-                    {
-                        int temp = ReadNextByte();
-                        if (temp == -1)
-                        {
-                            IsShort = true;
-                        }
-                        else
-                        {
-                            _bitBucket = (ulong)(temp >> count);
-                            _bitCount = 8 - count;
-                            _readBits += count;
-                        }
-                    }
                 }
             }
         }
