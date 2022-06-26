@@ -320,8 +320,6 @@ namespace NVorbis
 
         #endregion
 
-        #region State Change
-
         private void ResetDecoder()
         {
             _prevPacketBuf = null;
@@ -334,15 +332,16 @@ namespace NVorbis
             _hasPosition = false;
         }
 
-        #endregion
-
         #region Decoding
 
         /// <inheritdoc/>
         public unsafe int Read(Span<float> buffer)
         {
-            if (buffer.Length % _channels != 0) throw new ArgumentException("Length must be a multiple of Channels.", nameof(buffer));
-            if (_packetProvider == null) throw new ObjectDisposedException(nameof(StreamDecoder));
+            if (buffer.Length % _channels != 0) 
+                throw new ArgumentException("Length must be a multiple of Channels.", nameof(buffer));
+            
+            if (_packetProvider == null) 
+                throw new ObjectDisposedException(nameof(StreamDecoder));
 
             // if the caller didn't ask for any data, bail early
             if (buffer.Length == 0)
@@ -511,7 +510,10 @@ namespace NVorbis
         private bool ReadNextPacket(nint bufferedSamples, out long? samplePosition)
         {
             // decode the next packet now so we can start overlapping with it
-            float[][] curPacket = DecodeNextPacket(out int startIndex, out int validLen, out int totalLen, out bool isEndOfStream, out samplePosition, out int bitsRead, out int bitsRemaining, out int containerOverheadBits);
+            float[][] curPacket = DecodeNextPacket(
+                out int startIndex, out int validLen, out int totalLen, out bool isEndOfStream, 
+                out samplePosition, out int bitsRead, out int bitsRemaining, out int containerOverheadBits);
+
             _eosFound |= isEndOfStream;
             if (curPacket == null)
             {
@@ -530,7 +532,8 @@ namespace NVorbis
                 }
             }
 
-            // start overlapping (if we don't have an previous packet data, just loop and the previous packet logic will handle things appropriately)
+            // start overlapping (if we don't have an previous packet data,
+            // just loop and the previous packet logic will handle things appropriately)
             if (_prevPacketEnd > 0)
             {
                 // overlap the first samples in the packet with the previous packet, then loop
@@ -556,7 +559,9 @@ namespace NVorbis
             return true;
         }
 
-        private float[][] DecodeNextPacket(out int packetStartindex, out int packetValidLength, out int packetTotalLength, out bool isEndOfStream, out long? samplePosition, out int bitsRead, out int bitsRemaining, out int containerOverheadBits)
+        private float[][] DecodeNextPacket(
+            out int packetStartindex, out int packetValidLength, out int packetTotalLength, out bool isEndOfStream, 
+            out long? samplePosition, out int bitsRead, out int bitsRemaining, out int containerOverheadBits)
         {
             DataPacket packet = null;
             try
@@ -676,8 +681,11 @@ namespace NVorbis
         /// <param name="seekOrigin">The reference point used to obtain the new position.</param>
         public void SeekTo(long samplePosition, SeekOrigin seekOrigin = SeekOrigin.Begin)
         {
-            if (_packetProvider == null) throw new ObjectDisposedException(nameof(StreamDecoder));
-            if (!_packetProvider.CanSeek) throw new InvalidOperationException("Seek is not supported by the Contracts.IPacketProvider instance.");
+            if (_packetProvider == null) 
+                throw new ObjectDisposedException(nameof(StreamDecoder));
+            
+            if (!_packetProvider.CanSeek) 
+                throw new InvalidOperationException("Seek is not supported by the underlying packet provider.");
 
             switch (seekOrigin)
             {
@@ -721,7 +729,8 @@ namespace NVorbis
                 _eosFound = true;
                 if (_packetProvider.GetGranuleCount() != samplePosition)
                 {
-                    throw new InvalidOperationException("Could not read pre-roll packet!  Try seeking again prior to reading more samples.");
+                    throw new InvalidOperationException(
+                        "Could not read pre-roll packet!  Try seeking again prior to reading more samples.");
                 }
                 _prevPacketStart = _prevPacketStop;
                 _currentPosition = samplePosition;
@@ -734,7 +743,8 @@ namespace NVorbis
                 ResetDecoder();
                 // we'll use this to force ReadSamples to fail to read
                 _eosFound = true;
-                throw new InvalidOperationException("Could not read pre-roll packet!  Try seeking again prior to reading more samples.");
+                throw new InvalidOperationException(
+                    "Could not read pre-roll packet!  Try seeking again prior to reading more samples.");
             }
 
             // adjust our indexes to match what we want
@@ -784,7 +794,8 @@ namespace NVorbis
         public int UpperBitrate { get; private set; }
 
         /// <summary>
-        /// Gets the nominal bitrate of the stream, if specified.  May be calculated from <see cref="LowerBitrate"/> and <see cref="UpperBitrate"/>.
+        /// Gets the nominal bitrate of the stream, if specified. 
+        /// May be calculated from <see cref="LowerBitrate"/> and <see cref="UpperBitrate"/>.
         /// </summary>
         public int NominalBitrate { get; private set; }
 

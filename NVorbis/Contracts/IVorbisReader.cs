@@ -52,7 +52,8 @@ namespace NVorbis.Contracts
         int UpperBitrate { get; }
 
         /// <summary>
-        /// Gets the nominal bitrate of the stream, if specified.  May be calculated from <see cref="LowerBitrate"/> and <see cref="UpperBitrate"/>.
+        /// Gets the nominal bitrate of the stream, if specified.
+        /// May be calculated from <see cref="LowerBitrate"/> and <see cref="UpperBitrate"/>.
         /// </summary>
         int NominalBitrate { get; }
 
@@ -113,7 +114,9 @@ namespace NVorbis.Contracts
         void Initialize();
          
         /// <summary>
-        /// Searches for the next stream in a concatenated file.  Will raise <see cref="NewStream"/> for the found stream, and will add it to <see cref="Streams"/> if not marked as ignored.
+        /// Searches for the next stream in a concatenated file. 
+        /// Will raise <see cref="NewStream"/> for the found stream, 
+        /// and will add it to <see cref="Streams"/> if not marked as ignored.
         /// </summary>
         /// <returns><see langword="true"/> if a new stream was found, otherwise <see langword="false"/>.</returns>
         bool FindNextStream();
@@ -122,7 +125,10 @@ namespace NVorbis.Contracts
         /// Switches to an alternate logical stream.
         /// </summary>
         /// <param name="index">The logical stream index to switch to</param>
-        /// <returns><see langword="true"/> if the properties of the logical stream differ from those of the one previously being decoded. Otherwise, <see langword="false"/>.</returns>
+        /// <returns>
+        /// <see langword="true"/> if the properties of the logical stream differ from 
+        /// those of the one previously being decoded. Otherwise, <see langword="false"/>.
+        /// </returns>
         bool SwitchStreams(int index);
 
         /// <summary>
@@ -130,8 +136,13 @@ namespace NVorbis.Contracts
         /// </summary>
         /// <param name="buffer">The buffer to read the samples into.</param>
         /// <returns>The number of samples read into the buffer.</returns>
-        /// <exception cref="ArgumentException">Thrown when the buffer is too small or the length is not a multiple of <see cref="Channels"/>.</exception>
-        /// <remarks>The data populated into <paramref name="buffer"/> is interleaved by channel in normal PCM fashion: Left, Right, Left, Right, Left, Right</remarks>
+        /// <exception cref="ArgumentException">
+        /// The buffer is too small or the length is not a multiple of <see cref="Channels"/>.
+        /// </exception>
+        /// <remarks>
+        /// The data populated into <paramref name="buffer"/> is interleaved by channel in normal PCM fashion: 
+        /// Left, Right, Left, Right, Left, Right.
+        /// </remarks>
         int ReadSamples(Span<float> buffer);
 
         /// <summary>

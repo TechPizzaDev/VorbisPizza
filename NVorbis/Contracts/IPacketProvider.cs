@@ -1,4 +1,4 @@
-﻿namespace NVorbis.Contracts
+namespace NVorbis.Contracts
 {
     /// <summary>
     /// Encapsulates a method that calculates the number of granules decodable from the specified packet.
@@ -40,7 +40,9 @@
         /// </summary>
         /// <param name="granulePos">The granule position to seek to.</param>
         /// <param name="preRoll">The number of packets to seek backward prior to the granule position.</param>
-        /// <param name="getPacketGranuleCount">A <see cref="GetPacketGranuleCount"/> delegate that returns the number of granules in the specified packet.</param>
+        /// <param name="getPacketGranuleCount">
+        /// A <see cref="GetPacketGranuleCount"/> delegate that returns the number of granules in the specified packet.
+        /// </param>
         /// <returns>The granule position at the start of the packet containing the requested position.</returns>
         long SeekTo(long granulePos, uint preRoll, GetPacketGranuleCount getPacketGranuleCount);
 

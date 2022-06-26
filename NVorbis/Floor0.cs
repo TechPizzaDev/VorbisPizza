@@ -1,11 +1,12 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using NVorbis.Contracts;
 
 namespace NVorbis
 {
-    // Packed LSP values on dB amplittude and Bark frequency scale.  Virtually unused (libvorbis did not use past beta 4).  Probably untested.
+    // Packed LSP values on dB amplittude and Bark frequency scale.
+    // Virtually unused (libvorbis did not use past beta 4). Probably untested.
     internal class Floor0 : IFloor
     {
         private sealed class Data : FloorData
