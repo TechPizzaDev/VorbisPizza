@@ -1,5 +1,4 @@
 using System;
-using System.Numerics;
 using System.Runtime.CompilerServices;
 using NVorbis.Contracts;
 
@@ -16,7 +15,7 @@ namespace NVorbis
         private Residue0[] _channelResidue;
         private float[] _buf2;
 
-        public Mapping(DataPacket packet, int channels, IFloor[] floors, Residue0[] residues)
+        public Mapping(ref VorbisPacket packet, int channels, IFloor[] floors, Residue0[] residues)
         {
             int submapCount = 1;
             if (packet.ReadBit())
@@ -98,7 +97,7 @@ namespace NVorbis
         }
 
         [SkipLocalsInit]
-        public unsafe void DecodePacket(DataPacket packet, int blockSize, int channels, float[][] buffer)
+        public unsafe void DecodePacket(ref VorbisPacket packet, int blockSize, int channels, float[][] buffer)
         {
             Span<bool> noExecuteChannel = stackalloc bool[256];
             int halfBlockSize = blockSize >> 1;
@@ -110,7 +109,7 @@ namespace NVorbis
             for (int i = 0; i < _channelFloor.Length; i++)
             {
                 floorData[i].Reset();
-                _channelFloor[i].Unpack(packet, floorData[i], blockSize, i);
+                _channelFloor[i].Unpack(ref packet, floorData[i], blockSize, i);
                 noExecuteChannel[i] = !floorData[i].ExecuteChannel;
 
                 // pre-clear the residue buffers
@@ -139,7 +138,7 @@ namespace NVorbis
                     }
                 }
 
-                _submapResidue[i].Decode(packet, noExecuteChannel, blockSize, buffer);
+                _submapResidue[i].Decode(ref packet, noExecuteChannel, blockSize, buffer);
             }
 
             // inverse coupling

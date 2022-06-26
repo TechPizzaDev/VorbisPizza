@@ -46,13 +46,13 @@ namespace NVorbis
         public StreamDecoder(IPacketProvider packetProvider)
         {
             _packetProvider = packetProvider ?? throw new ArgumentNullException(nameof(packetProvider));
-            
+
             _stats = new StreamStats();
 
             _utf8Vendor = Array.Empty<byte>();
             _utf8Comments = Array.Empty<byte[]>();
             _modes = Array.Empty<Mode>();
-            
+
             _currentPosition = 0L;
             ClipSamples = true;
         }
@@ -60,17 +60,19 @@ namespace NVorbis
         /// <inheritdoc />
         public void Initialize()
         {
-            DataPacket packet = _packetProvider.PeekNextPacket();
-            if (!ProcessHeaderPackets(packet))
+            if (!_packetProvider.TryGetNextPacket(out VorbisPacket packet))
+                throw new InvalidDataException();
+
+            if (!ProcessHeaderPackets(ref packet))
             {
                 packet.Reset();
                 Dispose();
 
-                throw GetInvalidStreamException(packet);
+                throw GetInvalidStreamException(ref packet);
             }
         }
 
-        private static Exception GetInvalidStreamException(DataPacket packet)
+        private static Exception GetInvalidStreamException(ref VorbisPacket packet)
         {
             try
             {
@@ -107,30 +109,40 @@ namespace NVorbis
 
         #region Init
 
-        private bool ProcessHeaderPackets(DataPacket packet)
+        private bool ProcessHeaderPackets(ref VorbisPacket headerPacket)
         {
-            if (!ProcessHeaderPacket(
-                packet,
-                static (p, s) => s.LoadStreamHeader(p),
-                static (_, s) => s._packetProvider.GetNextPacket().Done()))
+            try
             {
-                return false;
+                if (!LoadStreamHeader(ref headerPacket))
+                    return false;
+            }
+            finally
+            {
+                headerPacket.Done();
             }
 
-            if (!ProcessHeaderPacket(
-                _packetProvider.GetNextPacket(),
-                static (p, s) => s.LoadComments(p),
-                static (p, _) => p.Done()))
-            {
+            if (!_packetProvider.TryGetNextPacket(out VorbisPacket commentPacket))
                 return false;
+            try
+            {
+                if (!LoadComments(ref commentPacket))
+                    return false;
+            }
+            finally
+            {
+                commentPacket.Done();
             }
 
-            if (!ProcessHeaderPacket(
-                _packetProvider.GetNextPacket(),
-                static (p, s) => s.LoadBooks(p),
-                static (p, _) => p.Done()))
-            {
+            if (!_packetProvider.TryGetNextPacket(out VorbisPacket bookPacket))
                 return false;
+            try
+            {
+                if (!LoadBooks(ref bookPacket))
+                    return false;
+            }
+            finally
+            {
+                bookPacket.Done();
             }
 
             _currentPosition = 0;
@@ -138,30 +150,11 @@ namespace NVorbis
             return true;
         }
 
-        private bool ProcessHeaderPacket(
-            DataPacket packet,
-            Func<DataPacket, StreamDecoder, bool> processAction,
-            Action<DataPacket, StreamDecoder> doneAction)
-        {
-            if (packet != null)
-            {
-                try
-                {
-                    return processAction(packet, this);
-                }
-                finally
-                {
-                    doneAction(packet, this);
-                }
-            }
-            return false;
-        }
-
         private static ReadOnlySpan<byte> PacketSignatureStream => new byte[] { 0x01, 0x76, 0x6f, 0x72, 0x62, 0x69, 0x73, 0x00, 0x00, 0x00, 0x00 };
         private static ReadOnlySpan<byte> PacketSignatureComments => new byte[] { 0x03, 0x76, 0x6f, 0x72, 0x62, 0x69, 0x73 };
         private static ReadOnlySpan<byte> PacketSignatureBooks => new byte[] { 0x05, 0x76, 0x6f, 0x72, 0x62, 0x69, 0x73 };
 
-        private static bool ValidateHeader(DataPacket packet, ReadOnlySpan<byte> expected)
+        private static bool ValidateHeader(ref VorbisPacket packet, ReadOnlySpan<byte> expected)
         {
             for (int i = 0; i < expected.Length; i++)
             {
@@ -173,7 +166,7 @@ namespace NVorbis
             return true;
         }
 
-        private static byte[] ReadString(DataPacket packet, bool skip)
+        private static byte[] ReadString(ref VorbisPacket packet, bool skip)
         {
             int byteLength = (int)packet.ReadBits(32);
             if (byteLength != 0)
@@ -187,9 +180,9 @@ namespace NVorbis
             return Array.Empty<byte>();
         }
 
-        private bool LoadStreamHeader(DataPacket packet)
+        private bool LoadStreamHeader(ref VorbisPacket packet)
         {
-            if (!ValidateHeader(packet, PacketSignatureStream))
+            if (!ValidateHeader(ref packet, PacketSignatureStream))
             {
                 return false;
             }
@@ -214,19 +207,19 @@ namespace NVorbis
             return true;
         }
 
-        private bool LoadComments(DataPacket packet)
+        private bool LoadComments(ref VorbisPacket packet)
         {
-            if (!ValidateHeader(packet, PacketSignatureComments))
+            if (!ValidateHeader(ref packet, PacketSignatureComments))
             {
                 return false;
             }
 
-            _utf8Vendor = ReadString(packet, SkipTags);
+            _utf8Vendor = ReadString(ref packet, SkipTags);
 
             _utf8Comments = new byte[packet.ReadBits(32)][];
             for (int i = 0; i < _utf8Comments.Length; i++)
             {
-                _utf8Comments[i] = ReadString(packet, SkipTags);
+                _utf8Comments[i] = ReadString(ref packet, SkipTags);
             }
 
             _stats.AddPacket(-1, packet.BitsRead, packet.BitsRemaining, packet.ContainerOverheadBits);
@@ -234,9 +227,9 @@ namespace NVorbis
             return true;
         }
 
-        private bool LoadBooks(DataPacket packet)
+        private bool LoadBooks(ref VorbisPacket packet)
         {
-            if (!ValidateHeader(packet, PacketSignatureBooks))
+            if (!ValidateHeader(ref packet, PacketSignatureBooks))
             {
                 return false;
             }
@@ -245,7 +238,7 @@ namespace NVorbis
             Codebook[] books = new Codebook[packet.ReadBits(8) + 1];
             for (int i = 0; i < books.Length; i++)
             {
-                books[i] = new Codebook(packet);
+                books[i] = new Codebook(ref packet);
             }
 
             // Vorbis never used this feature, so we just skip the appropriate number of bits
@@ -256,28 +249,28 @@ namespace NVorbis
             IFloor[] floors = new IFloor[packet.ReadBits(6) + 1];
             for (int i = 0; i < floors.Length; i++)
             {
-                floors[i] = CreateFloor(packet, _block0Size, _block1Size, books);
+                floors[i] = CreateFloor(ref packet, _block0Size, _block1Size, books);
             }
 
             // read the residues
             Residue0[] residues = new Residue0[packet.ReadBits(6) + 1];
             for (int i = 0; i < residues.Length; i++)
             {
-                residues[i] = CreateResidue(packet, _channels, books);
+                residues[i] = CreateResidue(ref packet, _channels, books);
             }
 
             // read the mappings
             Mapping[] mappings = new Mapping[packet.ReadBits(6) + 1];
             for (int i = 0; i < mappings.Length; i++)
             {
-                mappings[i] = CreateMapping(packet, _channels, floors, residues);
+                mappings[i] = CreateMapping(ref packet, _channels, floors, residues);
             }
 
             // read the modes
             _modes = new Mode[packet.ReadBits(6) + 1];
             for (int i = 0; i < _modes.Length; i++)
             {
-                _modes[i] = new Mode(packet, _channels, _block0Size, _block1Size, mappings);
+                _modes[i] = new Mode(ref packet, _channels, _block0Size, _block1Size, mappings);
             }
 
             // verify the closing bit
@@ -291,34 +284,34 @@ namespace NVorbis
             return true;
         }
 
-        private static IFloor CreateFloor(DataPacket packet, int block0Size, int block1Size, Codebook[] codebooks)
+        private static IFloor CreateFloor(ref VorbisPacket packet, int block0Size, int block1Size, Codebook[] codebooks)
         {
             int type = (int)packet.ReadBits(16);
             return type switch
             {
-                0 => new Floor0(packet, block0Size, block1Size, codebooks),
-                1 => new Floor1(packet, codebooks),
+                0 => new Floor0(ref packet, block0Size, block1Size, codebooks),
+                1 => new Floor1(ref packet, codebooks),
                 _ => throw new InvalidDataException("Invalid floor type!"),
             };
         }
 
-        private static Mapping CreateMapping(DataPacket packet, int channels, IFloor[] floors, Residue0[] residues)
+        private static Mapping CreateMapping(ref VorbisPacket packet, int channels, IFloor[] floors, Residue0[] residues)
         {
             if (packet.ReadBits(16) != 0)
             {
                 throw new InvalidDataException("Invalid mapping type!");
             }
-            return new Mapping(packet, channels, floors, residues);
+            return new Mapping(ref packet, channels, floors, residues);
         }
 
-        private static Residue0 CreateResidue(DataPacket packet, int channels, Codebook[] codebooks)
+        private static Residue0 CreateResidue(ref VorbisPacket packet, int channels, Codebook[] codebooks)
         {
             int type = (int)packet.ReadBits(16);
             return type switch
             {
-                0 => new Residue0(packet, channels, codebooks),
-                1 => new Residue1(packet, channels, codebooks),
-                2 => new Residue2(packet, channels, codebooks),
+                0 => new Residue0(ref packet, channels, codebooks),
+                1 => new Residue1(ref packet, channels, codebooks),
+                2 => new Residue2(ref packet, channels, codebooks),
                 _ => throw new InvalidDataException("Invalid residue type!"),
             };
         }
@@ -342,10 +335,10 @@ namespace NVorbis
         /// <inheritdoc/>
         public unsafe int Read(Span<float> buffer)
         {
-            if (buffer.Length % _channels != 0) 
+            if (buffer.Length % _channels != 0)
                 throw new ArgumentException("Length must be a multiple of Channels.", nameof(buffer));
-            
-            if (_packetProvider == null) 
+
+            if (_packetProvider == null)
                 throw new ObjectDisposedException(nameof(StreamDecoder));
 
             // if the caller didn't ask for any data, bail early
@@ -520,7 +513,7 @@ namespace NVorbis
         {
             // decode the next packet now so we can start overlapping with it
             float[][]? curPacket = DecodeNextPacket(
-                out int startIndex, out int validLen, out int totalLen, out bool isEndOfStream, 
+                out int startIndex, out int validLen, out int totalLen, out bool isEndOfStream,
                 out samplePosition, out int bitsRead, out int bitsRemaining, out int containerOverheadBits);
 
             _eosFound |= isEndOfStream;
@@ -571,19 +564,22 @@ namespace NVorbis
         }
 
         private float[][]? DecodeNextPacket(
-            out int packetStartindex, out int packetValidLength, out int packetTotalLength, out bool isEndOfStream, 
+            out int packetStartindex, out int packetValidLength, out int packetTotalLength, out bool isEndOfStream,
             out long? samplePosition, out int bitsRead, out int bitsRemaining, out int containerOverheadBits)
         {
-            DataPacket? packet = null;
+            bool hasPacket = false;
+            VorbisPacket packet = default;
             try
             {
-                if ((packet = _packetProvider.GetNextPacket()) == null)
+                if (!_packetProvider.TryGetNextPacket(out packet))
                 {
                     // no packet? we're at the end of the stream
                     isEndOfStream = true;
                 }
                 else
                 {
+                    hasPacket = true;
+
                     // if the packet is flagged as the end of the stream, we can safely mark _eosFound
                     isEndOfStream = packet.IsEndOfStream;
 
@@ -613,7 +609,7 @@ namespace NVorbis
                                 _nextPacketBuf[i] = new float[_block1Size];
                             }
                         }
-                        if (mode.Decode(packet, _nextPacketBuf, out packetStartindex, out packetValidLength, out packetTotalLength))
+                        if (mode.Decode(ref packet, _nextPacketBuf, out packetStartindex, out packetValidLength, out packetTotalLength))
                         {
                             // per the spec, do not decode more samples than the last granulePosition
                             samplePosition = packet.GranulePosition;
@@ -624,6 +620,7 @@ namespace NVorbis
                         bitsRemaining = packet.BitsRead + packet.BitsRemaining;
                     }
                 }
+
                 packetStartindex = 0;
                 packetValidLength = 0;
                 packetTotalLength = 0;
@@ -635,7 +632,8 @@ namespace NVorbis
             }
             finally
             {
-                packet?.Done();
+                if (hasPacket)
+                    packet.Done();
             }
         }
 
@@ -692,10 +690,10 @@ namespace NVorbis
         /// <param name="seekOrigin">The reference point used to obtain the new position.</param>
         public void SeekTo(long samplePosition, SeekOrigin seekOrigin = SeekOrigin.Begin)
         {
-            if (_packetProvider == null) 
+            if (_packetProvider == null)
                 throw new ObjectDisposedException(nameof(StreamDecoder));
-            
-            if (!_packetProvider.CanSeek) 
+
+            if (!_packetProvider.CanSeek)
                 throw new InvalidOperationException("Seek is not supported by the underlying packet provider.");
 
             switch (seekOrigin)
@@ -763,7 +761,7 @@ namespace NVorbis
             _currentPosition = samplePosition;
         }
 
-        private int GetPacketGranules(DataPacket curPacket, bool isLastInPage)
+        private int GetPacketGranules(ref VorbisPacket curPacket, bool isLastInPage)
         {
             // if it's a resync, there's not any audio data to return
             if (curPacket.IsResync) return 0;
@@ -779,7 +777,7 @@ namespace NVorbis
             // if we got an invalid mode value, we can't decode any audio data anyway...
             if (modeIdx < 0 || modeIdx >= _modes.Length) return 0;
 
-            return _modes[modeIdx].GetPacketSampleCount(curPacket, isLastInPage);
+            return _modes[modeIdx].GetPacketSampleCount(ref curPacket, isLastInPage);
         }
 
         #endregion

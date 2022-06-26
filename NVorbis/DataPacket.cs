@@ -111,7 +111,7 @@ namespace NVorbis
 
         private bool GetFlag(PacketFlags flag)
         {
-            return _packetFlags.HasFlag(flag);
+            return (_packetFlags & flag) == flag;
         }
 
         private void SetFlag(PacketFlags flag, bool value)

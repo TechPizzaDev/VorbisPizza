@@ -213,6 +213,11 @@ namespace NVorbis
         public IStreamStats StreamStats => _streamDecoder.Stats;
 
         /// <summary>
+        /// Gets whether the underlying stream can seek.
+        /// </summary>
+        public bool CanSeek => _containerReader.CanSeek;
+
+        /// <summary>
         /// Searches for the next stream in a concatenated file.
         /// Will raise <see cref="NewStream"/> for the found stream, 
         /// and will add it to <see cref="Streams"/> if not marked as ignored.

@@ -13,7 +13,7 @@ namespace NVorbis
         private int _block1Size;
         private Mapping _mapping;
 
-        public Mode(DataPacket packet, int channels, int block0Size, int block1Size, Mapping[] mappings)
+        public Mode(ref VorbisPacket packet, int channels, int block0Size, int block1Size, Mapping[] mappings)
         {
             _channels = channels;
             _block0Size = block0Size;
@@ -92,7 +92,7 @@ namespace NVorbis
         }
 
         private bool GetPacketInfo(
-            DataPacket packet,
+            ref VorbisPacket packet,
             bool isLastInPage,
             out int blockSize,
             out int windowIndex,
@@ -142,14 +142,14 @@ namespace NVorbis
         }
 
         public unsafe bool Decode(
-            DataPacket packet,
+            ref VorbisPacket packet,
             float[][] buffer,
             out int packetStartindex,
             out int packetValidLength,
             out int packetTotalLength)
         {
             if (GetPacketInfo(
-                packet,
+                ref packet,
                 isLastInPage: false,
                 out int blockSize,
                 out int windowIndex,
@@ -158,7 +158,7 @@ namespace NVorbis
                 out packetValidLength,
                 out packetTotalLength))
             {
-                _mapping.DecodePacket(packet, blockSize, _channels, buffer);
+                _mapping.DecodePacket(ref packet, blockSize, _channels, buffer);
 
                 Span<float> window = Windows[windowIndex].AsSpan(0, blockSize);
                 for (int ch = 0; ch < _channels; ch++)
@@ -191,9 +191,9 @@ namespace NVorbis
             return false;
         }
 
-        public int GetPacketSampleCount(DataPacket packet, bool isLastInPage)
+        public int GetPacketSampleCount(ref VorbisPacket packet, bool isLastInPage)
         {
-            GetPacketInfo(packet, isLastInPage, out _, out _, out _, out int packetStartIndex, out int packetValidLength, out _);
+            GetPacketInfo(ref packet, isLastInPage, out _, out _, out _, out int packetStartIndex, out int packetValidLength, out _);
             return packetValidLength - packetStartIndex;
         }
 

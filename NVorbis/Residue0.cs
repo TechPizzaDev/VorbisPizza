@@ -23,7 +23,7 @@ namespace NVorbis
         private int[]? _partWordCache;
 
         [SkipLocalsInit]
-        public Residue0(DataPacket packet, int channels, Codebook[] codebooks)
+        public Residue0(ref VorbisPacket packet, int channels, Codebook[] codebooks)
         {
             Span<byte> bookNums = stackalloc byte[1024];
 
@@ -115,7 +115,7 @@ namespace NVorbis
         }
 
         public virtual void Decode(
-            DataPacket packet, ReadOnlySpan<bool> doNotDecodeChannel, int blockSize, float[][] buffer)
+            ref VorbisPacket packet, ReadOnlySpan<bool> doNotDecodeChannel, int blockSize, float[][] buffer)
         {
             // this is pretty well stolen directly from libvorbis...  BSD license
             int end = _end < blockSize / 2 ? _end : blockSize / 2;
@@ -143,7 +143,7 @@ namespace NVorbis
                         {
                             for (int ch = 0; ch < channels; ch++)
                             {
-                                int idx = _classBook.DecodeScalar(packet);
+                                int idx = _classBook.DecodeScalar(ref packet);
                                 if (idx >= 0 && idx < decodeMap.Length)
                                 {
                                     partWordCache[ch * partitionWords + entryIdx] = idx;
@@ -157,19 +157,19 @@ namespace NVorbis
                             }
                         }
 
-                        for (int dimensionIdx = 0; partitionIdx < partitionCount && dimensionIdx < _classBook.Dimensions; dimensionIdx++, partitionIdx++)
+                        for (int dimIdx = 0; partitionIdx < partitionCount && dimIdx < _classBook.Dimensions; dimIdx++, partitionIdx++)
                         {
                             int offset = _begin + partitionIdx * _partitionSize;
                             for (int ch = 0; ch < channels; ch++)
                             {
                                 int mapIndex = partWordCache[ch * partitionWords + entryIdx] * _classBook.Dimensions;
-                                int idx = decodeMap[mapIndex + dimensionIdx];
+                                int idx = decodeMap[mapIndex + dimIdx];
                                 if ((cascade[idx] & (1 << stage)) != 0)
                                 {
                                     Codebook book = _books[idx][stage];
                                     if (book != null)
                                     {
-                                        if (WriteVectors(book, packet, buffer, ch, offset, _partitionSize))
+                                        if (WriteVectors(book, ref packet, buffer, ch, offset, _partitionSize))
                                         {
                                             // bad packet...  exit now and try to use what we already have
                                             partitionIdx = partitionCount;
@@ -185,14 +185,15 @@ namespace NVorbis
             }
         }
 
-        protected virtual bool WriteVectors(Codebook codebook, DataPacket packet, float[][] residue, int channel, int offset, int partitionSize)
+        protected virtual bool WriteVectors(
+            Codebook codebook, ref VorbisPacket packet, float[][] residue, int channel, int offset, int partitionSize)
         {
             float[] res = residue[channel];
             int steps = partitionSize / codebook.Dimensions;
 
             for (int step = 0; step < steps; step++, offset++)
             {
-                int entry = codebook.DecodeScalar(packet);
+                int entry = codebook.DecodeScalar(ref packet);
                 if (entry == -1)
                 {
                     return true;

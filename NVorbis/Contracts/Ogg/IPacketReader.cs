@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 namespace NVorbis.Contracts.Ogg
 {
@@ -6,6 +6,6 @@ namespace NVorbis.Contracts.Ogg
     {
         ArraySegment<byte> GetPacketData(PacketDataPart dataPart);
 
-        void InvalidatePacketCache(DataPacket packet);
+        void InvalidatePacketCache(in VorbisPacket packet);
     }
 }

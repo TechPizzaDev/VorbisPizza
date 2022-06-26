@@ -36,7 +36,7 @@ namespace NVorbis
         private Dictionary<int, float[]> _wMap;
         private Dictionary<int, int[]> _barkMaps;
 
-        public Floor0(DataPacket packet, int block0Size, int block1Size, Codebook[] codebooks)
+        public Floor0(ref VorbisPacket packet, int block0Size, int block1Size, Codebook[] codebooks)
         {
             // this is pretty well stolen directly from libvorbis...  BSD license
             _order = (int)packet.ReadBits(8);
@@ -111,7 +111,7 @@ namespace NVorbis
             return map;
         }
 
-        public void Unpack(DataPacket packet, FloorData floorData, int blockSize, int channel)
+        public void Unpack(ref VorbisPacket packet, FloorData floorData, int blockSize, int channel)
         {
             Data data = (Data)floorData;
 
@@ -135,7 +135,7 @@ namespace NVorbis
                 // first, the book decode...
                 for (int i = 0; i < _order;)
                 {
-                    int entry = book.DecodeScalar(packet);
+                    int entry = book.DecodeScalar(ref packet);
                     if (entry == -1)
                     {
                         // we ran out of data or the packet is corrupt...  0 the floor and return

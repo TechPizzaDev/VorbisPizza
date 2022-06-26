@@ -51,7 +51,7 @@ namespace NVorbis
         private int _prefixBitLength;
         private int _maxBits;
 
-        public Codebook(DataPacket packet)
+        public Codebook(ref VorbisPacket packet)
         {
             // first, check the sync pattern
             ulong chkVal = packet.ReadBits(24);
@@ -64,15 +64,15 @@ namespace NVorbis
             // init the storage
             _lengths = new int[Entries];
 
-            Huffman huffman = InitTree(packet);
+            Huffman huffman = InitTree(ref packet);
             _prefixList = huffman.PrefixTree;
             _prefixBitLength = huffman.TableBits;
             _overflowList = huffman.OverflowList ?? Array.Empty<HuffmanListNode>();
 
-            _lookupTable = InitLookupTable(packet);
+            _lookupTable = InitLookupTable(ref packet);
         }
 
-        private Huffman InitTree(DataPacket packet)
+        private Huffman InitTree(ref VorbisPacket packet)
         {
             bool sparse;
             int total = 0;
@@ -232,7 +232,7 @@ namespace NVorbis
             }
         }
 
-        private float[] InitLookupTable(DataPacket packet)
+        private float[] InitLookupTable(ref VorbisPacket packet)
         {
             MapType = (int)packet.ReadBits(4);
             if (MapType == 0)
@@ -315,7 +315,7 @@ namespace NVorbis
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public int DecodeScalar(DataPacket packet)
+        public int DecodeScalar(ref VorbisPacket packet)
         {
             ulong data = packet.TryPeekBits(_prefixBitLength, out int bitsRead);
             if (bitsRead != 0)
@@ -329,10 +329,10 @@ namespace NVorbis
                 }
             }
             // nope, not possible... run through the overflow nodes
-            return DecodeOverflowScalar(packet);
+            return DecodeOverflowScalar(ref packet);
         }
 
-        private int DecodeOverflowScalar(DataPacket packet)
+        private int DecodeOverflowScalar(ref VorbisPacket packet)
         {
             int data = (int)packet.TryPeekBits(_maxBits, out int bitsRead);
             if (bitsRead != 0)

@@ -74,7 +74,7 @@ namespace NVorbis.Ogg
             _isEndOfStream = true;
         }
 
-        public DataPacket? GetNextPacket()
+        public bool TryGetNextPacket(out VorbisPacket packet)
         {
             // if not done...
             if (_packetBuf.Count > 0)
@@ -84,38 +84,42 @@ namespace NVorbis.Ogg
 
                 // then return ourself, noting that we didn't peek the packet
                 _lastWasPeek = false;
-                return this;
+                packet = new VorbisPacket(this);
+                return true;
             }
 
             // always advance to the next packet
             _lastWasPeek = false;
             if (GetPacket())
             {
-                return this;
+                packet = new VorbisPacket(this);
+                return true;
             }
-            return null;
+
+            packet = default;
+            return false;
         }
 
-        public DataPacket? PeekNextPacket()
-        {
-            // if not done...
-            if (_packetBuf.Count > 0)
-            {
-                // only allow if last call was for peek
-                if (!_lastWasPeek) throw new InvalidOperationException("Must call Done() on previous packet first.");
-
-                // then just return ourself
-                return this;
-            }
-
-            // use a local variable to throw away the updated position
-            _lastWasPeek = true;
-            if (GetPacket())
-            {
-                return this;
-            }
-            return null;
-        }
+        //public DataPacket? PeekNextPacket()
+        //{
+        //    // if not done...
+        //    if (_packetBuf.Count > 0)
+        //    {
+        //        // only allow if last call was for peek
+        //        if (!_lastWasPeek) throw new InvalidOperationException("Must call Done() on previous packet first.");
+        //
+        //        // then just return ourself
+        //        return this;
+        //    }
+        //
+        //    // use a local variable to throw away the updated position
+        //    _lastWasPeek = true;
+        //    if (GetPacket())
+        //    {
+        //        return this;
+        //    }
+        //    return null;
+        //}
 
         private bool GetPacket()
         {

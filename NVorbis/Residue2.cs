@@ -9,21 +9,21 @@ namespace NVorbis
     {
         private int _channels;
 
-        public Residue2(DataPacket packet, int channels, Codebook[] codebooks) : base(packet, 1, codebooks)
+        public Residue2(ref VorbisPacket packet, int channels, Codebook[] codebooks) : base(ref packet, 1, codebooks)
         {
             _channels = channels;
         }
 
         public override void Decode(
-            DataPacket packet, ReadOnlySpan<bool> doNotDecodeChannel, int blockSize, float[][] buffer)
+            ref VorbisPacket packet, ReadOnlySpan<bool> doNotDecodeChannel, int blockSize, float[][] buffer)
         {
             // since we're doing all channels in a single pass, the block size has to be multiplied.
             // otherwise this is just a pass-through call
-            base.Decode(packet, doNotDecodeChannel, blockSize * _channels, buffer);
+            base.Decode(ref packet, doNotDecodeChannel, blockSize * _channels, buffer);
         }
 
         protected override unsafe bool WriteVectors(
-            Codebook codebook, DataPacket packet, float[][] residue, int channel, int offset, int partitionSize)
+            Codebook codebook, ref VorbisPacket packet, float[][] residue, int channel, int offset, int partitionSize)
         {
             uint dimensions = (uint)codebook.Dimensions;
             uint ch = 0;
@@ -36,7 +36,7 @@ namespace NVorbis
             {
                 for (uint c = 0; c < partitionSize; c += dimensions)
                 {
-                    int entry = codebook.DecodeScalar(packet);
+                    int entry = codebook.DecodeScalar(ref packet);
                     if (entry == -1)
                     {
                         return true;

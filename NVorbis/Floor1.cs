@@ -35,7 +35,7 @@ namespace NVorbis
         private static readonly int[] _rangeLookup = { 256, 128, 86, 64 };
         private static readonly int[] _yBitsLookup = { 8, 7, 7, 6 };
 
-        public Floor1(DataPacket packet, Codebook[] codebooks)
+        public Floor1(ref VorbisPacket packet, Codebook[] codebooks)
         {
             int maximum_class = -1;
             int[] partitionClass = new int[(int)packet.ReadBits(5)];
@@ -158,7 +158,7 @@ namespace NVorbis
             return new Data();
         }
 
-        public void Unpack(DataPacket packet, FloorData floorData, int blockSize, int channel)
+        public void Unpack(ref VorbisPacket packet, FloorData floorData, int blockSize, int channel)
         {
             Data data = (Data)floorData;
 
@@ -182,7 +182,7 @@ namespace NVorbis
                 uint cval = 0U;
                 if (cbits > 0)
                 {
-                    if ((cval = (uint)_classMasterbooks[clsNum].DecodeScalar(packet)) == uint.MaxValue)
+                    if ((cval = (uint)_classMasterbooks[clsNum].DecodeScalar(ref packet)) == uint.MaxValue)
                     {
                         // we read a bad value...  bail
                         postCount = 0;
@@ -196,7 +196,7 @@ namespace NVorbis
                     cval >>= cbits;
                     if (book != null)
                     {
-                        if ((data.Posts[postCount] = book.DecodeScalar(packet)) == -1)
+                        if ((data.Posts[postCount] = book.DecodeScalar(ref packet)) == -1)
                         {
                             // we read a bad value... bail
                             postCount = 0;

@@ -13,7 +13,7 @@ namespace NVorbis.Ogg
         private PacketDataPart[]? _dataParts;
         private PacketDataPart _firstDataPart;
 
-        private IPacketReader _packetReader;
+        public IPacketReader _packetReader;
         private int _dataCount;
         private byte[] _data;
         private int _dataPartIndex;
@@ -108,7 +108,7 @@ namespace NVorbis.Ogg
 
         public override void Done()
         {
-            _packetReader?.InvalidatePacketCache(this);
+            //_packetReader?.InvalidatePacketCache(this);
 
             base.Done();
         }
