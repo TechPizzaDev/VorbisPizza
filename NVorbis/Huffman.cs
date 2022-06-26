@@ -6,11 +6,18 @@ namespace NVorbis
 {
     internal struct Huffman
     {
+        public static Huffman Empty { get; } = new Huffman()
+        {
+            TableBits = 0,
+            PrefixTree = Array.Empty<HuffmanListNode>(),
+            OverflowList = Array.Empty<HuffmanListNode>(),
+        };
+
         private const int MAX_TABLE_BITS = 10;
 
         public int TableBits { get; private set; }
         public HuffmanListNode[] PrefixTree { get; private set; }
-        public HuffmanListNode[]? OverflowList { get; private set; }
+        public HuffmanListNode[] OverflowList { get; private set; }
 
         public static Huffman GenerateTable<TList>(TList values, int[] lengthList, int[] codeList)
             where TList : IReadOnlyList<int>
@@ -67,7 +74,7 @@ namespace NVorbis
             {
                 TableBits = tableBits,
                 PrefixTree = prefixList,
-                OverflowList = overflowList?.ToArray()
+                OverflowList = overflowList?.ToArray() ?? Array.Empty<HuffmanListNode>()
             };
         }
     }

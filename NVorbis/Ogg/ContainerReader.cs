@@ -40,6 +40,7 @@ namespace NVorbis.Ogg
             }
             return list;
         }
+
         /// <summary>
         /// Gets whether the underlying stream can seek.
         /// </summary>

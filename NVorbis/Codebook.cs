@@ -64,11 +64,15 @@ namespace NVorbis
             // init the storage
             _lengths = new int[Entries];
 
-            InitTree(packet);
-            InitLookupTable(packet);
+            Huffman huffman = InitTree(packet);
+            _prefixList = huffman.PrefixTree;
+            _prefixBitLength = huffman.TableBits;
+            _overflowList = huffman.OverflowList ?? Array.Empty<HuffmanListNode>();
+
+            _lookupTable = InitLookupTable(packet);
         }
 
-        private void InitTree(DataPacket packet)
+        private Huffman InitTree(DataPacket packet)
         {
             bool sparse;
             int total = 0;
@@ -118,55 +122,55 @@ namespace NVorbis
             }
 
             // figure out the maximum bit size; if all are unused, don't do anything else
-            if ((_maxBits = maxLen) > -1)
+            if ((_maxBits = maxLen) <= -1)
             {
-                int[]? codewordLengths = null;
-                if (sparse && total >= Entries >> 2)
-                {
-                    codewordLengths = new int[Entries];
-                    Array.Copy(_lengths, codewordLengths, Entries);
-
-                    sparse = false;
-                }
-
-                int sortedCount;
-                // compute size of sorted tables
-                if (sparse)
-                {
-                    sortedCount = total;
-                }
-                else
-                {
-                    sortedCount = 0;
-                }
-
-                int[]? values = null;
-                int[]? codewords = null;
-                if (!sparse)
-                {
-                    codewords = new int[Entries];
-                }
-                else if (sortedCount != 0)
-                {
-                    codewordLengths = new int[sortedCount];
-                    codewords = new int[sortedCount];
-                    values = new int[sortedCount];
-                }
-
-                if (!ComputeCodewords(sparse, codewords, codewordLengths, _lengths.AsSpan(0, Entries), values))
-                    throw new InvalidDataException();
-
-                Debug.Assert(codewords != null);
-
-                int[] lengthList = codewordLengths ?? _lengths;
-                Huffman huffman = values != null
-                    ? Huffman.GenerateTable(values, lengthList, codewords)
-                    : Huffman.GenerateTable(new FastRange(0, codewords.Length), lengthList, codewords);
-
-                _prefixList = huffman.PrefixTree;
-                _prefixBitLength = huffman.TableBits;
-                _overflowList = huffman.OverflowList ?? Array.Empty<HuffmanListNode>();
+                return Huffman.Empty;
             }
+
+            int[]? codewordLengths = null;
+            if (sparse && total >= Entries >> 2)
+            {
+                codewordLengths = new int[Entries];
+                Array.Copy(_lengths, codewordLengths, Entries);
+
+                sparse = false;
+            }
+
+            int sortedCount;
+            // compute size of sorted tables
+            if (sparse)
+            {
+                sortedCount = total;
+            }
+            else
+            {
+                sortedCount = 0;
+            }
+
+            int[]? values = null;
+            int[]? codewords = null;
+            if (!sparse)
+            {
+                codewords = new int[Entries];
+            }
+            else if (sortedCount != 0)
+            {
+                codewordLengths = new int[sortedCount];
+                codewords = new int[sortedCount];
+                values = new int[sortedCount];
+            }
+
+            if (!ComputeCodewords(sparse, codewords, codewordLengths, _lengths.AsSpan(0, Entries), values))
+                throw new InvalidDataException();
+
+            Debug.Assert(codewords != null);
+
+            int[] lengthList = codewordLengths ?? _lengths;
+            Huffman huffman = values != null
+                ? Huffman.GenerateTable(values, lengthList, codewords)
+                : Huffman.GenerateTable(new FastRange(0, codewords.Length), lengthList, codewords);
+
+            return huffman;
         }
 
         [SkipLocalsInit]
@@ -182,8 +186,8 @@ namespace NVorbis
             Debug.Assert(codewords != null);
             if (sparse)
             {
-                Debug.Assert(codewordLengths != null); 
-                Debug.Assert(values != null); 
+                Debug.Assert(codewordLengths != null);
+                Debug.Assert(values != null);
             }
 
             AddEntry(0, k, m++, len[k]);
@@ -228,10 +232,11 @@ namespace NVorbis
             }
         }
 
-        private void InitLookupTable(DataPacket packet)
+        private float[] InitLookupTable(DataPacket packet)
         {
             MapType = (int)packet.ReadBits(4);
-            if (MapType == 0) return;
+            if (MapType == 0)
+                return Array.Empty<float>();
 
             float minValue = Utils.ConvertFromVorbisFloat32((uint)packet.ReadBits(32));
             float deltaValue = Utils.ConvertFromVorbisFloat32((uint)packet.ReadBits(32));
@@ -297,7 +302,7 @@ namespace NVorbis
                 }
             }
 
-            _lookupTable = lookupTable;
+            return lookupTable;
         }
 
         private int lookup1_values()

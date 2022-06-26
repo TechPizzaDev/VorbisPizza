@@ -48,6 +48,10 @@ namespace NVorbis
             _packetProvider = packetProvider ?? throw new ArgumentNullException(nameof(packetProvider));
             
             _stats = new StreamStats();
+
+            _utf8Vendor = Array.Empty<byte>();
+            _utf8Comments = Array.Empty<byte[]>();
+            _modes = Array.Empty<Mode>();
             
             _currentPosition = 0L;
             ClipSamples = true;
@@ -290,12 +294,12 @@ namespace NVorbis
         private static IFloor CreateFloor(DataPacket packet, int block0Size, int block1Size, Codebook[] codebooks)
         {
             int type = (int)packet.ReadBits(16);
-            switch (type)
+            return type switch
             {
-                case 0: return new Floor0(packet, block0Size, block1Size, codebooks);
-                case 1: return new Floor1(packet, codebooks);
-                default: throw new InvalidDataException("Invalid floor type!");
-            }
+                0 => new Floor0(packet, block0Size, block1Size, codebooks),
+                1 => new Floor1(packet, codebooks),
+                _ => throw new InvalidDataException("Invalid floor type!"),
+            };
         }
 
         private static Mapping CreateMapping(DataPacket packet, int channels, IFloor[] floors, Residue0[] residues)
@@ -310,13 +314,13 @@ namespace NVorbis
         private static Residue0 CreateResidue(DataPacket packet, int channels, Codebook[] codebooks)
         {
             int type = (int)packet.ReadBits(16);
-            switch (type)
+            return type switch
             {
-                case 0: return new Residue0(packet, channels, codebooks);
-                case 1: return new Residue1(packet, channels, codebooks);
-                case 2: return new Residue2(packet, channels, codebooks);
-                default: throw new InvalidDataException("Invalid residue type!");
-            }
+                0 => new Residue0(packet, channels, codebooks),
+                1 => new Residue1(packet, channels, codebooks),
+                2 => new Residue2(packet, channels, codebooks),
+                _ => throw new InvalidDataException("Invalid residue type!"),
+            };
         }
 
         #endregion

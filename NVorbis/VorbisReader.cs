@@ -44,6 +44,8 @@ namespace NVorbis
 
             _leaveOpen = leaveOpen;
             _containerReader = containerReader;
+
+            _streamDecoder = null!;
         }
 
         /// <inheritdoc />
