@@ -11,8 +11,13 @@ namespace NVorbis
     {
         private sealed class Data : FloorData
         {
-            internal float[] Coeff;
+            internal readonly float[] Coeff;
             internal float Amp;
+
+            public Data(float[] coeff)
+            {
+                Coeff = coeff;
+            }
 
             public override bool ExecuteChannel => (ForceEnergy || Amp > 0f) && !ForceNoEnergy;
 
@@ -72,10 +77,7 @@ namespace NVorbis
 
         public FloorData CreateFloorData()
         {
-            return new Data
-            {
-                Coeff = new float[_order + 1],
-            };
+            return new Data(new float[_order + 1]);
         }
 
         private int[] SynthesizeBarkCurve(int n)

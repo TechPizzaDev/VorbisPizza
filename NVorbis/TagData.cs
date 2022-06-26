@@ -32,7 +32,7 @@ namespace NVorbis
                     parts[0] = parts[0].Substring(0, bktIdx);
                 }
 
-                if (tags.TryGetValue(parts[0].ToUpperInvariant(), out IReadOnlyList<string> list))
+                if (tags.TryGetValue(parts[0].ToUpperInvariant(), out IReadOnlyList<string>? list))
                 {
                     ((List<string>)list).Add(parts[1]);
                 }
@@ -60,7 +60,7 @@ namespace NVorbis
 
         public IReadOnlyList<string> GetTagMulti(string key)
         {
-            if (_tags.TryGetValue(key.ToUpperInvariant(), out IReadOnlyList<string> values))
+            if (_tags.TryGetValue(key.ToUpperInvariant(), out IReadOnlyList<string>? values))
             {
                 return values;
             }

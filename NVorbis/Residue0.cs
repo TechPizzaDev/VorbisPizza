@@ -20,7 +20,7 @@ namespace NVorbis
 
         private byte[] _cascade;
         private int[] _decodeMap;
-        private int[] _partWordCache;
+        private int[]? _partWordCache;
 
         [SkipLocalsInit]
         public Residue0(DataPacket packet, int channels, Codebook[] codebooks)

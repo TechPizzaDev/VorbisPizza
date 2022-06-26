@@ -19,7 +19,7 @@ namespace NVorbis
         /// <summary>
         /// Raised when a new stream has been encountered in the file or container.
         /// </summary>
-        public event NewStreamEventHandler NewStream;
+        public event NewStreamEventHandler? NewStream;
 
         /// <summary>
         /// Creates a new instance of <see cref="VorbisReader"/> reading from the specified file.

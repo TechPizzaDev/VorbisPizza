@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using NVorbis.Contracts;
@@ -18,7 +18,7 @@ namespace NVorbis.Ogg
         /// <summary>
         /// Gets or sets the callback to invoke when a new stream is encountered in the container.
         /// </summary>
-        public NewStreamHandler NewStreamCallback { get; set; }
+        public NewStreamHandler? NewStreamCallback { get; set; }
 
         /// <summary>
         /// Returns a list of streams available from this container.
@@ -28,7 +28,7 @@ namespace NVorbis.Ogg
             List<IPacketProvider> list = new(_packetProviders.Count);
             for (int i = 0; i < _packetProviders.Count; i++)
             {
-                if (_packetProviders[i].TryGetTarget(out IPacketProvider pp))
+                if (_packetProviders[i].TryGetTarget(out IPacketProvider? pp))
                 {
                     list.Add(pp);
                 }
@@ -133,7 +133,7 @@ namespace NVorbis.Ogg
         public void Dispose()
         {
             _reader?.Dispose();
-            _reader = null;
+            _reader = null!;
         }
     }
 }

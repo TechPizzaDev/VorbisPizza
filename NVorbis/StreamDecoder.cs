@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Numerics;
 using System.Runtime.CompilerServices;
@@ -23,17 +24,17 @@ namespace NVorbis
         private Mode[] _modes;
         private int _modeFieldBits;
 
-        private byte[]? _utf8Vendor;
-        private byte[][]? _utf8Comments;
-        private ITagData _tags;
+        private byte[] _utf8Vendor;
+        private byte[][] _utf8Comments;
+        private ITagData? _tags;
 
         private long _currentPosition;
         private bool _hasClipped;
         private bool _hasPosition;
         private bool _eosFound;
 
-        private float[][] _nextPacketBuf;
-        private float[][] _prevPacketBuf;
+        private float[][]? _nextPacketBuf;
+        private float[][]? _prevPacketBuf;
         private int _prevPacketStart;
         private int _prevPacketEnd;
         private int _prevPacketStop;
@@ -47,7 +48,7 @@ namespace NVorbis
             _packetProvider = packetProvider ?? throw new ArgumentNullException(nameof(packetProvider));
             
             _stats = new StreamStats();
-
+            
             _currentPosition = 0L;
             ClipSamples = true;
         }
@@ -58,8 +59,8 @@ namespace NVorbis
             DataPacket packet = _packetProvider.PeekNextPacket();
             if (!ProcessHeaderPackets(packet))
             {
-                _packetProvider = null;
                 packet.Reset();
+                Dispose();
 
                 throw GetInvalidStreamException(packet);
             }
@@ -410,6 +411,8 @@ namespace NVorbis
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
         private unsafe nint ClippingCopyBuffer(float* target, nint count)
         {
+            Debug.Assert(_prevPacketBuf != null);
+
             float[][] prevPacketBuf = _prevPacketBuf;
             nint channels = _channels;
             nint j = 0;
@@ -485,6 +488,8 @@ namespace NVorbis
 
         private unsafe nint CopyBuffer(float* target, nint count)
         {
+            Debug.Assert(_prevPacketBuf != null);
+
             float[][] prevPacketBuf = _prevPacketBuf;
             nint channels = _channels;
 
@@ -510,7 +515,7 @@ namespace NVorbis
         private bool ReadNextPacket(nint bufferedSamples, out long? samplePosition)
         {
             // decode the next packet now so we can start overlapping with it
-            float[][] curPacket = DecodeNextPacket(
+            float[][]? curPacket = DecodeNextPacket(
                 out int startIndex, out int validLen, out int totalLen, out bool isEndOfStream, 
                 out samplePosition, out int bitsRead, out int bitsRemaining, out int containerOverheadBits);
 
@@ -536,6 +541,8 @@ namespace NVorbis
             // just loop and the previous packet logic will handle things appropriately)
             if (_prevPacketEnd > 0)
             {
+                Debug.Assert(_prevPacketBuf != null);
+
                 // overlap the first samples in the packet with the previous packet, then loop
                 OverlapBuffers(_prevPacketBuf, curPacket, _prevPacketStart, _prevPacketStop, startIndex, _channels);
                 _prevPacketStart = startIndex;
@@ -559,11 +566,11 @@ namespace NVorbis
             return true;
         }
 
-        private float[][] DecodeNextPacket(
+        private float[][]? DecodeNextPacket(
             out int packetStartindex, out int packetValidLength, out int packetTotalLength, out bool isEndOfStream, 
             out long? samplePosition, out int bitsRead, out int bitsRemaining, out int containerOverheadBits)
         {
-            DataPacket packet = null;
+            DataPacket? packet = null;
             try
             {
                 if ((packet = _packetProvider.GetNextPacket()) == null)
@@ -779,7 +786,7 @@ namespace NVorbis
         public void Dispose()
         {
             (_packetProvider as IDisposable)?.Dispose();
-            _packetProvider = null;
+            _packetProvider = null!;
         }
 
         #region Properties

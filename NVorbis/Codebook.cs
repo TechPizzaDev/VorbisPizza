@@ -120,7 +120,7 @@ namespace NVorbis
             // figure out the maximum bit size; if all are unused, don't do anything else
             if ((_maxBits = maxLen) > -1)
             {
-                int[] codewordLengths = null;
+                int[]? codewordLengths = null;
                 if (sparse && total >= Entries >> 2)
                 {
                     codewordLengths = new int[Entries];
@@ -140,8 +140,8 @@ namespace NVorbis
                     sortedCount = 0;
                 }
 
-                int[] values = null;
-                int[] codewords = null;
+                int[]? values = null;
+                int[]? codewords = null;
                 if (!sparse)
                 {
                     codewords = new int[Entries];
@@ -156,6 +156,8 @@ namespace NVorbis
                 if (!ComputeCodewords(sparse, codewords, codewordLengths, _lengths.AsSpan(0, Entries), values))
                     throw new InvalidDataException();
 
+                Debug.Assert(codewords != null);
+
                 int[] lengthList = codewordLengths ?? _lengths;
                 Huffman huffman = values != null
                     ? Huffman.GenerateTable(values, lengthList, codewords)
@@ -163,19 +165,26 @@ namespace NVorbis
 
                 _prefixList = huffman.PrefixTree;
                 _prefixBitLength = huffman.TableBits;
-                _overflowList = huffman.OverflowList;
+                _overflowList = huffman.OverflowList ?? Array.Empty<HuffmanListNode>();
             }
         }
 
         [SkipLocalsInit]
-        private bool ComputeCodewords(bool sparse, int[] codewords, int[] codewordLengths, ReadOnlySpan<int> len, int[] values)
+        private bool ComputeCodewords(bool sparse, int[]? codewords, int[]? codewordLengths, ReadOnlySpan<int> len, int[]? values)
         {
-            int i, k, m = 0;
             Span<uint> available = stackalloc uint[32];
             available.Clear();
+            int i, k, m = 0;
 
             for (k = 0; k < len.Length; ++k) if (len[k] > 0) break;
             if (k == len.Length) return true;
+
+            Debug.Assert(codewords != null);
+            if (sparse)
+            {
+                Debug.Assert(codewordLengths != null); 
+                Debug.Assert(values != null); 
+            }
 
             AddEntry(0, k, m++, len[k]);
 
@@ -209,8 +218,8 @@ namespace NVorbis
                 if (sparse)
                 {
                     codewords[count] = (int)huffCode;
-                    codewordLengths[count] = len;
-                    values[count] = symbol;
+                    codewordLengths![count] = len;
+                    values![count] = symbol;
                 }
                 else
                 {

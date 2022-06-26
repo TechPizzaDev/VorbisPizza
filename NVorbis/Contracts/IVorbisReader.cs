@@ -4,6 +4,9 @@ using System.IO;
 
 namespace NVorbis.Contracts
 {
+    /// <summary>
+    /// Raised when a new stream has been encountered in the file or container.
+    /// </summary>
     public delegate void NewStreamEventHandler(IVorbisReader reader, ref NewStreamEventArgs eventArgs);
 
     /// <summary>

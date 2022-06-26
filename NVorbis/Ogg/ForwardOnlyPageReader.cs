@@ -18,7 +18,7 @@ namespace NVorbis.Ogg
 
         protected override bool AddPage(int streamSerial, byte[] pageBuf, bool isResync)
         {
-            if (_packetProviders.TryGetValue(streamSerial, out IForwardOnlyPacketProvider pp))
+            if (_packetProviders.TryGetValue(streamSerial, out IForwardOnlyPacketProvider? pp))
             {
                 // try to add the page...
                 if (pp.AddPage(pageBuf, isResync))
@@ -60,6 +60,9 @@ namespace NVorbis.Ogg
             _packetProviders.Clear();
         }
 
-        public override bool ReadPageAt(long offset) => throw new NotSupportedException();
+        public override bool ReadPageAt(long offset)
+        {
+            throw new NotSupportedException();
+        }
     }
 }
