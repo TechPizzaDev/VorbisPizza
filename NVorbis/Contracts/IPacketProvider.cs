@@ -32,9 +32,8 @@ namespace NVorbis.Contracts
         /// <summary>
         /// Gets the next packet in the stream and advances to the next packet position.
         /// </summary>
-        /// <param name="packet">The <see cref="VorbisPacket"/> for the next packet if available.</param>
-        /// <returns><see langword="true"/> whether the packet is valid, otherwise <see langword="false"/>.</returns>
-        bool TryGetNextPacket(out VorbisPacket packet);
+        /// <returns>The <see cref="VorbisPacket"/> for the next packet if available.</returns>
+        VorbisPacket GetNextPacket();
 
         ///// <summary>
         ///// Gets the next packet in the stream without advancing to the next packet position.

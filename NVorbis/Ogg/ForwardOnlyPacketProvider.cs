@@ -74,7 +74,7 @@ namespace NVorbis.Ogg
             _isEndOfStream = true;
         }
 
-        public bool TryGetNextPacket(out VorbisPacket packet)
+        public VorbisPacket GetNextPacket()
         {
             // if not done...
             if (_packetBuf.Count > 0)
@@ -84,20 +84,17 @@ namespace NVorbis.Ogg
 
                 // then return ourself, noting that we didn't peek the packet
                 _lastWasPeek = false;
-                packet = new VorbisPacket(this);
-                return true;
+                return new VorbisPacket(this);
             }
 
             // always advance to the next packet
             _lastWasPeek = false;
             if (GetPacket())
             {
-                packet = new VorbisPacket(this);
-                return true;
+                return new VorbisPacket(this);
             }
 
-            packet = default;
-            return false;
+            return default;
         }
 
         //public DataPacket? PeekNextPacket()

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using NVorbis.Contracts.Ogg;
 using NVorbis.Ogg;
 
@@ -17,6 +17,8 @@ namespace NVorbis
         {
             _packet = new Packet(firstDataPart, dataParts, packetReader);
         }
+
+        public bool IsValid => _packet != null;
 
         public int ContainerOverheadBits
         {
@@ -54,9 +56,14 @@ namespace NVorbis
         public void Done()
         {
             if (_packet is Packet packet)
+            {
                 packet._packetReader?.InvalidatePacketCache(this);
+            }
             else if (_packet is ForwardOnlyPacketProvider fpacket)
+            {
                 fpacket.Done();
+            }
+            _packet = null;
         }
 
         public void Reset()

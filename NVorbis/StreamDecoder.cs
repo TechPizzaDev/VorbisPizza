@@ -60,7 +60,8 @@ namespace NVorbis
         /// <inheritdoc />
         public void Initialize()
         {
-            if (!_packetProvider.TryGetNextPacket(out VorbisPacket packet))
+            VorbisPacket packet = _packetProvider.GetNextPacket();
+            if (!packet.IsValid)
                 throw new InvalidDataException();
 
             if (!ProcessHeaderPackets(ref packet))
@@ -121,7 +122,8 @@ namespace NVorbis
                 headerPacket.Done();
             }
 
-            if (!_packetProvider.TryGetNextPacket(out VorbisPacket commentPacket))
+            VorbisPacket commentPacket = _packetProvider.GetNextPacket();
+            if (!commentPacket.IsValid)
                 return false;
             try
             {
@@ -133,7 +135,8 @@ namespace NVorbis
                 commentPacket.Done();
             }
 
-            if (!_packetProvider.TryGetNextPacket(out VorbisPacket bookPacket))
+            VorbisPacket bookPacket = _packetProvider.GetNextPacket();
+            if (!bookPacket.IsValid)
                 return false;
             try
             {
@@ -567,19 +570,17 @@ namespace NVorbis
             out int packetStartindex, out int packetValidLength, out int packetTotalLength, out bool isEndOfStream,
             out long? samplePosition, out int bitsRead, out int bitsRemaining, out int containerOverheadBits)
         {
-            bool hasPacket = false;
             VorbisPacket packet = default;
             try
             {
-                if (!_packetProvider.TryGetNextPacket(out packet))
+                packet = _packetProvider.GetNextPacket();
+                if (!packet.IsValid)
                 {
                     // no packet? we're at the end of the stream
                     isEndOfStream = true;
                 }
                 else
                 {
-                    hasPacket = true;
-
                     // if the packet is flagged as the end of the stream, we can safely mark _eosFound
                     isEndOfStream = packet.IsEndOfStream;
 
@@ -632,8 +633,7 @@ namespace NVorbis
             }
             finally
             {
-                if (hasPacket)
-                    packet.Done();
+                packet.Done();
             }
         }
 
