@@ -12,7 +12,7 @@ namespace NVorbis
     {
         private sealed class Data : FloorData
         {
-            internal int[] Posts = new int[64];
+            internal readonly int[] Posts = new int[64];
             internal int PostCount;
 
             public override bool ExecuteChannel => (ForceEnergy || PostCount > 0) && !ForceNoEnergy;
@@ -105,49 +105,52 @@ namespace NVorbis
                     xList[xListOfs++] = (int)packet.ReadBits(rangeBits);
                 }
             }
-            _xList = xList;
 
             // precalc the low and high neighbors (and init the sort table)
-            _lNeigh = new int[xList.Length];
-            _hNeigh = new int[xList.Length];
-            _sortIdx = new int[xList.Length];
-            _sortIdx[0] = 0;
-            _sortIdx[1] = 1;
-            for (int i = 2; i < _lNeigh.Length; i++)
+            int[] lNeigh = new int[xList.Length];
+            int[] hNeigh = new int[xList.Length];
+            int[] sortIdx = new int[xList.Length];
+            sortIdx[0] = 0;
+            sortIdx[1] = 1;
+            for (int i = 2; i < lNeigh.Length; i++)
             {
-                _lNeigh[i] = 0;
-                _hNeigh[i] = 1;
-                _sortIdx[i] = i;
+                lNeigh[i] = 0;
+                hNeigh[i] = 1;
+                sortIdx[i] = i;
                 for (int j = 2; j < i; j++)
                 {
-                    int temp = _xList[j];
-                    if (temp < _xList[i])
+                    int temp = xList[j];
+                    if (temp < xList[i])
                     {
-                        if (temp > _xList[_lNeigh[i]]) _lNeigh[i] = j;
+                        if (temp > xList[lNeigh[i]]) lNeigh[i] = j;
                     }
                     else
                     {
-                        if (temp < _xList[_hNeigh[i]]) _hNeigh[i] = j;
+                        if (temp < xList[hNeigh[i]]) hNeigh[i] = j;
                     }
                 }
             }
 
             // precalc the sort table
-            for (int i = 0; i < _sortIdx.Length - 1; i++)
+            for (int i = 0; i < sortIdx.Length - 1; i++)
             {
-                for (int j = i + 1; j < _sortIdx.Length; j++)
+                for (int j = i + 1; j < sortIdx.Length; j++)
                 {
-                    if (_xList[i] == _xList[j]) throw new System.IO.InvalidDataException();
+                    if (xList[i] == xList[j])
+                        throw new System.IO.InvalidDataException();
 
-                    if (_xList[_sortIdx[i]] > _xList[_sortIdx[j]])
+                    if (xList[sortIdx[i]] > xList[sortIdx[j]])
                     {
                         // swap the sort indexes
-                        int temp = _sortIdx[i];
-                        _sortIdx[i] = _sortIdx[j];
-                        _sortIdx[j] = temp;
+                        (sortIdx[j], sortIdx[i]) = (sortIdx[i], sortIdx[j]);
                     }
                 }
             }
+
+            _xList = xList;
+            _lNeigh = lNeigh;
+            _hNeigh = hNeigh;
+            _sortIdx = sortIdx;
         }
 
         public FloorData CreateFloorData()

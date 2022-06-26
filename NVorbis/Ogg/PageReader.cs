@@ -15,7 +15,7 @@ namespace NVorbis.Ogg
 
         private long _nextPageOffset;
         private ushort _pageSize;
-        private ArraySegment<byte>[] _packets;
+        private ArraySegment<byte>[]? _packets;
 
         public PageReader(Stream stream, bool leaveOpen, NewStreamCallback newStreamCallback)
             : base(stream, leaveOpen)
@@ -134,7 +134,7 @@ namespace NVorbis.Ogg
                 new Span<byte>(pageBuf, 27, pageBuf[26]),
                 new ArraySegment<byte>(pageBuf, 27 + pageBuf[26], pageBuf.Length - 27 - pageBuf[26]));
 
-            if (_streamReaders.TryGetValue(streamSerial, out IStreamPageReader spr))
+            if (_streamReaders.TryGetValue(streamSerial, out IStreamPageReader? spr))
             {
                 spr.AddPage();
 
@@ -197,9 +197,6 @@ namespace NVorbis.Ogg
             _streamReaders.Clear();
         }
 
-
-        #region IPacketData
-
         public long PageOffset { get; private set; }
 
         public int StreamSerial { get; private set; }
@@ -237,7 +234,5 @@ namespace NVorbis.Ogg
 
             return _packets;
         }
-
-        #endregion
     }
 }

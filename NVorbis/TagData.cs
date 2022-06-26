@@ -25,10 +25,11 @@ namespace NVorbis
                 int bktIdx = parts[0].IndexOf('[');
                 if (bktIdx > -1)
                 {
-                    parts[1] = parts[0].Substring(bktIdx + 1, parts[0].Length - bktIdx - 2)
-                                       .ToUpper(System.Globalization.CultureInfo.CurrentCulture)
-                                     + ": "
-                                     + parts[1];
+                    parts[1] = parts[0]
+                        .Substring(bktIdx + 1, parts[0].Length - bktIdx - 2)
+                        .ToUpper(System.Globalization.CultureInfo.CurrentCulture)
+                        + ": "
+                        + parts[1];
                     parts[0] = parts[0].Substring(0, bktIdx);
                 }
 

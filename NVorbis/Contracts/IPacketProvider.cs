@@ -27,13 +27,13 @@ namespace NVorbis.Contracts
         /// Gets the next packet in the stream and advances to the next packet position.
         /// </summary>
         /// <returns>The <see cref="DataPacket"/> instance for the next packet if available, otherwise <see langword="null"/>.</returns>
-        DataPacket GetNextPacket();
+        DataPacket? GetNextPacket();
 
         /// <summary>
         /// Gets the next packet in the stream without advancing to the next packet position.
         /// </summary>
         /// <returns>The <see cref="DataPacket"/> instance for the next packet if available, otherwise <see langword="null"/>.</returns>
-        DataPacket PeekNextPacket();
+        DataPacket? PeekNextPacket();
 
         /// <summary>
         /// Seeks the stream to the packet that is prior to the requested granule position by the specified preroll number of packets.

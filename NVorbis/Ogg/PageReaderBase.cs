@@ -1,6 +1,7 @@
 using System;
 using System.Buffers.Binary;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using NVorbis.Contracts.Ogg;
 
@@ -11,7 +12,7 @@ namespace NVorbis.Ogg
     internal abstract class PageReaderBase : IPageReader
     {
         private readonly HashSet<int> _ignoredSerials = new();
-        private byte[] _overflowBuf;
+        private byte[]? _overflowBuf;
         private int _overflowBufIndex;
 
         private Stream _stream;
@@ -29,7 +30,7 @@ namespace NVorbis.Ogg
 
         public long WasteBits { get; private set; }
 
-        private bool VerifyPage(ReadOnlySpan<byte> headerBuf, out byte[] pageBuf, out int bytesRead)
+        private bool VerifyPage(ReadOnlySpan<byte> headerBuf, [MaybeNullWhen(false)] out byte[] pageBuf, out int bytesRead)
         {
             byte segCnt = headerBuf[26];
             if (headerBuf.Length < 27 + segCnt)
@@ -250,7 +251,7 @@ namespace NVorbis.Ogg
                 {
                     if (VerifyHeader(headerBuf.Slice(i), ref cnt, true))
                     {
-                        if (VerifyPage(headerBuf.Slice(i, cnt), out byte[] pageBuf, out int bytesRead))
+                        if (VerifyPage(headerBuf.Slice(i, cnt), out byte[]? pageBuf, out int bytesRead))
                         {
                             // one way or the other, we have to clear out the page's bytes from the queue (if queued)
                             ClearEnqueuedData(bytesRead);
@@ -310,7 +311,7 @@ namespace NVorbis.Ogg
             {
                 _stream?.Dispose();
             }
-            _stream = null;
+            _stream = null!;
         }
     }
 }

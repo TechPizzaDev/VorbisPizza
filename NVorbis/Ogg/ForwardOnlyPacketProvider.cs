@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using NVorbis.Contracts;
 using NVorbis.Contracts.Ogg;
 
@@ -11,7 +12,7 @@ namespace NVorbis.Ogg
         private readonly Queue<(byte[] buf, bool isResync)> _pageQueue = new();
 
         private readonly IPageReader _reader;
-        private byte[] _pageBuf;
+        private byte[]? _pageBuf;
         private int _packetIndex;
         private bool _isEndOfStream;
         private int _dataStart;
@@ -73,7 +74,7 @@ namespace NVorbis.Ogg
             _isEndOfStream = true;
         }
 
-        public DataPacket GetNextPacket()
+        public DataPacket? GetNextPacket()
         {
             // if not done...
             if (_packetBuf.Count > 0)
@@ -95,7 +96,7 @@ namespace NVorbis.Ogg
             return null;
         }
 
-        public DataPacket PeekNextPacket()
+        public DataPacket? PeekNextPacket()
         {
             // if not done...
             if (_packetBuf.Count > 0)
@@ -119,7 +120,7 @@ namespace NVorbis.Ogg
         private bool GetPacket()
         {
             // if we don't already have a page, grab it
-            byte[] pageBuf;
+            byte[]? pageBuf;
             bool isResync;
             int dataStart;
             int packetIndex;
@@ -251,7 +252,9 @@ namespace NVorbis.Ogg
             return true;
         }
 
-        private bool ReadNextPage(out byte[] pageBuf, out bool isResync, out int dataStart, out int packetIndex, out bool isContinuation, out bool isContinued)
+        private bool ReadNextPage(
+            [MaybeNullWhen(false)] out byte[] pageBuf, 
+            out bool isResync, out int dataStart, out int packetIndex, out bool isContinuation, out bool isContinued)
         {
             while (_pageQueue.Count == 0)
             {
@@ -279,7 +282,7 @@ namespace NVorbis.Ogg
             return true;
         }
 
-        private int GetPacketLength(byte[] pageBuf, ref int packetIndex)
+        private static int GetPacketLength(byte[] pageBuf, ref int packetIndex)
         {
             int len = 0;
             while (pageBuf[packetIndex] == 255 && packetIndex < pageBuf[26] + 27)
@@ -318,7 +321,14 @@ namespace NVorbis.Ogg
             base.Done();
         }
 
-        long IPacketProvider.GetGranuleCount() => throw new NotSupportedException();
-        long IPacketProvider.SeekTo(long granulePos, uint preRoll, GetPacketGranuleCount getPacketGranuleCount) => throw new NotSupportedException();
+        long IPacketProvider.GetGranuleCount()
+        {
+            throw new NotSupportedException();
+        }
+
+        long IPacketProvider.SeekTo(long granulePos, uint preRoll, GetPacketGranuleCount getPacketGranuleCount)
+        {
+            throw new NotSupportedException();
+        }
     }
 }
