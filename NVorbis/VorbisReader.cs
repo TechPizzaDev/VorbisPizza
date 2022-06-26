@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using NVorbis.Contracts;
@@ -19,7 +19,7 @@ namespace NVorbis
         /// <summary>
         /// Raised when a new stream has been encountered in the file or container.
         /// </summary>
-        public event EventHandler<NewStreamEventArgs> NewStream;
+        public event NewStreamEventHandler NewStream;
 
         /// <summary>
         /// Creates a new instance of <see cref="VorbisReader"/> reading from the specified file.
@@ -65,7 +65,7 @@ namespace NVorbis
             decoder.ClipSamples = true;
 
             NewStreamEventArgs ea = new NewStreamEventArgs(decoder);
-            NewStream?.Invoke(this, ea);
+            NewStream?.Invoke(this, ref ea);
             if (!ea.IgnoreStream)
             {
                 _decoders.Add(decoder);

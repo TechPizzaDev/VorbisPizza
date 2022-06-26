@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using NVorbis.Contracts;
 
 namespace NVorbis
@@ -6,8 +6,7 @@ namespace NVorbis
     /// <summary>
     /// Event data for when a new logical stream is found in a container.
     /// </summary>
-    [Serializable]
-    public class NewStreamEventArgs : EventArgs
+    public ref struct NewStreamEventArgs
     {
         /// <summary>
         /// Creates a new instance of <see cref="NewStreamEventArgs"/> with the specified <see cref="IStreamDecoder"/>.
@@ -16,6 +15,7 @@ namespace NVorbis
         public NewStreamEventArgs(IStreamDecoder streamDecoder)
         {
             StreamDecoder = streamDecoder ?? throw new ArgumentNullException(nameof(streamDecoder));
+            IgnoreStream = false;
         }
 
         /// <summary>

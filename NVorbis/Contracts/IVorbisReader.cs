@@ -1,9 +1,11 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 
 namespace NVorbis.Contracts
 {
+    public delegate void NewStreamEventHandler(IVorbisReader reader, ref NewStreamEventArgs eventArgs);
+
     /// <summary>
     /// Describes the interface for <see cref="VorbisReader"/>.
     /// </summary>
@@ -12,7 +14,7 @@ namespace NVorbis.Contracts
         /// <summary>
         /// Raised when a new stream has been encountered in the file or container.
         /// </summary>
-        event EventHandler<NewStreamEventArgs> NewStream;
+        event NewStreamEventHandler NewStream;
 
         /// <summary>
         /// Gets the number of bits read that are related to framing and transport alone.
