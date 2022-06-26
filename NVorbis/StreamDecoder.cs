@@ -4,7 +4,6 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
-using System.Text;
 using NVorbis.Contracts;
 
 namespace NVorbis
@@ -24,8 +23,8 @@ namespace NVorbis
         private Mode[] _modes;
         private int _modeFieldBits;
 
-        private string _vendor;
-        private string[] _comments;
+        private byte[]? _utf8Vendor;
+        private byte[][]? _utf8Comments;
         private ITagData _tags;
 
         private long _currentPosition;
@@ -46,12 +45,16 @@ namespace NVorbis
         public StreamDecoder(IPacketProvider packetProvider)
         {
             _packetProvider = packetProvider ?? throw new ArgumentNullException(nameof(packetProvider));
-
+            
             _stats = new StreamStats();
 
             _currentPosition = 0L;
             ClipSamples = true;
+        }
 
+        /// <inheritdoc />
+        public void Initialize()
+        {
             DataPacket packet = _packetProvider.PeekNextPacket();
             if (!ProcessHeaderPackets(packet))
             {
@@ -165,22 +168,18 @@ namespace NVorbis
             return true;
         }
 
-        private static string ReadString(DataPacket packet)
+        private static byte[] ReadString(DataPacket packet, bool skip)
         {
-            int len = (int)packet.ReadBits(32);
-
-            if (len == 0)
+            int byteLength = (int)packet.ReadBits(32);
+            if (byteLength != 0)
             {
-                return string.Empty;
+                if (!skip)
+                {
+                    return packet.ReadBytes(byteLength);
+                }
+                packet.SkipBytes(byteLength);
             }
-
-            byte[] buf = new byte[len];
-            int cnt = packet.Read(buf.AsSpan(0, len));
-            if (cnt < len)
-            {
-                throw new InvalidDataException("Could not read full string!");
-            }
-            return Encoding.UTF8.GetString(buf);
+            return Array.Empty<byte>();
         }
 
         private bool LoadStreamHeader(DataPacket packet)
@@ -217,12 +216,12 @@ namespace NVorbis
                 return false;
             }
 
-            _vendor = ReadString(packet);
+            _utf8Vendor = ReadString(packet, SkipTags);
 
-            _comments = new string[packet.ReadBits(32)];
-            for (int i = 0; i < _comments.Length; i++)
+            _utf8Comments = new byte[packet.ReadBits(32)][];
+            for (int i = 0; i < _utf8Comments.Length; i++)
             {
-                _comments[i] = ReadString(packet);
+                _utf8Comments[i] = ReadString(packet, SkipTags);
             }
 
             _stats.AddPacket(-1, packet.BitsRead, packet.BitsRemaining, packet.ContainerOverheadBits);
@@ -775,19 +774,13 @@ namespace NVorbis
 
         #region Properties
 
-        /// <summary>
-        /// Gets the number of channels in the stream.
-        /// </summary>
+        /// <inheritdoc />
         public int Channels => _channels;
 
-        /// <summary>
-        /// Gets the sample rate of the stream.
-        /// </summary>
+        /// <inheritdoc />
         public int SampleRate => _sampleRate;
 
-        /// <summary>
-        /// Gets the upper bitrate limit for the stream, if specified.
-        /// </summary>
+        /// <inheritdoc />
         public int UpperBitrate { get; private set; }
 
         /// <summary>
@@ -795,38 +788,26 @@ namespace NVorbis
         /// </summary>
         public int NominalBitrate { get; private set; }
 
-        /// <summary>
-        /// Gets the lower bitrate limit for the stream, if specified.
-        /// </summary>
+        /// <inheritdoc />
         public int LowerBitrate { get; private set; }
 
-        /// <summary>
-        /// Gets the tag data from the stream's header.
-        /// </summary>
-        public ITagData Tags => _tags ??= new TagData(_vendor, _comments);
+        /// <inheritdoc />
+        public ITagData Tags => _tags ??= new TagData(_utf8Vendor, _utf8Comments);
 
-        /// <summary>
-        /// Gets the total duration of the decoded stream.
-        /// </summary>
+        /// <inheritdoc />
         public TimeSpan TotalTime => TimeSpan.FromSeconds((double)TotalSamples / _sampleRate);
 
-        /// <summary>
-        /// Gets the total number of samples in the decoded stream.
-        /// </summary>
+        /// <inheritdoc />
         public long TotalSamples => _packetProvider?.GetGranuleCount() ?? throw new ObjectDisposedException(nameof(StreamDecoder));
 
-        /// <summary>
-        /// Gets or sets the current time position of the stream.
-        /// </summary>
+        /// <inheritdoc />
         public TimeSpan TimePosition
         {
             get => TimeSpan.FromSeconds((double)_currentPosition / _sampleRate);
             set => SeekTo(value);
         }
 
-        /// <summary>
-        /// Gets or sets the current sample position of the stream.
-        /// </summary>
+        /// <inheritdoc />
         public long SamplePosition
         {
             get => _currentPosition;
@@ -838,19 +819,18 @@ namespace NVorbis
         /// </summary>
         public bool ClipSamples { get; set; }
 
+        /// <inheritdoc />
+        public bool SkipTags { get; set; }
+
         /// <summary>
         /// Gets whether <see cref="Read(Span{float})"/> has returned any clipped samples.
         /// </summary>
         public bool HasClipped => _hasClipped;
 
-        /// <summary>
-        /// Gets whether the decoder has reached the end of the stream.
-        /// </summary>
+        /// <inheritdoc />
         public bool IsEndOfStream => _eosFound && _prevPacketBuf == null;
 
-        /// <summary>
-        /// Gets the <see cref="IStreamStats"/> instance for this stream.
-        /// </summary>
+        /// <inheritdoc />
         public IStreamStats Stats => _stats;
 
         #endregion

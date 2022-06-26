@@ -107,6 +107,12 @@ namespace NVorbis.Contracts
         ITagData Tags { get; }
 
         /// <summary>
+        /// Begin parsing the container in the stream.
+        /// </summary>
+        /// <exception cref="InvalidDataException">The Vorbis container could not be parsed.</exception>
+        void Initialize();
+         
+        /// <summary>
         /// Searches for the next stream in a concatenated file.  Will raise <see cref="NewStream"/> for the found stream, and will add it to <see cref="Streams"/> if not marked as ignored.
         /// </summary>
         /// <returns><see langword="true"/> if a new stream was found, otherwise <see langword="false"/>.</returns>

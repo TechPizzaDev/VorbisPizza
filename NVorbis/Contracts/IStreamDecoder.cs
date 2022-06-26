@@ -65,6 +65,11 @@ namespace NVorbis.Contracts
         bool ClipSamples { get; set; }
 
         /// <summary>
+        /// Gets or sets whether the decoder should skip parsing tags.
+        /// </summary>
+        bool SkipTags { get; set; }
+
+        /// <summary>
         /// Gets whether <see cref="Read(Span{float})"/> has returned any clipped samples.
         /// </summary>
         bool HasClipped { get; }
@@ -78,6 +83,12 @@ namespace NVorbis.Contracts
         /// Gets the <see cref="IStreamStats"/> instance for this stream.
         /// </summary>
         IStreamStats Stats { get; }
+
+        /// <summary>
+        /// Begin parsing the stream.
+        /// </summary>
+        /// <exception cref="InvalidDataException">The stream header could not be parsed.</exception>
+        void Initialize();
 
         /// <summary>
         /// Seeks the stream by the specified duration.

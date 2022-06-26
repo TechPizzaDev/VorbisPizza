@@ -1,23 +1,22 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.Text;
 using NVorbis.Contracts;
 
 namespace NVorbis
 {
     internal class TagData : ITagData
     {
-        private static IReadOnlyList<string> s_emptyList = new List<string>();
         private Dictionary<string, IReadOnlyList<string>> _tags;
 
-        public TagData(string vendor, string[] comments)
+        public TagData(byte[] utf8Vendor, byte[][] utf8Comments)
         {
-            EncoderVendor = vendor;
+            EncoderVendor = Encoding.UTF8.GetString(utf8Vendor);
 
-            Dictionary<string, IReadOnlyList<string>> tags = new Dictionary<string, IReadOnlyList<string>>();
-            for (int i = 0; i < comments.Length; i++)
+            Dictionary<string, IReadOnlyList<string>> tags = new();
+            for (int i = 0; i < utf8Comments.Length; i++)
             {
-                string[] parts = comments[i].Split('=');
+                string[] parts = Encoding.UTF8.GetString(utf8Comments[i]).Split('=');
                 if (parts.Length == 1)
                 {
                     parts = new[] { parts[0], string.Empty };
@@ -52,7 +51,7 @@ namespace NVorbis
             {
                 if (concatenate)
                 {
-                    return string.Join(Environment.NewLine, values.ToArray());
+                    return string.Join(Environment.NewLine, values);
                 }
                 return values[values.Count - 1];
             }
@@ -65,7 +64,7 @@ namespace NVorbis
             {
                 return values;
             }
-            return s_emptyList;
+            return Array.Empty<string>();
         }
 
         public IReadOnlyDictionary<string, IReadOnlyList<string>> All => _tags;

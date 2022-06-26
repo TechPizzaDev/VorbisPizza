@@ -229,7 +229,7 @@ namespace NVorbis
         /// </summary>
         /// <param name="count">The number of bits to skip reading.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void SkipBits(int count)
+        public int SkipBits(int count)
         {
             if (_bitCount >= count)
             {
@@ -241,11 +241,12 @@ namespace NVorbis
 
                 _bitCount -= count;
                 _readBits += count;
+                return count;
             }
             else //  _bitCount < count
             {
                 // we have to move more bits than we have available...
-                SkipExtraBits(count);
+                return SkipExtraBits(count);
             }
         }
 
@@ -261,13 +262,15 @@ namespace NVorbis
             }
         }
 
-        private void SkipExtraBits(int count)
+        private int SkipExtraBits(int count)
         {
             Span<byte> tmp = stackalloc byte[1];
             if (count <= 0)
             {
-                return;
+                return 0;
             }
+
+            int startReadBits = _readBits;
 
             count -= _bitCount;
             _readBits += _bitCount;
@@ -300,6 +303,8 @@ namespace NVorbis
                     _readBits += count;
                 }
             }
+
+            return _readBits - startReadBits;
         }
     }
 }

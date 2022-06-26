@@ -13,7 +13,7 @@ namespace NVorbis
         private readonly List<IStreamDecoder> _decoders;
         private readonly IContainerReader _containerReader;
         private readonly bool _leaveOpen;
-
+        
         private IStreamDecoder _streamDecoder;
 
         /// <summary>
@@ -39,33 +39,37 @@ namespace NVorbis
         {
             _decoders = new List<IStreamDecoder>();
 
-            Ogg.ContainerReader containerReader = new Ogg.ContainerReader(stream, leaveOpen);
+            Ogg.ContainerReader containerReader = new(stream, leaveOpen);
             containerReader.NewStreamCallback = ProcessNewStream;
 
-            if (!containerReader.TryInit() || _decoders.Count == 0)
-            {
-                containerReader.NewStreamCallback = null;
-                containerReader.Dispose();
-
-                if (!leaveOpen)
-                {
-                    stream.Dispose();
-                }
-
-                throw new ArgumentException("Could not load the specified container!", nameof(containerReader));
-            }
             _leaveOpen = leaveOpen;
             _containerReader = containerReader;
+        }
+
+        /// <inheritdoc />
+        public void Initialize()
+        {
+            if (!_containerReader.TryInit() || _decoders.Count == 0)
+            {
+                _containerReader.NewStreamCallback = null;
+                _containerReader.Dispose();
+
+                throw new InvalidDataException("Could not load the specified container.");
+            }
             _streamDecoder = _decoders[0];
         }
 
         private bool ProcessNewStream(IPacketProvider packetProvider)
         {
-            StreamDecoder decoder = new StreamDecoder(packetProvider);
+            StreamDecoder decoder = new(packetProvider);
             decoder.ClipSamples = true;
+            decoder.SkipTags = false;
 
-            NewStreamEventArgs ea = new NewStreamEventArgs(decoder);
+            NewStreamEventArgs ea = new(decoder);
             NewStream?.Invoke(this, ref ea);
+
+            decoder.Initialize();
+
             if (!ea.IgnoreStream)
             {
                 _decoders.Add(decoder);
@@ -105,8 +109,8 @@ namespace NVorbis
 
         #region Convenience Helpers
 
-        // Since most uses of VorbisReader are for single-stream audio files, we can make life simpler for users
-        //  by exposing the first stream's properties and methods here.
+        // Since most uses of VorbisReader are for single-stream audio files,
+        // we can make life simpler for users by exposing the first stream's properties and methods here.
 
         /// <summary>
         /// Gets the number of channels in the stream.
@@ -124,7 +128,8 @@ namespace NVorbis
         public int UpperBitrate => _streamDecoder.UpperBitrate;
 
         /// <summary>
-        /// Gets the nominal bitrate of the stream, if specified.  May be calculated from <see cref="LowerBitrate"/> and <see cref="UpperBitrate"/>.
+        /// Gets the nominal bitrate of the stream, if specified. 
+        /// May be calculated from <see cref="LowerBitrate"/> and <see cref="UpperBitrate"/>.
         /// </summary>
         public int NominalBitrate => _streamDecoder.NominalBitrate;
 
@@ -169,10 +174,7 @@ namespace NVorbis
         public TimeSpan TimePosition
         {
             get => _streamDecoder.TimePosition;
-            set
-            {
-                _streamDecoder.TimePosition = value;
-            }
+            set => _streamDecoder.TimePosition = value;
         }
 
         /// <summary>
@@ -181,10 +183,7 @@ namespace NVorbis
         public long SamplePosition
         {
             get => _streamDecoder.SamplePosition;
-            set
-            {
-                _streamDecoder.SamplePosition = value;
-            }
+            set => _streamDecoder.SamplePosition = value;
         }
 
         /// <summary>
@@ -212,7 +211,9 @@ namespace NVorbis
         public IStreamStats StreamStats => _streamDecoder.Stats;
 
         /// <summary>
-        /// Searches for the next stream in a concatenated file.  Will raise <see cref="NewStream"/> for the found stream, and will add it to <see cref="Streams"/> if not marked as ignored.
+        /// Searches for the next stream in a concatenated file.
+        /// Will raise <see cref="NewStream"/> for the found stream, 
+        /// and will add it to <see cref="Streams"/> if not marked as ignored.
         /// </summary>
         /// <returns><see langword="true"/> if a new stream was found, otherwise <see langword="false"/>.</returns>
         public bool FindNextStream()
@@ -225,7 +226,10 @@ namespace NVorbis
         /// Switches to an alternate logical stream.
         /// </summary>
         /// <param name="index">The logical stream index to switch to</param>
-        /// <returns><see langword="true"/> if the properties of the logical stream differ from those of the one previously being decoded. Otherwise, <see langword="false"/>.</returns>
+        /// <returns>
+        /// <see langword="true"/> if the properties of the logical stream differ from 
+        /// those of the one previously being decoded. Otherwise, <see langword="false"/>.
+        /// </returns>
         public bool SwitchStreams(int index)
         {
             if (index < 0 || index >= _decoders.Count) throw new ArgumentOutOfRangeException(nameof(index));
@@ -269,9 +273,14 @@ namespace NVorbis
         /// <param name="offset">The index to start reading samples into the buffer.</param>
         /// <param name="count">The number of samples that should be read into the buffer.</param>
         /// <returns>The number of floats read into the buffer.</returns>
-        /// <exception cref="ArgumentException">Thrown when the buffer is too small or the length is not a multiple of <see cref="Channels"/>.</exception>
+        /// <exception cref="ArgumentException">
+        /// The buffer is too small or the length is not a multiple of <see cref="Channels"/>.
+        /// </exception>
         /// <exception cref="ArgumentOutOfRangeException"><paramref name="offset"/> is less than zero.</exception>
-        /// <remarks>The data populated into <paramref name="buffer"/> is interleaved by channel in normal PCM fashion: Left, Right, Left, Right, Left, Right</remarks>
+        /// <remarks>
+        /// The data populated into <paramref name="buffer"/> is interleaved by channel 
+        /// in normal PCM fashion: Left, Right, Left, Right, Left, Right.
+        /// </remarks>
         public int ReadSamples(float[] buffer, int offset, int count)
         {
             return ReadSamples(buffer.AsSpan(offset, count));
