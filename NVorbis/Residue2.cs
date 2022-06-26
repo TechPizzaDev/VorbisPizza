@@ -1,4 +1,6 @@
 using System;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 namespace NVorbis
 {
@@ -20,34 +22,57 @@ namespace NVorbis
             base.Decode(packet, doNotDecodeChannel, blockSize * _channels, buffer);
         }
 
-        protected override bool WriteVectors(
+        protected override unsafe bool WriteVectors(
             Codebook codebook, DataPacket packet, float[][] residue, int channel, int offset, int partitionSize)
         {
-            int ch = 0;
-            int channels = _channels;
-            int o = offset / channels;
-            for (int c = 0; c < partitionSize;)
-            {
-                int entry = codebook.DecodeScalar(packet);
-                if (entry == -1)
-                {
-                    return true;
-                }
+            uint dimensions = (uint)codebook.Dimensions;
+            uint ch = 0;
+            uint channels = (uint)_channels;
+            uint o = (uint)offset / channels;
 
-                ReadOnlySpan<float> lookup = codebook.GetLookup(entry);
-                for (int d = 0; d < lookup.Length; d++)
+            fixed (float* res0 = residue[0])
+            fixed (float* res1 = residue.Length > 1 ? residue[1] : Array.Empty<float>())
+            fixed (float* lookupTable = codebook.GetLookupTable())
+            {
+                for (uint c = 0; c < partitionSize; c += dimensions)
                 {
-                    residue[ch][o] += lookup[d];
-                    if (++ch == channels)
+                    int entry = codebook.DecodeScalar(packet);
+                    if (entry == -1)
                     {
-                        ch = 0;
-                        o++;
+                        return true;
+                    }
+
+                    float* lookup = lookupTable + (uint)entry * dimensions;
+                    if (dimensions != 1 && channels == 2)
+                    {
+                        for (uint d = 0; d < dimensions; d += 2, o++)
+                        {
+                            res0[o] += lookup[d + 0];
+                            res1[o] += lookup[d + 1];
+                        }
+                    }
+                    else if (channels == 1)
+                    {
+                        for (uint d = 0; d < dimensions; d++, o++)
+                        {
+                            res0[o] += lookup[d];
+                        }
+                    }
+                    else
+                    {
+                        for (uint d = 0; d < dimensions; d++)
+                        {
+                            residue[ch][o] += lookup[d];
+                            if (++ch == channels)
+                            {
+                                ch = 0;
+                                o++;
+                            }
+                        }
                     }
                 }
-                c += lookup.Length;
+                return false;
             }
-
-            return false;
         }
     }
 }
