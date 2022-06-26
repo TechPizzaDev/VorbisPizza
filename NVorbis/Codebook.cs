@@ -300,6 +300,7 @@ namespace NVorbis
             return r;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DecodeScalar(DataPacket packet)
         {
             ulong data = packet.TryPeekBits(_prefixBitLength, out int bitsRead);

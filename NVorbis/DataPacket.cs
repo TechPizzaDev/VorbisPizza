@@ -176,7 +176,14 @@ namespace NVorbis
             Span<byte> span = new(buffer, (int)toRead);
             int bytesRead = ReadBytes(span);
 
-            for (int i = 0; i < bytesRead; i++)
+            int i = 0;
+            for (; i + 4 <= bytesRead; i += 4)
+            {
+                _bitBucket |= (ulong)*(uint*)(buffer + i) << _bitCount;
+                _bitCount += 32;
+            }
+
+            for (; i < bytesRead; i++)
             {
                 _bitBucket |= (ulong)buffer[i] << _bitCount;
                 _bitCount += 8;
