@@ -10,7 +10,7 @@ namespace NVorbis.Ogg
 
     internal abstract class PageReaderBase : IPageReader
     {
-        private readonly HashSet<int> _ignoredSerials = new HashSet<int>();
+        private readonly HashSet<int> _ignoredSerials = new();
         private byte[] _overflowBuf;
         private int _overflowBufIndex;
 

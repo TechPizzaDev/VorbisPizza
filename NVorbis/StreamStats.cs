@@ -1,13 +1,13 @@
-﻿using NVorbis.Contracts;
+using NVorbis.Contracts;
 
 namespace NVorbis
 {
-    internal class StreamStats : IStreamStats
+    internal unsafe class StreamStats : IStreamStats
     {
         private int _sampleRate;
 
-        private readonly int[] _packetBits = new int[2];
-        private readonly int[] _packetSamples = new int[2];
+        private PacketInt2 _packetBits;
+        private PacketInt2 _packetSamples;
         private int _packetIndex;
 
         private long _totalSamples;
@@ -16,7 +16,7 @@ namespace NVorbis
         private long _containerBits;
         private long _wasteBits;
 
-        private object _lock = new object();
+        private object _lock = new();
         private int _packetCount;
 
         public int EffectiveBitRate
@@ -44,8 +44,8 @@ namespace NVorbis
                 int samples, bits;
                 lock (_lock)
                 {
-                    bits = _packetBits[0] + _packetBits[1];
-                    samples = _packetSamples[0] + _packetSamples[1];
+                    bits = _packetBits.Buffer[0] + _packetBits.Buffer[1];
+                    samples = _packetSamples.Buffer[0] + _packetSamples.Buffer[1];
                 }
                 if (samples > 0)
                 {
@@ -69,8 +69,8 @@ namespace NVorbis
         {
             lock (_lock)
             {
-                _packetBits[0] = _packetBits[1] = 0;
-                _packetSamples[0] = _packetSamples[1] = 0;
+                _packetBits = default;
+                _packetSamples = default;
                 _packetIndex = 0;
                 _packetCount = 0;
                 _audioBits = 0;
@@ -102,8 +102,8 @@ namespace NVorbis
                     _wasteBits += waste;
                     _containerBits += container;
                     _totalSamples += samples;
-                    _packetBits[_packetIndex] = bits + waste;
-                    _packetSamples[_packetIndex] = samples;
+                    _packetBits.Buffer[_packetIndex] = bits + waste;
+                    _packetSamples.Buffer[_packetIndex] = samples;
 
                     if (++_packetIndex == 2)
                     {
@@ -118,6 +118,11 @@ namespace NVorbis
                     _containerBits += container;
                 }
             }
+        }
+
+        private struct PacketInt2
+        {
+            public fixed int Buffer[2];
         }
     }
 }

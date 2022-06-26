@@ -232,7 +232,7 @@ namespace NVorbis.Ogg
         private Packet CreatePacket(ref uint pageIndex, ref uint packetIndex, bool advance, long granulePos, bool isResync, bool isContinued, uint packetCount, int pageOverhead)
         {
             // create the packet list and add the item to it
-            PacketDataPart firstDataPart = new PacketDataPart(pageIndex, (byte)packetIndex);
+            PacketDataPart firstDataPart = new(pageIndex, (byte)packetIndex);
             PacketDataPart[] dataParts = null;
 
             // make sure we handle continuations
@@ -301,7 +301,7 @@ namespace NVorbis.Ogg
             }
 
             // create the packet instance and populate it with the appropriate initial data
-            Packet packet = new Packet(firstDataPart, dataParts, this)
+            Packet packet = new(firstDataPart, dataParts, this)
             {
                 IsResync = isResync
             };

@@ -9,9 +9,9 @@ namespace NVorbis.Ogg
 {
     internal class PageReader : PageReaderBase, IPageData
     {
-        private readonly Dictionary<int, IStreamPageReader> _streamReaders = new Dictionary<int, IStreamPageReader>();
+        private readonly Dictionary<int, IStreamPageReader> _streamReaders = new();
         private readonly NewStreamCallback _newStreamCallback;
-        private readonly object _readLock = new object();
+        private readonly object _readLock = new();
 
         private long _nextPageOffset;
         private ushort _pageSize;
@@ -147,7 +147,7 @@ namespace NVorbis.Ogg
             }
             else
             {
-                StreamPageReader streamReader = new StreamPageReader(this, StreamSerial);
+                StreamPageReader streamReader = new(this, StreamSerial);
                 streamReader.AddPage();
                 _streamReaders.Add(StreamSerial, streamReader);
                 if (!_newStreamCallback(streamReader.PacketProvider))

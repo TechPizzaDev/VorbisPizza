@@ -7,7 +7,7 @@ namespace NVorbis.Ogg
 {
     internal class ForwardOnlyPageReader : PageReaderBase
     {
-        private readonly Dictionary<int, IForwardOnlyPacketProvider> _packetProviders = new Dictionary<int, IForwardOnlyPacketProvider>();
+        private readonly Dictionary<int, IForwardOnlyPacketProvider> _packetProviders = new();
         private readonly NewStreamCallback _newStreamCallback;
 
         public ForwardOnlyPageReader(Stream stream, bool leaveOpen, NewStreamCallback newStreamCallback)

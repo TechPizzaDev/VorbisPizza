@@ -8,7 +8,7 @@ namespace NVorbis.Ogg
     internal sealed class ForwardOnlyPacketProvider : DataPacket, IForwardOnlyPacketProvider
     {
         private int _lastSeqNo;
-        private readonly Queue<(byte[] buf, bool isResync)> _pageQueue = new Queue<(byte[] buf, bool isResync)>();
+        private readonly Queue<(byte[] buf, bool isResync)> _pageQueue = new();
 
         private readonly IPageReader _reader;
         private byte[] _pageBuf;

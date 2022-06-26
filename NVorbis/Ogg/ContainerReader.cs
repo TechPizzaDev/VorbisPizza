@@ -25,7 +25,7 @@ namespace NVorbis.Ogg
         /// </summary>
         public IReadOnlyList<IPacketProvider> GetStreams()
         {
-            List<IPacketProvider> list = new List<IPacketProvider>(_packetProviders.Count);
+            List<IPacketProvider> list = new(_packetProviders.Count);
             for (int i = 0; i < _packetProviders.Count; i++)
             {
                 if (_packetProviders[i].TryGetTarget(out IPacketProvider pp))
