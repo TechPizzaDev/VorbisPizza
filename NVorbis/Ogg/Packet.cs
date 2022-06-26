@@ -7,12 +7,10 @@ namespace NVorbis.Ogg
 {
     internal sealed class Packet : DataPacket
     {
-        private static byte[] _oneByte = new byte[1];
-
         // this is the list of pages & packets in packed 24:8 format
         // in theory, this is good for up to 1016 GiB of Ogg file
         // in practice, probably closer to 300 days @ 160k bps
-        private PacketDataPart[] _dataParts;
+        private PacketDataPart[]? _dataParts;
         private PacketDataPart _firstDataPart;
 
         private IPacketReader _packetReader;
@@ -22,11 +20,12 @@ namespace NVorbis.Ogg
         private int _dataOfs;
         private int _dataEnd;
 
-        internal Packet(PacketDataPart firstDataPart, PacketDataPart[] dataParts, IPacketReader packetReader)
+        internal Packet(PacketDataPart firstDataPart, PacketDataPart[]? dataParts, IPacketReader packetReader)
         {
             _firstDataPart = firstDataPart;
             _dataParts = dataParts;
             _packetReader = packetReader;
+            _data = Array.Empty<byte>();
             Reset();
         }
 
@@ -49,7 +48,7 @@ namespace NVorbis.Ogg
 
         private void SetData(ArraySegment<byte> data)
         {
-            _data = data.Array;
+            _data = data.Array ?? Array.Empty<byte>();
             _dataOfs = data.Offset;
             _dataEnd = data.Offset + data.Count;
         }
@@ -87,14 +86,14 @@ namespace NVorbis.Ogg
             }
 
             byte[] oldData = _data;
-            SetData(_oneByte);
+            SetData(Array.Empty<byte>());
 
             // Restore to previous index to not overflow ever
             _dataPartIndex--;
 
             // If data was already the special one-byte array,
             // there was an attempt to read past the end of the packet so invalidate the read.
-            return oldData != _oneByte;
+            return oldData != Array.Empty<byte>();
         }
 
         public override void Reset()
