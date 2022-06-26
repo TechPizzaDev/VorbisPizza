@@ -1,4 +1,7 @@
-﻿using System;
+using System;
+using System.Numerics;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 namespace NVorbis
 {
@@ -138,7 +141,7 @@ namespace NVorbis
             return true;
         }
 
-        public bool Decode(
+        public unsafe bool Decode(
             DataPacket packet,
             float[][] buffer,
             out int packetStartindex,
@@ -157,14 +160,30 @@ namespace NVorbis
             {
                 _mapping.DecodePacket(packet, blockSize, _channels, buffer);
 
-                nint channels = _channels;
                 Span<float> window = Windows[windowIndex].AsSpan(0, blockSize);
-                for (int i = 0; i < window.Length; i++)
+                for (int ch = 0; ch < _channels; ch++)
                 {
-                    float v = window[i];
-                    for (nint ch = 0; ch < channels; ch++)
+                    Span<float> span = buffer[ch].AsSpan(0, window.Length);
+
+                    fixed (float* spanPtr = span)
+                    fixed (float* windowPtr = window)
                     {
-                        buffer[ch][i] *= v;
+                        int i = 0;
+                        if (Vector.IsHardwareAccelerated)
+                        {
+                            for (; i + Vector<float>.Count <= window.Length; i += Vector<float>.Count)
+                            {
+                                Vector<float> v_span = Unsafe.ReadUnaligned<Vector<float>>(spanPtr + i);
+                                Vector<float> v_window = Unsafe.ReadUnaligned<Vector<float>>(windowPtr + i);
+
+                                Vector<float> result = v_span * v_window;
+                                Unsafe.WriteUnaligned(spanPtr + i, result);
+                            }
+                        }
+                        for (; i < window.Length; i++)
+                        {
+                            span[i] *= window[i];
+                        }
                     }
                 }
                 return true;

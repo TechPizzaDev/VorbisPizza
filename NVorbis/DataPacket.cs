@@ -109,7 +109,10 @@ namespace NVorbis
         /// </summary>
         protected abstract int TotalBits { get; }
 
-        private bool GetFlag(PacketFlags flag) => _packetFlags.HasFlag(flag);
+        private bool GetFlag(PacketFlags flag)
+        {
+            return _packetFlags.HasFlag(flag);
+        }
 
         private void SetFlag(PacketFlags flag, bool value)
         {
@@ -165,32 +168,7 @@ namespace NVorbis
             return value;
         }
 
-        private ulong RefillBits1(ref int count)
-        {
-            Span<byte> tmp = stackalloc byte[1];
-            while (_bitCount < 64)
-            {
-                if (ReadBytes(tmp) == 0)
-                    break;
-
-                byte val = tmp[0];
-                _bitBucket |= (ulong)val << _bitCount;
-                _bitCount += 8;
-
-                if (_bitCount > 64)
-                    _overflowBits = (byte)(val >> (72 - _bitCount));
-            }
-
-            if (count > _bitCount)
-                count = _bitCount;
-
-            ulong value = _bitBucket;
-            if (count < 64)
-                value &= (1UL << count) - 1;
-
-            return value;
-        }
-
+        [SkipLocalsInit]
         private unsafe ulong RefillBits(ref int count)
         {
             byte* buffer = stackalloc byte[8];
@@ -204,7 +182,7 @@ namespace NVorbis
                 _bitCount += 8;
             }
 
-            if (_bitCount > 64 && bytesRead > 0)
+            if (bytesRead > 0 && _bitCount > 64)
                 _overflowBits = (byte)(buffer[bytesRead - 1] >> (72 - _bitCount));
 
             if (count > _bitCount)
@@ -246,43 +224,33 @@ namespace NVorbis
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void SkipBits(int count)
         {
-            if (_bitCount > count)
+            if (_bitCount >= count)
             {
                 // we still have bits left over...
-                if (count > 63)
-                {
-                    _bitBucket = 0;
-                }
-                else
-                {
-                    _bitBucket >>= count;
-                }
+                _bitBucket >>= count;
 
                 if (_bitCount > 64)
-                {
-                    int overflowCount = _bitCount - 64;
-                    _bitBucket |= (ulong)_overflowBits << (_bitCount - count - overflowCount);
-
-                    if (overflowCount > count)
-                    {
-                        // ugh, we have to keep bits in overflow
-                        _overflowBits >>= count;
-                    }
-                }
+                    SkipOverflow(count);
 
                 _bitCount -= count;
-                _readBits += count;
-            }
-            else if (_bitCount == count)
-            {
-                _bitBucket = 0UL;
-                _bitCount = 0;
                 _readBits += count;
             }
             else //  _bitCount < count
             {
                 // we have to move more bits than we have available...
                 SkipExtraBits(count);
+            }
+        }
+
+        private void SkipOverflow(int count)
+        {
+            int overflowCount = _bitCount - 64;
+            _bitBucket |= (ulong)_overflowBits << (_bitCount - count - overflowCount);
+
+            if (overflowCount > count)
+            {
+                // ugh, we have to keep bits in overflow
+                _overflowBits >>= count;
             }
         }
 

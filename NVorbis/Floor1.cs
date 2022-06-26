@@ -160,55 +160,58 @@ namespace NVorbis
             Data data = (Data)floorData;
 
             // hoist ReadPosts to here since that's all we're doing...
-            if (packet.ReadBit())
+            if (!packet.ReadBit())
             {
-                int postCount = 2;
-                data.Posts[0] = (int)packet.ReadBits(_yBits);
-                data.Posts[1] = (int)packet.ReadBits(_yBits);
+                return;
+            }
 
-                int[] partitionClass = _partitionClass;
-                for (int i = 0; i < partitionClass.Length; i++)
+            int postCount = 2;
+            data.Posts[0] = (int)packet.ReadBits(_yBits);
+            data.Posts[1] = (int)packet.ReadBits(_yBits);
+
+            int[] partitionClass = _partitionClass;
+            for (int i = 0; i < partitionClass.Length; i++)
+            {
+                int clsNum = partitionClass[i];
+                int cdim = _classDimensions[clsNum];
+                int cbits = _classSubclasses[clsNum];
+                int csub = (1 << cbits) - 1;
+                uint cval = 0U;
+                if (cbits > 0)
                 {
-                    int clsNum = partitionClass[i];
-                    int cdim = _classDimensions[clsNum];
-                    int cbits = _classSubclasses[clsNum];
-                    int csub = (1 << cbits) - 1;
-                    uint cval = 0U;
-                    if (cbits > 0)
+                    if ((cval = (uint)_classMasterbooks[clsNum].DecodeScalar(packet)) == uint.MaxValue)
                     {
-                        if ((cval = (uint)_classMasterbooks[clsNum].DecodeScalar(packet)) == uint.MaxValue)
-                        {
-                            // we read a bad value...  bail
-                            postCount = 0;
-                            break;
-                        }
-                    }
-                    for (int j = 0; j < cdim; j++)
-                    {
-                        Codebook book = _subclassBooks[clsNum][cval & csub];
-                        cval >>= cbits;
-                        if (book != null)
-                        {
-                            if ((data.Posts[postCount] = book.DecodeScalar(packet)) == -1)
-                            {
-                                // we read a bad value... bail
-                                postCount = 0;
-                                i = partitionClass.Length;
-                                break;
-                            }
-                        }
-                        ++postCount;
+                        // we read a bad value...  bail
+                        postCount = 0;
+                        break;
                     }
                 }
 
-                data.PostCount = postCount;
+                for (int j = 0; j < cdim; j++)
+                {
+                    Codebook book = _subclassBooks[clsNum][cval & csub];
+                    cval >>= cbits;
+                    if (book != null)
+                    {
+                        if ((data.Posts[postCount] = book.DecodeScalar(packet)) == -1)
+                        {
+                            // we read a bad value... bail
+                            postCount = 0;
+                            i = partitionClass.Length;
+                            break;
+                        }
+                    }
+                    ++postCount;
+                }
             }
+
+            data.PostCount = postCount;
         }
 
         [SkipLocalsInit]
         public void Apply(FloorData floorData, int blockSize, float[] residue)
         {
-            Span<bool> stepFlags = stackalloc bool[64];
+            bool* stepFlags = stackalloc bool[64];
 
             int n = blockSize / 2;
             Data data = (Data)floorData;
@@ -249,70 +252,74 @@ namespace NVorbis
             }
         }
 
-        private void UnwrapPosts(Span<bool> stepFlags, Data data)
+        private void UnwrapPosts(bool* stepFlags, Data data)
         {
-            stepFlags[0] = true;
-            stepFlags[1] = true;
-
-            int[] xList = _xList;
-            int[] finalY = data.Posts;
-            finalY[0] = data.Posts[0];
-            finalY[1] = data.Posts[1];
-
-            for (int i = 2; i < data.PostCount; i++)
+            fixed (int* xList = _xList)
+            fixed (int* finalY = data.Posts)
+            fixed (int* lNeigh = _lNeigh)
+            fixed (int* hNeigh = _hNeigh)
             {
-                int lowOfs = _lNeigh[i];
-                int highOfs = _hNeigh[i];
+                stepFlags[0] = true;
+                stepFlags[1] = true;
 
-                int predicted = RenderPoint(xList[lowOfs], finalY[lowOfs], xList[highOfs], finalY[highOfs], xList[i]);
+                finalY[0] = data.Posts[0];
+                finalY[1] = data.Posts[1];
 
-                int val = finalY[i];
-                int highroom = _range - predicted;
-                int lowroom = predicted;
-                int room;
-                if (highroom < lowroom)
+                for (int i = 2; i < data.PostCount; i++)
                 {
-                    room = highroom * 2;
-                }
-                else
-                {
-                    room = lowroom * 2;
-                }
-                if (val != 0)
-                {
-                    stepFlags[lowOfs] = true;
-                    stepFlags[highOfs] = true;
-                    stepFlags[i] = true;
+                    int lowOfs = lNeigh[i];
+                    int highOfs = hNeigh[i];
 
-                    if (val >= room)
+                    int predicted = RenderPoint(xList[lowOfs], finalY[lowOfs], xList[highOfs], finalY[highOfs], xList[i]);
+
+                    int val = finalY[i];
+                    int highroom = _range - predicted;
+                    int lowroom = predicted;
+                    int room;
+                    if (highroom < lowroom)
                     {
-                        if (highroom > lowroom)
+                        room = highroom * 2;
+                    }
+                    else
+                    {
+                        room = lowroom * 2;
+                    }
+                    if (val != 0)
+                    {
+                        stepFlags[lowOfs] = true;
+                        stepFlags[highOfs] = true;
+                        stepFlags[i] = true;
+
+                        if (val >= room)
                         {
-                            finalY[i] = val - lowroom + predicted;
+                            if (highroom > lowroom)
+                            {
+                                finalY[i] = val - lowroom + predicted;
+                            }
+                            else
+                            {
+                                finalY[i] = predicted - val + highroom - 1;
+                            }
                         }
                         else
                         {
-                            finalY[i] = predicted - val + highroom - 1;
+                            if ((val % 2) == 1)
+                            {
+                                // odd
+                                finalY[i] = predicted - ((val + 1) / 2);
+                            }
+                            else
+                            {
+                                // even
+                                finalY[i] = predicted + (val / 2);
+                            }
                         }
                     }
                     else
                     {
-                        if ((val % 2) == 1)
-                        {
-                            // odd
-                            finalY[i] = predicted - ((val + 1) / 2);
-                        }
-                        else
-                        {
-                            // even
-                            finalY[i] = predicted + (val / 2);
-                        }
+                        stepFlags[i] = false;
+                        finalY[i] = predicted;
                     }
-                }
-                else
-                {
-                    stepFlags[i] = false;
-                    finalY[i] = predicted;
                 }
             }
         }

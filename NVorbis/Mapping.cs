@@ -1,4 +1,5 @@
 using System;
+using System.Numerics;
 using System.Runtime.CompilerServices;
 using NVorbis.Contracts;
 
@@ -97,7 +98,7 @@ namespace NVorbis
         }
 
         [SkipLocalsInit]
-        public void DecodePacket(DataPacket packet, int blockSize, int channels, float[][] buffer)
+        public unsafe void DecodePacket(DataPacket packet, int blockSize, int channels, float[][] buffer)
         {
             Span<bool> noExecuteChannel = stackalloc bool[256];
             int halfBlockSize = blockSize >> 1;
@@ -144,42 +145,49 @@ namespace NVorbis
             // inverse coupling
             for (int i = _couplingAngle.Length - 1; i >= 0; i--)
             {
-                if (floorData[_couplingAngle[i]].ExecuteChannel || floorData[_couplingMangitude[i]].ExecuteChannel)
+                if (!floorData[_couplingAngle[i]].ExecuteChannel &&
+                    !floorData[_couplingMangitude[i]].ExecuteChannel)
                 {
-                    float[] magnitude = buffer[_couplingMangitude[i]];
-                    float[] angle = buffer[_couplingAngle[i]];
+                    continue;
+                }
 
+                Span<float> magnitudeSpan = buffer[_couplingMangitude[i]].AsSpan(0, halfBlockSize);
+                Span<float> angleSpan = buffer[_couplingAngle[i]].AsSpan(0, halfBlockSize);
+
+                fixed (float* magnitude = magnitudeSpan)
+                fixed (float* angle = angleSpan)
+                {
                     // we only have to do the first half; MDCT ignores the last half
                     for (int j = 0; j < halfBlockSize; j++)
                     {
-                        float newM, newA;
-
                         float oldM = magnitude[j];
                         float oldA = angle[j];
+
+                        float newM = oldM;
+                        float newA = oldA;
+
                         if (oldM > 0)
                         {
                             if (oldA > 0)
                             {
-                                newM = oldM;
                                 newA = oldM - oldA;
                             }
                             else
                             {
-                                newA = oldM;
                                 newM = oldM + oldA;
+                                newA = oldM;
                             }
                         }
                         else
                         {
                             if (oldA > 0)
                             {
-                                newM = oldM;
                                 newA = oldM + oldA;
                             }
                             else
                             {
-                                newA = oldM;
                                 newM = oldM - oldA;
+                                newA = oldM;
                             }
                         }
 

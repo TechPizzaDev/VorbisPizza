@@ -1,13 +1,11 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Numerics;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 using System.Text;
 using NVorbis.Contracts;
-using static System.Runtime.CompilerServices.Unsafe;
 
 namespace NVorbis
 {
@@ -342,7 +340,7 @@ namespace NVorbis
         #region Decoding
 
         /// <inheritdoc/>
-        public int Read(Span<float> buffer)
+        public unsafe int Read(Span<float> buffer)
         {
             if (buffer.Length % _channels != 0) throw new ArgumentException("Length must be a multiple of Channels.", nameof(buffer));
             if (_packetProvider == null) throw new ObjectDisposedException(nameof(StreamDecoder));
@@ -356,7 +354,6 @@ namespace NVorbis
             // save off value to track when we're done with the request
             nint idx = 0;
             int tgt = buffer.Length;
-            ref float target = ref MemoryMarshal.GetReference(buffer);
 
             // try to fill the buffer; drain the last buffer if EOS, resync, bad packet, or parameter change
             while (idx < tgt)
@@ -391,13 +388,16 @@ namespace NVorbis
                 nint copyLen = Math.Min((tgt - idx) / _channels, _prevPacketEnd - _prevPacketStart);
                 if (copyLen > 0)
                 {
-                    if (ClipSamples)
+                    fixed (float* target = buffer)
                     {
-                        idx += ClippingCopyBuffer(ref Add(ref target, idx), copyLen);
-                    }
-                    else
-                    {
-                        idx += CopyBuffer(ref Add(ref target, idx), copyLen);
+                        if (ClipSamples)
+                        {
+                            idx += ClippingCopyBuffer(target + idx, copyLen);
+                        }
+                        else
+                        {
+                            idx += CopyBuffer(target + idx, copyLen);
+                        }
                     }
                 }
             }
@@ -410,7 +410,7 @@ namespace NVorbis
         }
 
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
-        private nint ClippingCopyBuffer(ref float target, nint count)
+        private unsafe nint ClippingCopyBuffer(float* target, nint count)
         {
             float[][] prevPacketBuf = _prevPacketBuf;
             nint channels = _channels;
@@ -422,36 +422,43 @@ namespace NVorbis
 
                 if (_channels == 2)
                 {
-                    ref float prev0 = ref prevPacketBuf[0][_prevPacketStart];
-                    ref float prev1 = ref prevPacketBuf[1][_prevPacketStart];
-
-                    for (; j + 4 <= count; j += 4)
+                    fixed (float* prev0Ptr = prevPacketBuf[0])
+                    fixed (float* prev1Ptr = prevPacketBuf[1])
                     {
-                        Vector128<float> p0 = As<float, Vector128<float>>(ref Add(ref prev0, j));
-                        Vector128<float> p1 = As<float, Vector128<float>>(ref Add(ref prev1, j));
+                        float* prev0 = prev0Ptr + _prevPacketStart;
+                        float* prev1 = prev1Ptr + _prevPacketStart;
 
-                        Vector128<float> t0 = Sse.Shuffle(p0, p1, 0b01_00_01_00);
-                        Vector128<float> ts0 = Sse.Shuffle(t0, t0, 0b11_01_10_00);
+                        for (; j + 4 <= count; j += 4)
+                        {
+                            Vector128<float> p0 = Unsafe.ReadUnaligned<Vector128<float>>(prev0 + j);
+                            Vector128<float> p1 = Unsafe.ReadUnaligned<Vector128<float>>(prev1 + j);
 
-                        Vector128<float> t1 = Sse.Shuffle(p0, p1, 0b11_10_11_10);
-                        Vector128<float> ts1 = Sse.Shuffle(t1, t1, 0b11_01_10_00);
+                            Vector128<float> t0 = Sse.Shuffle(p0, p1, 0b01_00_01_00);
+                            Vector128<float> ts0 = Sse.Shuffle(t0, t0, 0b11_01_10_00);
 
-                        ts0 = Utils.ClipValue(ts0, ref clipped);
-                        ts1 = Utils.ClipValue(ts1, ref clipped);
+                            Vector128<float> t1 = Sse.Shuffle(p0, p1, 0b11_10_11_10);
+                            Vector128<float> ts1 = Sse.Shuffle(t1, t1, 0b11_01_10_00);
 
-                        As<float, Vector128<float>>(ref Add(ref target, j * 2 + 0)) = ts0;
-                        As<float, Vector128<float>>(ref Add(ref target, j * 2 + 4)) = ts1;
+                            ts0 = Utils.ClipValue(ts0, ref clipped);
+                            ts1 = Utils.ClipValue(ts1, ref clipped);
+
+                            Unsafe.WriteUnaligned(target + j * 2 + 0, ts0);
+                            Unsafe.WriteUnaligned(target + j * 2 + 4, ts1);
+                        }
                     }
                 }
                 else if (_channels == 1)
                 {
-                    ref float prev0 = ref prevPacketBuf[0][_prevPacketStart];
-
-                    for (; j + 4 <= count; j += 4)
+                    fixed (float* prev0Ptr = prevPacketBuf[0])
                     {
-                        Vector128<float> p0 = As<float, Vector128<float>>(ref Add(ref prev0, j));
-                        p0 = Utils.ClipValue(p0, ref clipped);
-                        As<float, Vector128<float>>(ref Add(ref target, j)) = p0;
+                        float* prev0 = prev0Ptr + _prevPacketStart;
+
+                        for (; j + 4 <= count; j += 4)
+                        {
+                            Vector128<float> p0 = Unsafe.ReadUnaligned<Vector128<float>>(prev0 + j);
+                            p0 = Utils.ClipValue(p0, ref clipped);
+                            Unsafe.WriteUnaligned(target + j, p0);
+                        }
                     }
                 }
 
@@ -461,12 +468,15 @@ namespace NVorbis
 
             for (nint ch = 0; ch < channels; ch++)
             {
-                ref float tar = ref Add(ref target, ch);
-                ref float prev = ref prevPacketBuf[ch][_prevPacketStart];
-
-                for (nint i = j; i < count; i++)
+                fixed (float* prevPtr = prevPacketBuf[ch])
                 {
-                    Add(ref tar, i * channels) = Utils.ClipValue(Add(ref prev, i), ref _hasClipped);
+                    float* prev = prevPtr + _prevPacketStart;
+                    float* tar = target + ch;
+
+                    for (nint i = j; i < count; i++)
+                    {
+                        tar[i * channels] = Utils.ClipValue(prev[i], ref _hasClipped);
+                    }
                 }
             }
 
@@ -475,20 +485,22 @@ namespace NVorbis
             return count * channels;
         }
 
-        private nint CopyBuffer(ref float target, nint count)
+        private unsafe nint CopyBuffer(float* target, nint count)
         {
             float[][] prevPacketBuf = _prevPacketBuf;
             nint channels = _channels;
-            nint j = 0;
 
             for (nint ch = 0; ch < channels; ch++)
             {
-                ref float tar = ref Add(ref target, ch);
-                ref float prev = ref prevPacketBuf[ch][_prevPacketStart];
-
-                for (nint i = j; i < count; i++)
+                fixed (float* prevPtr = prevPacketBuf[ch])
                 {
-                    Add(ref tar, i * channels) = Add(ref prev, i);
+                    float* prev = prevPtr + _prevPacketStart;
+                    float* tar = target + ch;
+
+                    for (nint i = 0; i < count; i++)
+                    {
+                        tar[i * channels] = prev[i];
+                    }
                 }
             }
 
@@ -612,7 +624,8 @@ namespace NVorbis
             }
         }
 
-        private static void OverlapBuffers(float[][] previous, float[][] next, int prevStart, int prevLen, int nextStart, int channels)
+        private static unsafe void OverlapBuffers(
+            float[][] previous, float[][] next, int prevStart, int prevLen, int nextStart, int channels)
         {
             nint length = prevLen - prevStart;
             for (int c = 0; c < channels; c++)
@@ -620,22 +633,25 @@ namespace NVorbis
                 Span<float> prevSpan = previous[c].AsSpan(prevStart, (int)length);
                 Span<float> nextSpan = next[c].AsSpan(nextStart, (int)length);
 
-                ref float p = ref MemoryMarshal.GetReference(prevSpan);
-                ref float n = ref MemoryMarshal.GetReference(nextSpan);
-
-                nint i = 0;
-                if (Vector.IsHardwareAccelerated)
+                fixed (float* p = prevSpan)
+                fixed (float* n = nextSpan)
                 {
-                    for (; i + Vector<float>.Count <= length; i += Vector<float>.Count)
+                    nint i = 0;
+                    if (Vector.IsHardwareAccelerated)
                     {
-                        ref float ni = ref Add(ref n, i);
-                        ref float pi = ref Add(ref p, i);
-                        As<float, Vector<float>>(ref ni) += As<float, Vector<float>>(ref pi);
+                        for (; i + Vector<float>.Count <= length; i += Vector<float>.Count)
+                        {
+                            Vector<float> ni = Unsafe.ReadUnaligned<Vector<float>>(n + i);
+                            Vector<float> pi = Unsafe.ReadUnaligned<Vector<float>>(p + i);
+
+                            Vector<float> result = ni + pi;
+                            Unsafe.WriteUnaligned(n + i, result);
+                        }
                     }
-                }
-                for (; i < length; i++)
-                {
-                    Add(ref n, i) += Add(ref p, i);
+                    for (; i < length; i++)
+                    {
+                        n[i] += p[i];
+                    }
                 }
             }
         }
@@ -787,7 +803,7 @@ namespace NVorbis
         /// <summary>
         /// Gets the tag data from the stream's header.
         /// </summary>
-        public ITagData Tags => _tags ?? (_tags = new TagData(_vendor, _comments));
+        public ITagData Tags => _tags ??= new TagData(_vendor, _comments);
 
         /// <summary>
         /// Gets the total duration of the decoded stream.
