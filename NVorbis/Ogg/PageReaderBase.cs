@@ -66,7 +66,7 @@ namespace NVorbis.Ogg
 
         private bool AddPage(byte[] pageBuf, bool isResync)
         {
-            int streamSerial = BitConverter.ToInt32(pageBuf, 14);
+            int streamSerial = BinaryPrimitives.ReadInt32LittleEndian(pageBuf.AsSpan(14, sizeof(int)));
             if (!_ignoredSerials.Contains(streamSerial))
             {
                 if (AddPage(streamSerial, pageBuf, isResync))

@@ -350,6 +350,10 @@ namespace NVorbis.Ogg
                     packet.IsEndOfStream = true;
                 }
             }
+            else
+            {
+                packet.GranulePosition = -1;
+            }
 
             if (advance)
             {

@@ -44,12 +44,12 @@ namespace NVorbis.Ogg
                     return false;
                 }
                 isResync = true;
-                _lastSeqNo = BitConverter.ToInt32(buf, 18);
+                _lastSeqNo = BinaryPrimitives.ReadInt32LittleEndian(buf.AsSpan(18, sizeof(int)));
             }
             else
             {
                 // check the sequence number
-                int seqNo = BitConverter.ToInt32(buf, 18);
+                int seqNo = BinaryPrimitives.ReadInt32LittleEndian(buf.AsSpan(18, sizeof(int)));
                 isResync |= seqNo != _lastSeqNo + 1;
                 _lastSeqNo = seqNo;
             }
@@ -195,10 +195,10 @@ namespace NVorbis.Ogg
 
             // forth, if it is the last one, process continuations or flags & granulePos
             bool isEos = false;
-            long? granulePos = null;
+            long granulePos = -1;
             if (isLast)
             {
-                granulePos = BitConverter.ToInt64(pageBuf, 6);
+                granulePos = BinaryPrimitives.ReadInt64LittleEndian(pageBuf.AsSpan(6, sizeof(long)));
 
                 // fifth, set flags from the end page
                 if (((PageFlags)pageBuf[5] & PageFlags.EndOfStream) != 0 || (_isEndOfStream && _pageQueue.Count == 0))
