@@ -578,6 +578,9 @@ namespace NVorbis
                 {
                     // no packet? we're at the end of the stream
                     isEndOfStream = true;
+                    bitsRead = 0;
+                    bitsRemaining = 0;
+                    containerOverheadBits = 0;
                 }
                 else
                 {
@@ -594,11 +597,7 @@ namespace NVorbis
                     containerOverheadBits = packet.ContainerOverheadBits;
 
                     // make sure the packet starts with a 0 bit as per the spec
-                    if (packet.ReadBit())
-                    {
-                        bitsRemaining = packet.BitsRemaining + 1;
-                    }
-                    else
+                    if (packet.ReadBits(1) == 0)
                     {
                         // if we get here, we should have a good packet; decode it and add it to the buffer
                         Mode mode = _modes[(int)packet.ReadBits(_modeFieldBits)];
@@ -618,17 +617,15 @@ namespace NVorbis
                             bitsRemaining = packet.BitsRemaining;
                             return _nextPacketBuf;
                         }
-                        bitsRemaining = packet.BitsRead + packet.BitsRemaining;
                     }
+                    bitsRead = packet.BitsRead;
+                    bitsRemaining = packet.BitsRead + packet.BitsRemaining;
                 }
 
                 packetStartindex = 0;
                 packetValidLength = 0;
                 packetTotalLength = 0;
                 samplePosition = null;
-                bitsRead = 0;
-                bitsRemaining = 0;
-                containerOverheadBits = 0;
                 return null;
             }
             finally
