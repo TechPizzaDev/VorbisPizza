@@ -277,7 +277,7 @@ namespace NVorbis
             }
 
             // verify the closing bit
-            if (!packet.ReadBit()) 
+            if (!packet.ReadBit())
                 throw new InvalidDataException("Book packet did not end on correct bit!");
 
             // save off the number of bits to read to determine packet mode
@@ -767,11 +767,11 @@ namespace NVorbis
             try
             {
                 // if it's a resync, there's not any audio data to return
-                if (curPacket.IsResync) 
+                if (curPacket.IsResync)
                     return 0;
 
                 // if it's not an audio packet, there's no audio data (seems obvious, though...)
-                if (curPacket.ReadBit()) 
+                if (curPacket.ReadBit())
                     return 0;
 
                 // OK, let's ask the appropriate mode how long this packet actually is
@@ -780,7 +780,7 @@ namespace NVorbis
                 uint modeIdx = (uint)curPacket.ReadBits(_modeFieldBits);
 
                 // if we got an invalid mode value, we can't decode any audio data anyway...
-                if (modeIdx >= (uint)_modes.Length) 
+                if (modeIdx >= (uint)_modes.Length)
                     return 0;
 
                 return _modes[modeIdx].GetPacketSampleCount(ref curPacket, isLastInPage);

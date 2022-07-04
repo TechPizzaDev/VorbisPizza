@@ -115,7 +115,7 @@ namespace NVorbis.Contracts
         /// </summary>
         /// <exception cref="InvalidDataException">The Vorbis container could not be parsed.</exception>
         void Initialize();
-         
+
         /// <summary>
         /// Searches for the next stream in a concatenated file. 
         /// Will raise <see cref="NewStream"/> for the found stream, 

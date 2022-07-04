@@ -13,7 +13,7 @@ namespace NVorbis
         private readonly List<IStreamDecoder> _decoders;
         private readonly IContainerReader _containerReader;
         private readonly bool _leaveOpen;
-        
+
         private IStreamDecoder _streamDecoder;
 
         /// <summary>

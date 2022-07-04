@@ -42,7 +42,7 @@ namespace NVorbis
         {
             PacketProvider = packetProvider;
             DataParts = dataParts;
-            
+
             _data = Array.Empty<byte>();
         }
 
@@ -285,7 +285,7 @@ namespace NVorbis
 
             return _readBits - startReadBits;
         }
-    
+
         private void SetData(ArraySegment<byte> data)
         {
             _data = data.Array ?? Array.Empty<byte>();

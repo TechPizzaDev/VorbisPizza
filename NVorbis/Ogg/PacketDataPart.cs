@@ -23,7 +23,7 @@ namespace NVorbis.Ogg
         /// Gets the page index of the packet.
         /// </summary>
         public ulong PageIndex => _value >> 8;
-        
+
         /// <summary>
         /// Gets the packet index within the page.
         /// </summary>
