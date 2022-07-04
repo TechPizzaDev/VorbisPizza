@@ -1,5 +1,9 @@
+// Source: https://github.com/nothings/stb/blob/master/stb_vorbis.c
+
 using System;
 using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.Runtime.CompilerServices;
 
 namespace NVorbis
 {
@@ -15,7 +19,8 @@ namespace NVorbis
 
         private class MdctImpl
         {
-            private readonly int _n, _n2, _n4, _n8, _ld;
+            private readonly int _n;
+            private readonly int _ld;
 
             private readonly float[] _a, _b, _c;
             private readonly ushort[] _bitrev;
@@ -23,11 +28,11 @@ namespace NVorbis
             public MdctImpl(int n)
             {
                 _n = n;
-                _n2 = n >> 1;
-                _n4 = _n2 >> 1;
-                _n8 = _n4 >> 1;
-
                 _ld = Utils.ilog(n) - 1;
+
+                int _n2 = n >> 1;
+                int _n4 = _n2 >> 1;
+                int _n8 = _n4 >> 1;
 
                 // first, calc the "twiddle factors"
                 _a = new float[_n2];
@@ -65,69 +70,94 @@ namespace NVorbis
                 }
             }
 
-            private void CalcReverse(float* buffer, float* buf2, float* aa)
+            private void CalcReverse(float* buffer, float* buf2, float* A)
             {
-                // copy and reflect spectral data
-                // step 0
+                int n = _n;
+                int n2 = n >> 1;
+                int n4 = n2 >> 1;
+                int n8 = n4 >> 1;
+
+                // IMDCT algorithm from "The use of multirate filter banks for coding of high quality digital audio"
+                // See notes about bugs in that paper in less-optimal implementation 'inverse_mdct_old' after this function.
+
+                // kernel from paper
+
+
+                // merged:
+                //   copy and reflect spectral data
+                //   step 0
+
+                // note that it turns out that the items added together during
+                // this step are, in fact, being added to themselves (as reflected
+                // by step 0). inexplicable inefficiency! this became obvious
+                // once I combined the passes.
+
+                // so there's a missing 'times 2' here (for adding X to itself).
+                // this propagates through linearly to the end, where the numbers
+                // are 1/2 too small, and need to be compensated for.
 
                 {
-                    nint d = _n2 - 2;  // buf2
-                    nint AA = 0;       // A
-                    nint e = 0;        // buffer
-                    nint e_stop = _n2; // buffer
+                    float* d = &buf2[n2 - 2];   // buf2
+                    float* AA = A;              // A
+                    float* e = &buffer[0];      // buffer
+                    float* e_stop = &buffer[n2];// buffer
 
                     while (e != e_stop)
                     {
-                        buf2[d + 1] = buffer[e] * aa[AA + 0] - buffer[e + 2] * aa[AA + 1];
-                        buf2[d + 0] = buffer[e] * aa[AA + 1] + buffer[e + 2] * aa[AA + 0];
+                        d[1] = e[0] * AA[0] - e[2] * AA[1];
+                        d[0] = e[0] * AA[1] + e[2] * AA[0];
                         d -= 2;
                         AA += 2;
                         e += 4;
                     }
 
-                    e = _n2 - 3;
-                    while (d >= 0)
+                    e = &buffer[n2 - 3];
+                    while (d >= buf2)
                     {
-                        buf2[d + 1] = -buffer[e + 2] * aa[AA + 0] - -buffer[e] * aa[AA + 1];
-                        buf2[d + 0] = -buffer[e + 2] * aa[AA + 1] + -buffer[e] * aa[AA + 0];
+                        d[1] = -e[2] * AA[0] - -e[0] * AA[1];
+                        d[0] = -e[2] * AA[1] + -e[0] * AA[0];
                         d -= 2;
                         AA += 2;
                         e -= 4;
                     }
                 }
 
-                // apply "symbolic" names
+                // now we use symbolic names for these, so that we can
+                // possibly swap their meaning as we change which operations
+                // are in place
                 float* u = buffer;
                 float* v = buf2;
 
-                // step 2
-
+                // step 2    (paper output is w, now u)
+                // this could be in place, but the data ends up in the wrong
+                // place... _somebody_'s got to swap it, so this is nominated
                 {
-                    nint AA = _n2 - 8;    // A
 
-                    nint e0 = _n4;        // v
-                    nint e1 = 0;         // v
+                    float* AA = &A[n2 - 8];   // A
 
-                    nint d0 = _n4;        // u
-                    nint d1 = 0;         // u
+                    float* e0 = &v[n4];       // v
+                    float* e1 = &v[0];        // v
 
-                    while (AA >= 0)
+                    float* d0 = &u[n4];       // u
+                    float* d1 = &u[0];        // u
+
+                    while (AA >= A)
                     {
                         float v40_20, v41_21;
 
-                        v41_21 = v[e0 + 1] - v[e1 + 1];
-                        v40_20 = v[e0 + 0] - v[e1 + 0];
-                        u[d0 + 1] = v[e0 + 1] + v[e1 + 1];
-                        u[d0 + 0] = v[e0 + 0] + v[e1 + 0];
-                        u[d1 + 1] = v41_21 * aa[AA + 4] - v40_20 * aa[AA + 5];
-                        u[d1 + 0] = v40_20 * aa[AA + 4] + v41_21 * aa[AA + 5];
+                        v41_21 = e0[1] - e1[1];
+                        v40_20 = e0[0] - e1[0];
+                        d0[1] = e0[1] + e1[1];
+                        d0[0] = e0[0] + e1[0];
+                        d1[1] = v41_21 * AA[4] - v40_20 * AA[5];
+                        d1[0] = v40_20 * AA[4] + v41_21 * AA[5];
 
-                        v41_21 = v[e0 + 3] - v[e1 + 3];
-                        v40_20 = v[e0 + 2] - v[e1 + 2];
-                        u[d0 + 3] = v[e0 + 3] + v[e1 + 3];
-                        u[d0 + 2] = v[e0 + 2] + v[e1 + 2];
-                        u[d1 + 3] = v41_21 * aa[AA + 0] - v40_20 * aa[AA + 1];
-                        u[d1 + 2] = v40_20 * aa[AA + 0] + v41_21 * aa[AA + 1];
+                        v41_21 = e0[3] - e1[3];
+                        v40_20 = e0[2] - e1[2];
+                        d0[3] = e0[3] + e1[3];
+                        d0[2] = e0[2] + e1[2];
+                        d1[3] = v41_21 * AA[0] - v40_20 * AA[1];
+                        d1[2] = v40_20 * AA[0] + v41_21 * AA[1];
 
                         AA -= 8;
 
@@ -139,174 +169,202 @@ namespace NVorbis
                 }
 
                 // step 3
+                int ld = _ld;
 
-                // iteration 0
-                step3_iter0_loop(_n >> 4, u, _n2 - 1 - _n4 * 0, -_n8, aa);
-                step3_iter0_loop(_n >> 4, u, _n2 - 1 - _n4 * 1, -_n8, aa);
+                // optimized step 3:
 
-                // iteration 1
-                step3_inner_r_loop(_n >> 5, u, _n2 - 1 - _n8 * 0, -(_n >> 4), 16, aa);
-                step3_inner_r_loop(_n >> 5, u, _n2 - 1 - _n8 * 1, -(_n >> 4), 16, aa);
-                step3_inner_r_loop(_n >> 5, u, _n2 - 1 - _n8 * 2, -(_n >> 4), 16, aa);
-                step3_inner_r_loop(_n >> 5, u, _n2 - 1 - _n8 * 3, -(_n >> 4), 16, aa);
+                // the original step3 loop can be nested r inside s or s inside r;
+                // it's written originally as s inside r, but this is dumb when r
+                // iterates many times, and s few. So I have two copies of it and
+                // switch between them halfway.
 
-                // iterations 2 ... x
+                // this is iteration 0 of step 3
+                step3_iter0_loop(n >> 4, u, n2 - 1 - n4 * 0, -(n >> 3), A);
+                step3_iter0_loop(n >> 4, u, n2 - 1 - n4 * 1, -(n >> 3), A);
+
+                // this is iteration 1 of step 3
+                step3_inner_r_loop(n >> 5, u, n2 - 1 - n8 * 0, -(n >> 4), A, 16);
+                step3_inner_r_loop(n >> 5, u, n2 - 1 - n8 * 1, -(n >> 4), A, 16);
+                step3_inner_r_loop(n >> 5, u, n2 - 1 - n8 * 2, -(n >> 4), A, 16);
+                step3_inner_r_loop(n >> 5, u, n2 - 1 - n8 * 3, -(n >> 4), A, 16);
+
                 int l = 2;
-                for (; l < (_ld - 3) >> 1; ++l)
+                for (; l < (ld - 3) >> 1; ++l)
                 {
-                    int k0 = _n >> (l + 2);
-                    nint k0_2 = -(k0 >> 1);
+                    int k0 = n >> (l + 2), k0_2 = k0 >> 1;
                     int lim = 1 << (l + 1);
-
-                    for (int i = 0; i < lim; ++i)
+                    int i;
+                    for (i = 0; i < lim; ++i)
                     {
-                        step3_inner_r_loop(_n >> (l + 4), u, _n2 - 1 - k0 * i, k0_2, 1 << (l + 3), aa);
+                        step3_inner_r_loop(n >> (l + 4), u, n2 - 1 - k0 * i, -k0_2, A, 1 << (l + 3));
                     }
                 }
 
-                // iterations x ... end
-                for (; l < _ld - 6; ++l)
+                for (; l < ld - 6; ++l)
                 {
-                    nint k0 = _n >> (l + 2);
-                    nint k1 = 1 << (l + 3);
-                    nint k0_2 = -(k0 >> 1);
-                    int rlim = _n >> (l + 6);
-                    int lim = 1 << l + 1;
-                    nint i_off = _n2 - 1;
-                    nint A0 = 0;
-
-                    for (int r = rlim; r > 0; --r)
+                    int k0 = n >> (l + 2), k1 = 1 << (l + 3), k0_2 = k0 >> 1;
+                    int rlim = n >> (l + 6), r;
+                    int lim = 1 << (l + 1);
+                    int i_off;
+                    float* A0 = A;
+                    i_off = n2 - 1;
+                    for (r = rlim; r > 0; --r)
                     {
-                        step3_inner_s_loop(lim, u, i_off, k0_2, A0, k1, k0, aa);
+                        step3_inner_s_loop(lim, u, i_off, -k0_2, A0, k1, k0);
                         A0 += k1 * 4;
                         i_off -= 8;
                     }
                 }
 
-                // combine some iteration steps...
-                step3_inner_s_loop_ld654(_n >> 5, u, _n2 - 1, _n, aa);
+                // iterations with count:
+                //   ld-6,-5,-4 all interleaved together
+                //       the big win comes from getting rid of needless flops
+                //         due to the constants on pass 5 & 4 being all 1 and 0;
+                //       combining them to be simultaneous to improve cache made little difference
+                step3_inner_s_loop_ld654(n >> 5, u, n2 - 1, A, n);
 
-                // steps 4, 5, and 6
-                fixed (ushort* bitrev = _bitrev)
+                // output is u
+
+                // step 4, 5, and 6
+                // cannot be in-place because of step 5
+                fixed (ushort* bit_reverse = _bitrev)
                 {
-                    nint bit = 0;
-                    nint d0 = _n4 - 4; // v
-                    nint d1 = _n2 - 4; // v
+                    ushort* bitrev = bit_reverse;
+                    // weirdly, I'd have thought reading sequentially and writing
+                    // erratically would have been better than vice-versa, but in
+                    // fact that's not what my testing showed. (That is, with
+                    // j = bitreverse(i), do you read i and write j, or read j and write i.)
 
-                    while (d0 >= 0)
+                    float* d0 = &v[n4 - 4];
+                    float* d1 = &v[n2 - 4];
+                    while (d0 >= v)
                     {
                         int k4;
 
-                        k4 = bitrev[bit + 0];
-                        v[d1 + 3] = u[k4 + 0];
-                        v[d1 + 2] = u[k4 + 1];
-                        v[d0 + 3] = u[k4 + 2];
-                        v[d0 + 2] = u[k4 + 3];
+                        k4 = bitrev[0];
+                        d1[3] = u[k4 + 0];
+                        d1[2] = u[k4 + 1];
+                        d0[3] = u[k4 + 2];
+                        d0[2] = u[k4 + 3];
 
-                        k4 = bitrev[bit + 1];
-                        v[d1 + 1] = u[k4 + 0];
-                        v[d1 + 0] = u[k4 + 1];
-                        v[d0 + 1] = u[k4 + 2];
-                        v[d0 + 0] = u[k4 + 3];
+                        k4 = bitrev[1];
+                        d1[1] = u[k4 + 0];
+                        d1[0] = u[k4 + 1];
+                        d0[1] = u[k4 + 2];
+                        d0[0] = u[k4 + 3];
 
                         d0 -= 4;
                         d1 -= 4;
-                        bit += 2;
+                        bitrev += 2;
                     }
                 }
+                // (paper output is u, now v)
 
-                // step 7
+
+                // data must be in buf2
+                Debug.Assert(v == buf2);
+
+                // step 7   (paper output is v, now v)
+                // this is now in place
                 fixed (float* cc = _c)
                 {
-                    nint c = 0;      // C
-                    nint d = 0;      // v
-                    nint e = _n2 - 4; // v
+                    float* C = cc;
+
+                    float* d = v;
+                    float* e = v + n2 - 4;
 
                     while (d < e)
                     {
                         float a02, a11, b0, b1, b2, b3;
 
-                        a02 = v[d + 0] - v[e + 2];
-                        a11 = v[d + 1] + v[e + 3];
+                        a02 = d[0] - e[2];
+                        a11 = d[1] + e[3];
 
-                        b0 = cc[c + 1] * a02 + cc[c] * a11;
-                        b1 = cc[c + 1] * a11 - cc[c] * a02;
+                        b0 = C[1] * a02 + C[0] * a11;
+                        b1 = C[1] * a11 - C[0] * a02;
 
-                        b2 = v[d + 0] + v[e + 2];
-                        b3 = v[d + 1] - v[e + 3];
+                        b2 = d[0] + e[2];
+                        b3 = d[1] - e[3];
 
-                        v[d + 0] = b2 + b0;
-                        v[d + 1] = b3 + b1;
-                        v[e + 2] = b2 - b0;
-                        v[e + 3] = b1 - b3;
+                        d[0] = b2 + b0;
+                        d[1] = b3 + b1;
+                        e[2] = b2 - b0;
+                        e[3] = b1 - b3;
 
-                        a02 = v[d + 2] - v[e + 0];
-                        a11 = v[d + 3] + v[e + 1];
+                        a02 = d[2] - e[0];
+                        a11 = d[3] + e[1];
 
-                        b0 = cc[c + 3] * a02 + cc[c + 2] * a11;
-                        b1 = cc[c + 3] * a11 - cc[c + 2] * a02;
+                        b0 = C[3] * a02 + C[2] * a11;
+                        b1 = C[3] * a11 - C[2] * a02;
 
-                        b2 = v[d + 2] + v[e + 0];
-                        b3 = v[d + 3] - v[e + 1];
+                        b2 = d[2] + e[0];
+                        b3 = d[3] - e[1];
 
-                        v[d + 2] = b2 + b0;
-                        v[d + 3] = b3 + b1;
-                        v[e + 0] = b2 - b0;
-                        v[e + 1] = b1 - b3;
+                        d[2] = b2 + b0;
+                        d[3] = b3 + b1;
+                        e[0] = b2 - b0;
+                        e[1] = b1 - b3;
 
-                        c += 4;
+                        C += 4;
                         d += 4;
                         e -= 4;
                     }
                 }
 
-                // step 8 + decode
+                // data must be in buf2
+
+
+                // step 8+decode   (paper output is X, now buffer)
+                // this generates pairs of data a la 8 and pushes them directly through
+                // the decode kernel (pushing rather than pulling) to avoid having
+                // to make another pass later
+
+                // this cannot POSSIBLY be in place, so we refer to the buffers directly
                 fixed (float* bb = _b)
                 {
-                    nint b = _n2 - 8; // B
-                    nint e = _n2 - 8; // buf2
-                    nint d0 = 0;      // buffer
-                    nint d1 = _n2 - 4;// buffer
-                    nint d2 = _n2;    // buffer
-                    nint d3 = _n - 4; // buffer
-
-                    while (e >= 0)
+                    float* B = bb + n2 - 8;
+                    float* e = buf2 + n2 - 8;
+                    float* d0 = &buffer[0];
+                    float* d1 = &buffer[n2 - 4];
+                    float* d2 = &buffer[n2];
+                    float* d3 = &buffer[n - 4];
+                    while (e >= v)
                     {
                         float p0, p1, p2, p3;
 
-                        p3 = +buf2[e + 6] * bb[b + 7] - buf2[e + 7] * bb[b + 6];
-                        p2 = -buf2[e + 6] * bb[b + 6] - buf2[e + 7] * bb[b + 7];
+                        p3 = e[6] * B[7] - e[7] * B[6];
+                        p2 = -e[6] * B[6] - e[7] * B[7];
 
-                        buffer[d0 + 0] = p3;
-                        buffer[d1 + 3] = -p3;
-                        buffer[d2 + 0] = p2;
-                        buffer[d3 + 3] = p2;
+                        d0[0] = p3;
+                        d1[3] = -p3;
+                        d2[0] = p2;
+                        d3[3] = p2;
 
-                        p1 = +buf2[e + 4] * bb[b + 5] - buf2[e + 5] * bb[b + 4];
-                        p0 = -buf2[e + 4] * bb[b + 4] - buf2[e + 5] * bb[b + 5];
+                        p1 = e[4] * B[5] - e[5] * B[4];
+                        p0 = -e[4] * B[4] - e[5] * B[5];
 
-                        buffer[d0 + 1] = p1;
-                        buffer[d1 + 2] = -p1;
-                        buffer[d2 + 1] = p0;
-                        buffer[d3 + 2] = p0;
+                        d0[1] = p1;
+                        d1[2] = -p1;
+                        d2[1] = p0;
+                        d3[2] = p0;
 
-                        p3 = +buf2[e + 2] * bb[b + 3] - buf2[e + 3] * bb[b + 2];
-                        p2 = -buf2[e + 2] * bb[b + 2] - buf2[e + 3] * bb[b + 3];
+                        p3 = e[2] * B[3] - e[3] * B[2];
+                        p2 = -e[2] * B[2] - e[3] * B[3];
 
-                        buffer[d0 + 2] = p3;
-                        buffer[d1 + 1] = -p3;
-                        buffer[d2 + 2] = p2;
-                        buffer[d3 + 1] = p2;
+                        d0[2] = p3;
+                        d1[1] = -p3;
+                        d2[2] = p2;
+                        d3[1] = p2;
 
-                        p1 = +buf2[e] * bb[b + 1] - buf2[e + 1] * bb[b + 0];
-                        p0 = -buf2[e] * bb[b + 0] - buf2[e + 1] * bb[b + 1];
+                        p1 = e[0] * B[1] - e[1] * B[0];
+                        p0 = -e[0] * B[0] - e[1] * B[1];
 
-                        buffer[d0 + 3] = p1;
-                        buffer[d1 + 0] = -p1;
-                        buffer[d2 + 3] = p0;
-                        buffer[d3 + 0] = p0;
+                        d0[3] = p1;
+                        d1[0] = -p1;
+                        d2[3] = p0;
+                        d3[0] = p0;
 
-                        b -= 8;
+                        B -= 8;
                         e -= 8;
                         d0 += 4;
                         d2 += 4;
@@ -316,228 +374,234 @@ namespace NVorbis
                 }
             }
 
-            private static void step3_iter0_loop(int n, float* e, nint i_off, nint k_off, float* aa)
+            // the following were split out into separate functions while optimizing;
+            // they could be pushed back up but eh. __forceinline showed no change;
+            // they're probably already being inlined.
+            private static void step3_iter0_loop(int n, float* e, int i_off, int k_off, float* A)
             {
-                nint ee0 = i_off;        // e
-                nint ee2 = ee0 + k_off;  // e
-                nint a = 0;
+                float* ee0 = e + i_off;
+                float* ee2 = ee0 + k_off;
+                int i;
 
-                for (int i = n >> 2; i > 0; --i)
+                Debug.Assert((n & 3) == 0);
+
+                for (i = n >> 2; i > 0; --i)
                 {
                     float k00_20, k01_21;
+                    k00_20 = ee0[0] - ee2[0];
+                    k01_21 = ee0[-1] - ee2[-1];
+                    ee0[0] += ee2[0];   //ee0[ 0] = ee0[ 0] + ee2[ 0];
+                    ee0[-1] += ee2[-1]; //ee0[-1] = ee0[-1] + ee2[-1];
+                    ee2[0] = k00_20 * A[0] - k01_21 * A[1];
+                    ee2[-1] = k01_21 * A[0] + k00_20 * A[1];
+                    A += 8;
 
-                    k00_20 = e[ee0 + 0] - e[ee2 + 0];
-                    k01_21 = e[ee0 - 1] - e[ee2 - 1];
-                    e[ee0 + 0] += e[ee2 + 0];
-                    e[ee0 - 1] += e[ee2 - 1];
-                    e[ee2 + 0] = k00_20 * aa[a] - k01_21 * aa[a + 1];
-                    e[ee2 - 1] = k01_21 * aa[a] + k00_20 * aa[a + 1];
-                    a += 8;
+                    k00_20 = ee0[-2] - ee2[-2];
+                    k01_21 = ee0[-3] - ee2[-3];
+                    ee0[-2] += ee2[-2]; //ee0[-2] = ee0[-2] + ee2[-2];
+                    ee0[-3] += ee2[-3]; //ee0[-3] = ee0[-3] + ee2[-3];
+                    ee2[-2] = k00_20 * A[0] - k01_21 * A[1];
+                    ee2[-3] = k01_21 * A[0] + k00_20 * A[1];
+                    A += 8;
 
-                    k00_20 = e[ee0 - 2] - e[ee2 - 2];
-                    k01_21 = e[ee0 - 3] - e[ee2 - 3];
-                    e[ee0 - 2] += e[ee2 - 2];
-                    e[ee0 - 3] += e[ee2 - 3];
-                    e[ee2 - 2] = k00_20 * aa[a] - k01_21 * aa[a + 1];
-                    e[ee2 - 3] = k01_21 * aa[a] + k00_20 * aa[a + 1];
-                    a += 8;
+                    k00_20 = ee0[-4] - ee2[-4];
+                    k01_21 = ee0[-5] - ee2[-5];
+                    ee0[-4] += ee2[-4]; //ee0[-4] = ee0[-4] + ee2[-4];
+                    ee0[-5] += ee2[-5]; //ee0[-5] = ee0[-5] + ee2[-5];
+                    ee2[-4] = k00_20 * A[0] - k01_21 * A[1];
+                    ee2[-5] = k01_21 * A[0] + k00_20 * A[1];
+                    A += 8;
 
-                    k00_20 = e[ee0 - 4] - e[ee2 - 4];
-                    k01_21 = e[ee0 - 5] - e[ee2 - 5];
-                    e[ee0 - 4] += e[ee2 - 4];
-                    e[ee0 - 5] += e[ee2 - 5];
-                    e[ee2 - 4] = k00_20 * aa[a] - k01_21 * aa[a + 1];
-                    e[ee2 - 5] = k01_21 * aa[a] + k00_20 * aa[a + 1];
-                    a += 8;
-
-                    k00_20 = e[ee0 - 6] - e[ee2 - 6];
-                    k01_21 = e[ee0 - 7] - e[ee2 - 7];
-                    e[ee0 - 6] += e[ee2 - 6];
-                    e[ee0 - 7] += e[ee2 - 7];
-                    e[ee2 - 6] = k00_20 * aa[a] - k01_21 * aa[a + 1];
-                    e[ee2 - 7] = k01_21 * aa[a] + k00_20 * aa[a + 1];
-                    a += 8;
+                    k00_20 = ee0[-6] - ee2[-6];
+                    k01_21 = ee0[-7] - ee2[-7];
+                    ee0[-6] += ee2[-6]; //ee0[-6] = ee0[-6] + ee2[-6];
+                    ee0[-7] += ee2[-7]; //ee0[-7] = ee0[-7] + ee2[-7];
+                    ee2[-6] = k00_20 * A[0] - k01_21 * A[1];
+                    ee2[-7] = k01_21 * A[0] + k00_20 * A[1];
+                    A += 8;
 
                     ee0 -= 8;
                     ee2 -= 8;
                 }
             }
 
-            private static void step3_inner_r_loop(int lim, float* e, nint d0, nint k_off, nint k1, float* aa)
+            private static void step3_inner_r_loop(int lim, float* e, int d0, int k_off, float* A, int k1)
             {
+                int i;
                 float k00_20, k01_21;
 
-                nint e0 = d0;            // e
-                nint e2 = e0 + k_off;    // e
-                nint a = 0;
+                float* e0 = e + d0;
+                float* e2 = e0 + k_off;
 
-                for (int i = lim >> 2; i > 0; --i)
+                for (i = lim >> 2; i > 0; --i)
                 {
-                    k00_20 = e[e0 + 0] - e[e2 + 0];
-                    k01_21 = e[e0 - 1] - e[e2 - 1];
-                    e[e0 + 0] += e[e2 + 0];
-                    e[e0 - 1] += e[e2 - 1];
-                    e[e2 + 0] = k00_20 * aa[a] - k01_21 * aa[a + 1];
-                    e[e2 - 1] = k01_21 * aa[a] + k00_20 * aa[a + 1];
+                    k00_20 = e0[-0] - e2[-0];
+                    k01_21 = e0[-1] - e2[-1];
+                    e0[-0] += e2[-0]; //e0[-0] = e0[-0] + e2[-0];
+                    e0[-1] += e2[-1]; //e0[-1] = e0[-1] + e2[-1];
+                    e2[-0] = k00_20 * A[0] - k01_21 * A[1];
+                    e2[-1] = k01_21 * A[0] + k00_20 * A[1];
 
-                    a += k1;
+                    A += k1;
 
-                    k00_20 = e[e0 - 2] - e[e2 - 2];
-                    k01_21 = e[e0 - 3] - e[e2 - 3];
-                    e[e0 - 2] += e[e2 - 2];
-                    e[e0 - 3] += e[e2 - 3];
-                    e[e2 - 2] = k00_20 * aa[a] - k01_21 * aa[a + 1];
-                    e[e2 - 3] = k01_21 * aa[a] + k00_20 * aa[a + 1];
+                    k00_20 = e0[-2] - e2[-2];
+                    k01_21 = e0[-3] - e2[-3];
+                    e0[-2] += e2[-2]; //e0[-2] = e0[-2] + e2[-2];
+                    e0[-3] += e2[-3]; //e0[-3] = e0[-3] + e2[-3];
+                    e2[-2] = k00_20 * A[0] - k01_21 * A[1];
+                    e2[-3] = k01_21 * A[0] + k00_20 * A[1];
 
-                    a += k1;
+                    A += k1;
 
-                    k00_20 = e[e0 - 4] - e[e2 - 4];
-                    k01_21 = e[e0 - 5] - e[e2 - 5];
-                    e[e0 - 4] += e[e2 - 4];
-                    e[e0 - 5] += e[e2 - 5];
-                    e[e2 - 4] = k00_20 * aa[a] - k01_21 * aa[a + 1];
-                    e[e2 - 5] = k01_21 * aa[a] + k00_20 * aa[a + 1];
+                    k00_20 = e0[-4] - e2[-4];
+                    k01_21 = e0[-5] - e2[-5];
+                    e0[-4] += e2[-4]; //e0[-4] = e0[-4] + e2[-4];
+                    e0[-5] += e2[-5]; //e0[-5] = e0[-5] + e2[-5];
+                    e2[-4] = k00_20 * A[0] - k01_21 * A[1];
+                    e2[-5] = k01_21 * A[0] + k00_20 * A[1];
 
-                    a += k1;
+                    A += k1;
 
-                    k00_20 = e[e0 - 6] - e[e2 - 6];
-                    k01_21 = e[e0 - 7] - e[e2 - 7];
-                    e[e0 - 6] += e[e2 - 6];
-                    e[e0 - 7] += e[e2 - 7];
-                    e[e2 - 6] = k00_20 * aa[a] - k01_21 * aa[a + 1];
-                    e[e2 - 7] = k01_21 * aa[a] + k00_20 * aa[a + 1];
-
-                    a += k1;
+                    k00_20 = e0[-6] - e2[-6];
+                    k01_21 = e0[-7] - e2[-7];
+                    e0[-6] += e2[-6]; //e0[-6] = e0[-6] + e2[-6];
+                    e0[-7] += e2[-7]; //e0[-7] = e0[-7] + e2[-7];
+                    e2[-6] = k00_20 * A[0] - k01_21 * A[1];
+                    e2[-7] = k01_21 * A[0] + k00_20 * A[1];
 
                     e0 -= 8;
                     e2 -= 8;
+
+                    A += k1;
                 }
             }
 
-            private static void step3_inner_s_loop(
-                int n, float* e, nint i_off, nint k_off, nint a, nint a_off, nint k0, float* aa)
+            private static void step3_inner_s_loop(int n, float* e, int i_off, int k_off, float* A, int a_off, int k0)
             {
-                float A0 = aa[a + 0];
-                float A1 = aa[a + 1];
-                float A2 = aa[a + a_off];
-                float A3 = aa[a + a_off + 1 + 0];
-                float A4 = aa[a + a_off * 2 + 0];
-                float A5 = aa[a + a_off * 2 + 1];
-                float A6 = aa[a + a_off * 3 + 0];
-                float A7 = aa[a + a_off * 3 + 1];
+                float A0 = A[0];
+                float A1 = A[0 + 1];
+                float A2 = A[0 + a_off];
+                float A3 = A[0 + a_off + 1];
+                float A4 = A[0 + a_off * 2 + 0];
+                float A5 = A[0 + a_off * 2 + 1];
+                float A6 = A[0 + a_off * 3 + 0];
+                float A7 = A[0 + a_off * 3 + 1];
 
                 float k00, k11;
 
-                nint ee0 = i_off;        // e
-                nint ee2 = ee0 + k_off;  // e
+                float* ee0 = e + i_off;
+                float* ee2 = ee0 + k_off;
 
                 for (int i = n; i > 0; --i)
                 {
-                    k00 = e[ee0 + 0] - e[ee2 + 0];
-                    k11 = e[ee0 - 1] - e[ee2 - 1];
-                    e[ee0 + 0] += e[ee2 + 0];
-                    e[ee0 - 1] += e[ee2 - 1];
-                    e[ee2 + 0] = k00 * A0 - k11 * A1;
-                    e[ee2 - 1] = k11 * A0 + k00 * A1;
+                    k00 = ee0[0] - ee2[0];
+                    k11 = ee0[-1] - ee2[-1];
+                    ee0[0] = ee0[0] + ee2[0];
+                    ee0[-1] = ee0[-1] + ee2[-1];
+                    ee2[0] = k00 * A0 - k11 * A1;
+                    ee2[-1] = k11 * A0 + k00 * A1;
 
-                    k00 = e[ee0 - 2] - e[ee2 - 2];
-                    k11 = e[ee0 - 3] - e[ee2 - 3];
-                    e[ee0 - 2] += e[ee2 - 2];
-                    e[ee0 - 3] += e[ee2 - 3];
-                    e[ee2 - 2] = k00 * A2 - k11 * A3;
-                    e[ee2 - 3] = k11 * A2 + k00 * A3;
+                    k00 = ee0[-2] - ee2[-2];
+                    k11 = ee0[-3] - ee2[-3];
+                    ee0[-2] = ee0[-2] + ee2[-2];
+                    ee0[-3] = ee0[-3] + ee2[-3];
+                    ee2[-2] = k00 * A2 - k11 * A3;
+                    ee2[-3] = k11 * A2 + k00 * A3;
 
-                    k00 = e[ee0 - 4] - e[ee2 - 4];
-                    k11 = e[ee0 - 5] - e[ee2 - 5];
-                    e[ee0 - 4] += e[ee2 - 4];
-                    e[ee0 - 5] += e[ee2 - 5];
-                    e[ee2 - 4] = k00 * A4 - k11 * A5;
-                    e[ee2 - 5] = k11 * A4 + k00 * A5;
+                    k00 = ee0[-4] - ee2[-4];
+                    k11 = ee0[-5] - ee2[-5];
+                    ee0[-4] = ee0[-4] + ee2[-4];
+                    ee0[-5] = ee0[-5] + ee2[-5];
+                    ee2[-4] = k00 * A4 - k11 * A5;
+                    ee2[-5] = k11 * A4 + k00 * A5;
 
-                    k00 = e[ee0 - 6] - e[ee2 - 6];
-                    k11 = e[ee0 - 7] - e[ee2 - 7];
-                    e[ee0 - 6] += e[ee2 - 6];
-                    e[ee0 - 7] += e[ee2 - 7];
-                    e[ee2 - 6] = k00 * A6 - k11 * A7;
-                    e[ee2 - 7] = k11 * A6 + k00 * A7;
+                    k00 = ee0[-6] - ee2[-6];
+                    k11 = ee0[-7] - ee2[-7];
+                    ee0[-6] = ee0[-6] + ee2[-6];
+                    ee0[-7] = ee0[-7] + ee2[-7];
+                    ee2[-6] = k00 * A6 - k11 * A7;
+                    ee2[-7] = k11 * A6 + k00 * A7;
 
                     ee0 -= k0;
                     ee2 -= k0;
                 }
             }
 
-            private static void step3_inner_s_loop_ld654(int n, float* e, int i_off, int base_n, float* aa)
+            private static void step3_inner_s_loop_ld654(int n, float* e, int i_off, float* A, int base_n)
             {
                 int a_off = base_n >> 3;
-                float A2 = aa[a_off];
-                nint z = i_off;          // e
-                nint @base = z - 16 * n; // e
+                float A2 = A[0 + a_off];
+                float* z = e + i_off;
+                float* @base = z - 16 * n;
 
                 while (z > @base)
                 {
                     float k00, k11;
+                    float l00, l11;
 
-                    k00 = e[z + 0] - e[z - 8];
-                    k11 = e[z - 1] - e[z - 9];
-                    e[z + 0] += e[z - 8];
-                    e[z - 1] += e[z - 9];
-                    e[z - 8] = k00;
-                    e[z - 9] = k11;
+                    k00 = z[-0] - z[-8];
+                    k11 = z[-1] - z[-9];
+                    l00 = z[-2] - z[-10];
+                    l11 = z[-3] - z[-11];
+                    z[-0] = z[-0] + z[-8];
+                    z[-1] = z[-1] + z[-9];
+                    z[-2] = z[-2] + z[-10];
+                    z[-3] = z[-3] + z[-11];
+                    z[-8] = k00;
+                    z[-9] = k11;
+                    z[-10] = (l00 + l11) * A2;
+                    z[-11] = (l11 - l00) * A2;
 
-                    k00 = e[z - 2] - e[z - 10];
-                    k11 = e[z - 3] - e[z - 11];
-                    e[z - 2] += e[z - 10];
-                    e[z - 3] += e[z - 11];
-                    e[z - 10] = (k00 + k11) * A2;
-                    e[z - 11] = (k11 - k00) * A2;
+                    k00 = z[-4] - z[-12];
+                    k11 = z[-5] - z[-13];
+                    l00 = z[-6] - z[-14];
+                    l11 = z[-7] - z[-15];
+                    z[-4] = z[-4] + z[-12];
+                    z[-5] = z[-5] + z[-13];
+                    z[-6] = z[-6] + z[-14];
+                    z[-7] = z[-7] + z[-15];
+                    z[-12] = k11;
+                    z[-13] = -k00;
+                    z[-14] = (l11 - l00) * A2;
+                    z[-15] = (l00 + l11) * -A2;
 
-                    k00 = e[z - 12] - e[z - 4];
-                    k11 = e[z - 5] - e[z - 13];
-                    e[z - 4] += e[z - 12];
-                    e[z - 5] += e[z - 13];
-                    e[z - 12] = k11;
-                    e[z - 13] = k00;
-
-                    k00 = e[z - 14] - e[z - 6];
-                    k11 = e[z - 7] - e[z - 15];
-                    e[z - 6] += e[z - 14];
-                    e[z - 7] += e[z - 15];
-                    e[z - 14] = (k00 + k11) * A2;
-                    e[z - 15] = (k00 - k11) * A2;
-
-                    iter_54(e, z);
-                    iter_54(e, z - 8);
-
+                    iter_54(z);
+                    iter_54(z - 8);
                     z -= 16;
                 }
             }
 
-            private static void iter_54(float* e, nint z)
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            private static void iter_54(float* z)
             {
                 float k00, k11, k22, k33;
                 float y0, y1, y2, y3;
 
-                k00 = e[z + 0] - e[z - 4];
-                y0 = e[z + 0] + e[z - 4];
-                y2 = e[z - 2] + e[z - 6];
-                k22 = e[z - 2] - e[z - 6];
+                k00 = z[0] - z[-4];
+                y0 = z[0] + z[-4];
+                y2 = z[-2] + z[-6];
+                k22 = z[-2] - z[-6];
 
-                e[z + 0] = y0 + y2;
-                e[z - 2] = y0 - y2;
+                z[-0] = y0 + y2;      // z0 + z4 + z2 + z6
+                z[-2] = y0 - y2;      // z0 + z4 - z2 - z6
 
-                k33 = e[z - 3] - e[z - 7];
+                // done with y0,y2
 
-                e[z - 4] = k00 + k33;
-                e[z - 6] = k00 - k33;
+                k33 = z[-3] - z[-7];
 
-                k11 = e[z - 1] - e[z - 5];
-                y1 = e[z - 1] + e[z - 5];
-                y3 = e[z - 3] + e[z - 7];
+                z[-4] = k00 + k33;    // z0 - z4 + z3 - z7
+                z[-6] = k00 - k33;    // z0 - z4 - z3 + z7
 
-                e[z - 1] = y1 + y3;
-                e[z - 3] = y1 - y3;
-                e[z - 5] = k11 - k22;
-                e[z - 7] = k11 + k22;
+                // done with k33
+
+                k11 = z[-1] - z[-5];
+                y1 = z[-1] + z[-5];
+                y3 = z[-3] + z[-7];
+
+                z[-1] = y1 + y3;      // z1 + z5 + z3 + z7
+                z[-3] = y1 - y3;      // z1 + z5 - z3 - z7
+                z[-5] = k11 - k22;    // z1 - z5 + z2 - z6
+                z[-7] = k11 + k22;    // z1 - z5 - z2 + z6
             }
         }
     }
