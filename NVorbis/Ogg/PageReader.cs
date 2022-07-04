@@ -7,7 +7,7 @@ using NVorbis.Contracts.Ogg;
 
 namespace NVorbis.Ogg
 {
-    internal class PageReader : PageReaderBase, IPageData
+    internal sealed class PageReader : PageReaderBase, IPageData
     {
         private readonly Dictionary<int, IStreamPageReader> _streamReaders = new();
         private readonly NewStreamCallback _newStreamCallback;

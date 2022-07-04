@@ -5,7 +5,7 @@ using NVorbis.Contracts.Ogg;
 
 namespace NVorbis.Ogg
 {
-    internal class ForwardOnlyPageReader : PageReaderBase
+    internal sealed class ForwardOnlyPageReader : PageReaderBase
     {
         private readonly Dictionary<int, IForwardOnlyPacketProvider> _packetProviders = new();
         private readonly NewStreamCallback _newStreamCallback;

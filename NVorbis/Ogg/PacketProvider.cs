@@ -5,7 +5,7 @@ using NVorbis.Contracts.Ogg;
 
 namespace NVorbis.Ogg
 {
-    internal class PacketProvider : IPacketProvider
+    internal sealed class PacketProvider : IPacketProvider
     {
         private static ConcurrentQueue<PacketDataPart[]> _dataPartPool = new();
         private const int DataPartInitialArraySize = 2;

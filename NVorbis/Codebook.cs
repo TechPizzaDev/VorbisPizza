@@ -9,7 +9,7 @@ using NVorbis.Contracts;
 
 namespace NVorbis
 {
-    internal class Codebook
+    internal sealed class Codebook
     {
         private struct FastRange : IReadOnlyList<int>
         {

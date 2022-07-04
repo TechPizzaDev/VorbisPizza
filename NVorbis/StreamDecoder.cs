@@ -601,7 +601,7 @@ namespace NVorbis
                     if (packet.ReadBits(1) == 0)
                     {
                         // if we get here, we should have a good packet; decode it and add it to the buffer
-                        Mode mode = _modes[(int)packet.ReadBits(_modeFieldBits)];
+                        ref Mode mode = ref _modes[(int)packet.ReadBits(_modeFieldBits)];
                         if (_nextPacketBuf == null)
                         {
                             _nextPacketBuf = new float[_channels][];

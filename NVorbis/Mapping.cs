@@ -4,7 +4,7 @@ using NVorbis.Contracts;
 
 namespace NVorbis
 {
-    internal class Mapping
+    internal sealed class Mapping
     {
         private int[] _couplingAngle;
         private int[] _couplingMangitude;

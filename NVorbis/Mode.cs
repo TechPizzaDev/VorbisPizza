@@ -4,7 +4,7 @@ using System.Runtime.CompilerServices;
 
 namespace NVorbis
 {
-    internal class Mode
+    internal struct Mode
     {
         private int _channels;
         private bool _blockFlag;

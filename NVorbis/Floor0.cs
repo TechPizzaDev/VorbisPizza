@@ -7,7 +7,7 @@ namespace NVorbis
 {
     // Packed LSP values on dB amplittude and Bark frequency scale.
     // Virtually unused (libvorbis did not use past beta 4). Probably untested.
-    internal class Floor0 : IFloor
+    internal sealed class Floor0 : IFloor
     {
         private sealed class Data : FloorData
         {
@@ -124,7 +124,7 @@ namespace NVorbis
                 data.Amp = data.Amp / _ampDiv * _ampOfs;
 
                 uint bookNum = (uint)packet.ReadBits(_bookBits);
-                if (bookNum >= _books.Length)
+                if (bookNum >= (uint)_books.Length)
                 {
                     // we ran out of data or the packet is corrupt...  0 the floor and return
                     data.Amp = 0;
@@ -174,7 +174,7 @@ namespace NVorbis
                 int[] barkMap = _barkMaps[blockSize];
                 float[] wMap = _wMap[blockSize];
 
-                int i = 0;
+                int i;
                 for (i = 0; i < _order; i++)
                 {
                     data.Coeff[i] = 2f * (float)Math.Cos(data.Coeff[i]);
