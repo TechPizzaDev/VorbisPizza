@@ -119,7 +119,7 @@ namespace NVorbis
             }
             finally
             {
-                headerPacket.Done();
+                headerPacket.Finish();
             }
 
             VorbisPacket commentPacket = _packetProvider.GetNextPacket();
@@ -132,7 +132,7 @@ namespace NVorbis
             }
             finally
             {
-                commentPacket.Done();
+                commentPacket.Finish();
             }
 
             VorbisPacket bookPacket = _packetProvider.GetNextPacket();
@@ -145,7 +145,7 @@ namespace NVorbis
             }
             finally
             {
-                bookPacket.Done();
+                bookPacket.Finish();
             }
 
             _currentPosition = 0;
@@ -277,7 +277,8 @@ namespace NVorbis
             }
 
             // verify the closing bit
-            if (!packet.ReadBit()) throw new InvalidDataException("Book packet did not end on correct bit!");
+            if (!packet.ReadBit()) 
+                throw new InvalidDataException("Book packet did not end on correct bit!");
 
             // save off the number of bits to read to determine packet mode
             _modeFieldBits = Utils.ilog(_modes.Length - 1);
@@ -630,7 +631,7 @@ namespace NVorbis
             }
             finally
             {
-                packet.Done();
+                packet.Finish();
             }
         }
 
@@ -698,12 +699,15 @@ namespace NVorbis
                 case SeekOrigin.Begin:
                     // no-op
                     break;
+
                 case SeekOrigin.Current:
                     samplePosition = SamplePosition - samplePosition;
                     break;
+
                 case SeekOrigin.End:
                     samplePosition = TotalSamples - samplePosition;
                     break;
+
                 default:
                     throw new ArgumentOutOfRangeException(nameof(seekOrigin));
             }
@@ -760,21 +764,31 @@ namespace NVorbis
 
         private int GetPacketGranules(ref VorbisPacket curPacket, bool isLastInPage)
         {
-            // if it's a resync, there's not any audio data to return
-            if (curPacket.IsResync) return 0;
+            try
+            {
+                // if it's a resync, there's not any audio data to return
+                if (curPacket.IsResync) 
+                    return 0;
 
-            // if it's not an audio packet, there's no audio data (seems obvious, though...)
-            if (curPacket.ReadBit()) return 0;
+                // if it's not an audio packet, there's no audio data (seems obvious, though...)
+                if (curPacket.ReadBit()) 
+                    return 0;
 
-            // OK, let's ask the appropriate mode how long this packet actually is
+                // OK, let's ask the appropriate mode how long this packet actually is
 
-            // first we need to know which mode...
-            int modeIdx = (int)curPacket.ReadBits(_modeFieldBits);
+                // first we need to know which mode...
+                uint modeIdx = (uint)curPacket.ReadBits(_modeFieldBits);
 
-            // if we got an invalid mode value, we can't decode any audio data anyway...
-            if (modeIdx < 0 || modeIdx >= _modes.Length) return 0;
+                // if we got an invalid mode value, we can't decode any audio data anyway...
+                if (modeIdx >= (uint)_modes.Length) 
+                    return 0;
 
-            return _modes[modeIdx].GetPacketSampleCount(ref curPacket, isLastInPage);
+                return _modes[modeIdx].GetPacketSampleCount(ref curPacket, isLastInPage);
+            }
+            finally
+            {
+                curPacket.Finish();
+            }
         }
 
         #endregion

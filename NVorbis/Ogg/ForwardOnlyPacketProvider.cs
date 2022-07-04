@@ -1,4 +1,5 @@
 using System;
+using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using NVorbis.Contracts;
@@ -6,7 +7,7 @@ using NVorbis.Contracts.Ogg;
 
 namespace NVorbis.Ogg
 {
-    internal sealed class ForwardOnlyPacketProvider : DataPacket, IForwardOnlyPacketProvider
+    internal sealed class ForwardOnlyPacketProvider : IForwardOnlyPacketProvider
     {
         private int _lastSeqNo;
         private readonly Queue<(byte[] buf, bool isResync)> _pageQueue = new();
@@ -16,11 +17,11 @@ namespace NVorbis.Ogg
         private int _packetIndex;
         private bool _isEndOfStream;
         private int _dataStart;
-        private bool _lastWasPeek;
 
+        private bool _hasPacketData;
+        private bool _isPacketFinished;
         private ArraySegment<byte> _packetBuf;
-
-        private int _dataIndex;
+        private PacketDataPart[] _dataParts;
 
         public ForwardOnlyPacketProvider(IPageReader reader, int streamSerial)
         {
@@ -29,6 +30,9 @@ namespace NVorbis.Ogg
 
             // force the first page to read
             _packetIndex = int.MaxValue;
+            _isPacketFinished = true;
+
+            _dataParts = new PacketDataPart[1];
         }
 
         public bool CanSeek => false;
@@ -76,50 +80,11 @@ namespace NVorbis.Ogg
 
         public VorbisPacket GetNextPacket()
         {
-            // if not done...
-            if (_packetBuf.Count > 0)
+            if (!_isPacketFinished)
             {
-                // only allow if last call was for peek
-                if (!_lastWasPeek) throw new InvalidOperationException("Must call Done() on previous packet first.");
-
-                // then return ourself, noting that we didn't peek the packet
-                _lastWasPeek = false;
-                return new VorbisPacket(this);
+                throw new InvalidOperationException("The previous packet has not been finished.");
             }
 
-            // always advance to the next packet
-            _lastWasPeek = false;
-            if (GetPacket())
-            {
-                return new VorbisPacket(this);
-            }
-
-            return default;
-        }
-
-        //public DataPacket? PeekNextPacket()
-        //{
-        //    // if not done...
-        //    if (_packetBuf.Count > 0)
-        //    {
-        //        // only allow if last call was for peek
-        //        if (!_lastWasPeek) throw new InvalidOperationException("Must call Done() on previous packet first.");
-        //
-        //        // then just return ourself
-        //        return this;
-        //    }
-        //
-        //    // use a local variable to throw away the updated position
-        //    _lastWasPeek = true;
-        //    if (GetPacket())
-        //    {
-        //        return this;
-        //    }
-        //    return null;
-        //}
-
-        private bool GetPacket()
-        {
             // if we don't already have a page, grab it
             byte[]? pageBuf;
             bool isResync;
@@ -140,7 +105,7 @@ namespace NVorbis.Ogg
                 if (!ReadNextPage(out pageBuf, out isResync, out dataStart, out packetIndex, out isCont, out isCntd))
                 {
                     // couldn't read the next page...
-                    return false;
+                    return default;
                 }
             }
 
@@ -161,7 +126,7 @@ namespace NVorbis.Ogg
                     if (packetIndex == 27 + pageBuf[26])
                     {
                         // ... so we'll just recurse and try again
-                        return GetPacket();
+                        return GetNextPacket();
                     }
                 }
             }
@@ -210,51 +175,55 @@ namespace NVorbis.Ogg
             {
                 while (isCntd && packetIndex == 27 + pageBuf[26])
                 {
-                    if (ReadNextPage(out pageBuf, out isResync, out dataStart, out packetIndex, out isCont, out isCntd) && !isResync && isCont)
-                    {
-                        // we're in the right spot!
-
-                        // update the overhead count
-                        contOverhead += 27 + pageBuf[26];
-
-                        // save off the previous buffer data
-                        Memory<byte> prevBuf = packetBuf;
-
-                        // get the size of this page's portion
-                        int contSz = GetPacketLength(pageBuf, ref packetIndex);
-
-                        // set up the new buffer and fill it
-                        packetBuf = new(new byte[prevBuf.Length + contSz]);
-                        prevBuf.CopyTo(packetBuf);
-                        pageBuf.AsSpan(dataStart, contSz).CopyTo(packetBuf.Slice(prevBuf.Length));
-
-                        // now that we've read, update our start position
-                        dataStart += contSz;
-                    }
-                    else
+                    if (!ReadNextPage(out pageBuf, out isResync, out dataStart, out packetIndex, out isCont, out isCntd)
+                        || isResync || !isCont)
                     {
                         // just use what data we can...
                         break;
                     }
+
+                    // we're in the right spot!
+
+                    // update the overhead count
+                    contOverhead += 27 + pageBuf[26];
+
+                    // save off the previous buffer data
+                    ArraySegment<byte> prevBuf = packetBuf;
+
+                    // get the size of this page's portion
+                    int contSz = GetPacketLength(pageBuf, ref packetIndex);
+
+                    // set up the new buffer and fill it
+                    packetBuf = new(new byte[prevBuf.Count + contSz]);
+                    prevBuf.CopyTo(packetBuf);
+                    pageBuf.AsSpan(dataStart, contSz).CopyTo(packetBuf.Slice(prevBuf.Count));
+
+                    // now that we've read, update our start position
+                    dataStart += contSz;
                 }
             }
 
             // last, save off our state and return true
-            IsResync = isResync;
-            GranulePosition = granulePos;
-            IsEndOfStream = isEos;
-            ContainerOverheadBits = contOverhead * 8;
+            VorbisPacket packet = new(this, _dataParts)
+            {
+                IsResync = isResync,
+                GranulePosition = granulePos,
+                IsEndOfStream = isEos,
+                ContainerOverheadBits = contOverhead * 8
+            };
             _pageBuf = pageBuf;
             _dataStart = dataStart;
             _packetIndex = packetIndex;
             _packetBuf = packetBuf;
             _isEndOfStream |= isEos;
-            Reset();
-            return true;
+            _hasPacketData = true;
+            _isPacketFinished = false;
+            packet.Reset();
+            return packet;
         }
 
         private bool ReadNextPage(
-            [MaybeNullWhen(false)] out byte[] pageBuf, 
+            [MaybeNullWhen(false)] out byte[] pageBuf,
             out bool isResync, out int dataStart, out int packetIndex, out bool isContinuation, out bool isContinued)
         {
             while (_pageQueue.Count == 0)
@@ -299,27 +268,21 @@ namespace NVorbis.Ogg
             return len;
         }
 
-        protected override int TotalBits => _packetBuf.Count * 8;
-
-        protected override int ReadBytes(Span<byte> destination)
+        public ArraySegment<byte> GetPacketData(PacketDataPart dataPart)
         {
-            int left = _packetBuf.Count - _dataIndex;
-            int toRead = Math.Min(left, destination.Length);
-            _packetBuf.AsSpan(_dataIndex, toRead).CopyTo(destination);
-            _dataIndex += toRead;
-            return toRead;
+            if (_hasPacketData)
+            {
+                return _packetBuf;
+            }
+
+            _hasPacketData = false;
+            return ArraySegment<byte>.Empty;
         }
 
-        public override void Reset()
-        {
-            _dataIndex = 0;
-            base.Reset();
-        }
-
-        public override void Done()
+        public void FinishPacket(in VorbisPacket packet)
         {
             _packetBuf = ArraySegment<byte>.Empty;
-            base.Done();
+            _isPacketFinished = true;
         }
 
         long IPacketProvider.GetGranuleCount()

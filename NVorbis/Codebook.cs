@@ -64,7 +64,7 @@ namespace NVorbis
             // init the storage
             _lengths = new int[Entries];
 
-            Huffman huffman = InitTree(ref packet);
+            Huffman huffman = InitTree(ref packet, out _maxBits);
             _prefixList = huffman.PrefixTree;
             _prefixBitLength = huffman.TableBits;
             _overflowList = huffman.OverflowList ?? Array.Empty<HuffmanListNode>();
@@ -72,7 +72,7 @@ namespace NVorbis
             _lookupTable = InitLookupTable(ref packet);
         }
 
-        private Huffman InitTree(ref VorbisPacket packet)
+        private Huffman InitTree(ref VorbisPacket packet, out int maxBits)
         {
             bool sparse;
             int total = 0;
@@ -122,7 +122,8 @@ namespace NVorbis
             }
 
             // figure out the maximum bit size; if all are unused, don't do anything else
-            if ((_maxBits = maxLen) <= -1)
+            maxBits = maxLen;
+            if (maxLen <= -1)
             {
                 return Huffman.Empty;
             }

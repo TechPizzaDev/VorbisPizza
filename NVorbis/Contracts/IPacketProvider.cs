@@ -1,3 +1,6 @@
+using System;
+using NVorbis.Ogg;
+
 namespace NVorbis.Contracts
 {
     /// <summary>
@@ -23,23 +26,11 @@ namespace NVorbis.Contracts
         /// </summary>
         int StreamSerial { get; }
 
-        ///// <summary>
-        ///// Gets the next packet in the stream and advances to the next packet position.
-        ///// </summary>
-        ///// <returns>The <see cref="DataPacket"/> instance for the next packet if available, otherwise <see langword="null"/>.</returns>
-        //DataPacket? GetNextPacket();
-
         /// <summary>
         /// Gets the next packet in the stream and advances to the next packet position.
         /// </summary>
         /// <returns>The <see cref="VorbisPacket"/> for the next packet if available.</returns>
         VorbisPacket GetNextPacket();
-
-        ///// <summary>
-        ///// Gets the next packet in the stream without advancing to the next packet position.
-        ///// </summary>
-        ///// <returns>The <see cref="DataPacket"/> instance for the next packet if available, otherwise <see langword="null"/>.</returns>
-        //DataPacket? PeekNextPacket();
 
         /// <summary>
         /// Seeks the stream to the packet that is prior to the requested granule position by the specified preroll number of packets.
@@ -56,5 +47,18 @@ namespace NVorbis.Contracts
         /// Gets the total number of granule available in the stream.
         /// </summary>
         long GetGranuleCount();
+
+        /// <summary>
+        /// Gets packet data for the requested position.
+        /// </summary>
+        /// <param name="dataPart">The packet data position.</param>
+        /// <returns>The packet data segment.</returns>
+        ArraySegment<byte> GetPacketData(PacketDataPart dataPart);
+
+        /// <summary>
+        /// Used to finish a packet. Using a finished packet is undefined behavior.
+        /// </summary>
+        /// <param name="packet">The packet to finish.</param>
+        void FinishPacket(in VorbisPacket packet);
     }
 }

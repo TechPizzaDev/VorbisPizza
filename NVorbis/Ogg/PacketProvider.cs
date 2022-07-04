@@ -1,20 +1,24 @@
 using System;
+using System.Collections.Concurrent;
 using NVorbis.Contracts;
 using NVorbis.Contracts.Ogg;
 
 namespace NVorbis.Ogg
 {
-    internal class PacketProvider : IPacketProvider, IPacketReader
+    internal class PacketProvider : IPacketProvider
     {
+        private static ConcurrentQueue<PacketDataPart[]> _dataPartPool = new();
+        private const int DataPartInitialArraySize = 2;
+
         private IStreamPageReader _reader;
 
-        private uint _pageIndex;
+        private ulong _pageIndex;
         private uint _packetIndex;
 
-        private uint _lastPacketPageIndex;
+        private ulong _lastPacketPageIndex;
         private uint _lastPacketPacketIndex;
         private VorbisPacket _lastPacket;
-        private uint _nextPacketPageIndex;
+        private ulong _nextPacketPageIndex;
         private uint _nextPacketPacketIndex;
 
         public bool CanSeek => true;
@@ -45,18 +49,11 @@ namespace NVorbis.Ogg
             return GetNextPacket(ref _pageIndex, ref _packetIndex);
         }
 
-        public VorbisPacket PeekNextPacket()
-        {
-            uint pageIndex = _pageIndex;
-            uint packetIndex = _packetIndex;
-            return GetNextPacket(ref pageIndex, ref packetIndex);
-        }
-
         public long SeekTo(long granulePos, uint preRoll, GetPacketGranuleCount getPacketGranuleCount)
         {
             if (_reader == null) throw new ObjectDisposedException(nameof(PacketProvider));
 
-            uint pageIndex;
+            ulong pageIndex;
             uint packetIndex;
             if (granulePos == 0)
             {
@@ -100,7 +97,7 @@ namespace NVorbis.Ogg
             return granulePos;
         }
 
-        private uint FindPacket(uint pageIndex, ref long granulePos, GetPacketGranuleCount getPacketGranuleCount)
+        private uint FindPacket(ulong pageIndex, ref long granulePos, GetPacketGranuleCount getPacketGranuleCount)
         {
             // pageIndex is the correct page; we just need to figure out which packet
             int firstRealPacket = 0;
@@ -156,7 +153,7 @@ namespace NVorbis.Ogg
             {
                 // either it's a continued packet OR we've hit the "long->short over page boundary" bug.
                 // in both cases we'll just return the last packet of the previous page.
-                uint prevPageIndex = pageIndex;
+                ulong prevPageIndex = pageIndex;
                 uint prevPacketIndex = uint.MaxValue;
                 if (!NormalizePacketIndex(ref prevPageIndex, ref prevPacketIndex))
                 {
@@ -183,14 +180,14 @@ namespace NVorbis.Ogg
         // this method calc's the appropriate page and packet prior to the one specified,
         // honoring continuations and handling negative packetIndex values
         // if packet index is larger than the current page allows, we just return it as-is
-        private bool NormalizePacketIndex(ref uint pageIndex, ref uint packetIndex)
+        private bool NormalizePacketIndex(ref ulong pageIndex, ref uint packetIndex)
         {
             if (!_reader.GetPage(pageIndex, out _, out bool isResync, out bool isContinuation, out _, out _, out _))
             {
                 return false;
             }
 
-            uint pgIdx = pageIndex;
+            ulong pgIdx = pageIndex;
             uint pktIdx = packetIndex;
 
             while (pktIdx < (isContinuation ? 1 : 0))
@@ -218,7 +215,7 @@ namespace NVorbis.Ogg
             return true;
         }
 
-        private VorbisPacket GetNextPacket(ref uint pageIndex, ref uint packetIndex)
+        private VorbisPacket GetNextPacket(ref ulong pageIndex, ref uint packetIndex)
         {
             if (_reader == null) throw new ObjectDisposedException(nameof(PacketProvider));
 
@@ -250,18 +247,39 @@ namespace NVorbis.Ogg
             return _lastPacket;
         }
 
+        private static PacketDataPart[] GetDataPartArray(int minimumLength)
+        {
+            if (minimumLength == DataPartInitialArraySize)
+            {
+                if (_dataPartPool.TryDequeue(out PacketDataPart[]? array))
+                {
+                    return array;
+                }
+            }
+            return new PacketDataPart[minimumLength];
+        }
+
+        private static void ReturnDataPartArray(PacketDataPart[] array)
+        {
+            if (array.Length == DataPartInitialArraySize)
+            {
+                _dataPartPool.Enqueue(array);
+            }
+        }
+
         private VorbisPacket CreatePacket(
-            ref uint pageIndex, ref uint packetIndex,
+            ref ulong pageIndex, ref uint packetIndex,
             bool advance, long granulePos, bool isResync, bool isContinued, uint packetCount, int pageOverhead)
         {
             // create the packet list and add the item to it
-            PacketDataPart firstDataPart = new(pageIndex, (byte)packetIndex);
-            PacketDataPart[]? dataParts = null;
+            PacketDataPart[] dataParts = GetDataPartArray(DataPartInitialArraySize);
+            int partCount = 0;
+            dataParts[partCount++] = new PacketDataPart(pageIndex, packetIndex);
 
             // make sure we handle continuations
             bool isLastPacket;
             bool isFirstPacket;
-            uint finalPage = pageIndex;
+            ulong finalPage = pageIndex;
             if (isContinued && packetIndex == packetCount - 1)
             {
                 // by definition, it's the first packet in the page it ends on
@@ -274,7 +292,7 @@ namespace NVorbis.Ogg
                 }
 
                 // go read the next page(s) that include this packet
-                uint contPageIdx = pageIndex;
+                ulong contPageIdx = pageIndex;
                 while (isContinued)
                 {
                     if (!_reader.GetPage(
@@ -300,18 +318,11 @@ namespace NVorbis.Ogg
                     }
 
                     // add the packet to the list
-
-                    int partOffset = 0;
-                    if (dataParts == null)
+                    if (dataParts.Length < partCount)
                     {
-                        dataParts = new PacketDataPart[1];
+                        Array.Resize(ref dataParts, dataParts.Length + 2);
                     }
-                    else
-                    {
-                        partOffset = dataParts.Length;
-                        Array.Resize(ref dataParts, dataParts.Length + 1);
-                    }
-                    dataParts[partOffset] = new PacketDataPart(contPageIdx, 0);
+                    dataParts[partCount++] = new PacketDataPart(contPageIdx, 0);
                 }
 
                 // we're now the first packet in the final page, so we'll act like it...
@@ -327,7 +338,7 @@ namespace NVorbis.Ogg
             }
 
             // create the packet instance and populate it with the appropriate initial data
-            VorbisPacket packet = new(firstDataPart, dataParts, this)
+            VorbisPacket packet = new(this, new ArraySegment<PacketDataPart>(dataParts, 0, partCount))
             {
                 IsResync = isResync
             };
@@ -387,20 +398,25 @@ namespace NVorbis.Ogg
 
         public ArraySegment<byte> GetPacketData(PacketDataPart dataPart)
         {
-            uint pageIndex = dataPart.PageIndex;
-            byte packetIndex = dataPart.PacketIndex;
+            ulong pageIndex = dataPart.PageIndex;
+            uint packetIndex = dataPart.PacketIndex;
 
             ArraySegment<byte>[] packets = _reader.GetPagePackets(pageIndex);
-            if (packetIndex < packets.Length)
+            if (packetIndex < (uint)packets.Length)
             {
                 return packets[packetIndex];
             }
             return ArraySegment<byte>.Empty;
         }
 
-        public void InvalidatePacketCache(in VorbisPacket packet)
+        public void FinishPacket(in VorbisPacket packet)
         {
-            if (_lastPacket.Equals(packet))
+            if (packet.DataParts.Array != null)
+            {
+                ReturnDataPartArray(packet.DataParts.Array);
+            }
+
+            if (_lastPacket.DataParts.AsSpan().SequenceEqual(packet.DataParts))
             {
                 _lastPacket = default;
             }

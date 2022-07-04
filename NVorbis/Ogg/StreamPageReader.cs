@@ -10,10 +10,10 @@ namespace NVorbis.Ogg
         private readonly List<long> _pageOffsets = new();
 
         private int _lastSeqNbr;
-        private uint? _firstDataPageIndex;
+        private ulong? _firstDataPageIndex;
         private long _maxGranulePos;
 
-        private uint _lastPageIndex = uint.MaxValue;
+        private ulong _lastPageIndex = PacketDataPart.MaxPageIndex;
         private long _lastPageGranulePos;
         private bool _lastPageIsResync;
         private bool _lastPageIsContinuation;
@@ -88,7 +88,7 @@ namespace NVorbis.Ogg
             }
         }
 
-        public ArraySegment<byte>[] GetPagePackets(uint pageIndex)
+        public ArraySegment<byte>[] GetPagePackets(ulong pageIndex)
         {
             if (_cachedPagePackets != null && _lastPageIndex == pageIndex)
             {
@@ -118,10 +118,10 @@ namespace NVorbis.Ogg
             }
         }
 
-        public uint FindPage(long granulePos)
+        public ulong FindPage(long granulePos)
         {
             // if we're being asked for the first granule, just grab the very first data page
-            uint pageIndex = uint.MaxValue;
+            ulong pageIndex = ulong.MaxValue;
             if (granulePos == 0)
             {
                 pageIndex = FindFirstDataPage();
@@ -149,18 +149,18 @@ namespace NVorbis.Ogg
                     }
                 }
             }
-            if (pageIndex == uint.MaxValue)
+            if (pageIndex == ulong.MaxValue)
             {
                 throw new ArgumentOutOfRangeException(nameof(granulePos));
             }
             return pageIndex;
         }
 
-        private uint FindFirstDataPage()
+        private ulong FindFirstDataPage()
         {
             while (!_firstDataPageIndex.HasValue)
             {
-                if (!GetPageRaw((uint)_pageOffsets.Count, out _))
+                if (!GetPageRaw((ulong)_pageOffsets.Count, out _))
                 {
                     return uint.MaxValue;
                 }
@@ -225,20 +225,20 @@ namespace NVorbis.Ogg
             return false;
         }
 
-        private uint FindPageBisection(long granulePos, uint low, uint high, long highGranulePos)
+        private ulong FindPageBisection(long granulePos, ulong low, ulong high, long highGranulePos)
         {
             // we can treat low as always being before the first sample; later work will correct that if needed
             long lowGranulePos = 0L;
-            uint dist;
+            ulong dist;
             while ((dist = high - low) > 0)
             {
                 // try to find the right page by assumming they are all about the same size
-                uint index = low + (uint)(dist * ((granulePos - lowGranulePos) / (double)(highGranulePos - lowGranulePos)));
+                ulong index = low + (ulong)(dist * ((granulePos - lowGranulePos) / (double)(highGranulePos - lowGranulePos)));
 
                 // go get the actual position of the selected page
                 if (!GetPageRaw(index, out long idxGranulePos))
                 {
-                    return uint.MaxValue;
+                    return ulong.MaxValue;
                 }
 
                 // figure out where to go from here
@@ -263,7 +263,7 @@ namespace NVorbis.Ogg
             return low;
         }
 
-        private bool GetPageRaw(uint pageIndex, out long pageGranulePos)
+        private bool GetPageRaw(ulong pageIndex, out long pageGranulePos)
         {
             long offset = _pageOffsets[(int)pageIndex];
             if (offset < 0)
@@ -289,7 +289,7 @@ namespace NVorbis.Ogg
         }
 
         public bool GetPage(
-            uint pageIndex, out long granulePos, out bool isResync, out bool isContinuation, out bool isContinued, 
+            ulong pageIndex, out long granulePos, out bool isResync, out bool isContinuation, out bool isContinued,
             out uint packetCount, out int pageOverhead)
         {
             if (_lastPageIndex == pageIndex)
@@ -306,12 +306,12 @@ namespace NVorbis.Ogg
             _reader.Lock();
             try
             {
-                while (pageIndex >= _pageOffsets.Count && !HasAllPages)
+                while (pageIndex >= (ulong)_pageOffsets.Count && !HasAllPages)
                 {
                     if (_reader.ReadNextPage())
                     {
                         // if we found our page, return it from here so we don't have to do further processing
-                        if (pageIndex < _pageOffsets.Count)
+                        if (pageIndex < (ulong)_pageOffsets.Count)
                         {
                             isResync = _reader.IsResync.GetValueOrDefault();
                             ReadPageData(pageIndex, out granulePos, out isContinuation, out isContinued, out packetCount, out pageOverhead);
@@ -329,7 +329,7 @@ namespace NVorbis.Ogg
                 _reader.Release();
             }
 
-            if (pageIndex < _pageOffsets.Count)
+            if (pageIndex < (ulong)_pageOffsets.Count)
             {
                 long offset = _pageOffsets[(int)pageIndex];
                 if (offset < 0)
@@ -368,7 +368,7 @@ namespace NVorbis.Ogg
         }
 
         private void ReadPageData(
-            uint pageIndex, out long granulePos, out bool isContinuation, out bool isContinued, out uint packetCount, out int pageOverhead)
+            ulong pageIndex, out long granulePos, out bool isContinuation, out bool isContinued, out uint packetCount, out int pageOverhead)
         {
             _cachedPagePackets = null;
             _lastPageGranulePos = granulePos = _reader.GranulePosition;
@@ -384,12 +384,12 @@ namespace NVorbis.Ogg
             HasAllPages = true;
         }
 
-        public uint PageCount => (uint)_pageOffsets.Count;
+        public ulong PageCount => (uint)_pageOffsets.Count;
 
         public bool HasAllPages { get; private set; }
 
-        public long? MaxGranulePosition => HasAllPages ? (long?)_maxGranulePos : null;
+        public long? MaxGranulePosition => HasAllPages ? _maxGranulePos : null;
 
-        public uint FirstDataPageIndex => FindFirstDataPage();
+        public ulong FirstDataPageIndex => FindFirstDataPage();
     }
 }

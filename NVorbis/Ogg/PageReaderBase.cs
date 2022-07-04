@@ -61,7 +61,7 @@ namespace NVorbis.Ogg
 
             Span<byte> pb1 = pageBuf.AsSpan(26, pageBuf.Length - 26);
             crc.Update(pb1);
-            return crc.Test(BinaryPrimitives.ReadUInt32BigEndian(pageBuf.AsSpan(22, 4)));
+            return crc.Test(BinaryPrimitives.ReadUInt32BigEndian(pageBuf.AsSpan(22, sizeof(uint))));
         }
 
         private bool AddPage(byte[] pageBuf, bool isResync)

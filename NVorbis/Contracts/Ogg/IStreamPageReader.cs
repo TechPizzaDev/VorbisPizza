@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 namespace NVorbis.Contracts.Ogg
 {
@@ -8,20 +8,20 @@ namespace NVorbis.Contracts.Ogg
 
         void AddPage();
 
-        ArraySegment<byte>[] GetPagePackets(uint pageIndex);
+        ArraySegment<byte>[] GetPagePackets(ulong pageIndex);
 
-        uint FindPage(long granulePos);
+        ulong FindPage(long granulePos);
 
-        bool GetPage(uint pageIndex, out long granulePos, out bool isResync, out bool isContinuation, out bool isContinued, out uint packetCount, out int pageOverhead);
+        bool GetPage(ulong pageIndex, out long granulePos, out bool isResync, out bool isContinuation, out bool isContinued, out uint packetCount, out int pageOverhead);
 
         void SetEndOfStream();
 
-        uint PageCount { get; }
+        ulong PageCount { get; }
 
         bool HasAllPages { get; }
 
         long? MaxGranulePosition { get; }
 
-        uint FirstDataPageIndex { get; }
+        ulong FirstDataPageIndex { get; }
     }
 }

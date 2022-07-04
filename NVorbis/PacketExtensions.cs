@@ -9,6 +9,14 @@ namespace NVorbis
     public static class PacketExtensions
     {
         /// <summary>
+        /// Frees the buffers and caching for the packet instance.
+        /// </summary>
+        public static void Finish(in this VorbisPacket packet)
+        {
+            packet.PacketProvider.FinishPacket(packet);
+        }
+
+        /// <summary>
         /// Reads into the specified buffer.
         /// </summary>
         /// <param name="packet">The packet to read from.</param>
