@@ -248,7 +248,6 @@ namespace NVorbis
             int dimensions = Dimensions;
             int lookupValueCount = entries * dimensions;
             float[] lookupTable = new float[lookupValueCount];
-            ref float lookup = ref lookupTable[0];
 
             if (MapType == 1)
             {
@@ -260,26 +259,25 @@ namespace NVorbis
             {
                 multiplicands[i] = (ushort)packet.ReadBits(valueBits);
             }
-            ref ushort muls = ref multiplicands[0];
-
+            
             // now that we have the initial data read in, calculate the entry tree
             if (MapType == 1)
             {
                 for (int idx = 0; idx < entries; idx++)
                 {
                     float last = 0f;
-                    int idxDiv = 1;
-                    ref float dimLookup = ref Unsafe.Add(ref lookup, idx * dimensions);
+                    uint idxDiv = 1;
+                    Span<float> dimLookup = lookupTable.AsSpan(idx * dimensions, dimensions);
 
                     for (int i = 0; i < dimensions; i++)
                     {
-                        int moff = (idx / idxDiv) % lookupValueCount;
-                        float value = Unsafe.Add(ref muls, moff) * deltaValue + minValue + last;
-                        Unsafe.Add(ref dimLookup, i) = value;
+                        uint moff = (uint)idx / idxDiv % (uint)multiplicands.Length;
+                        float value = multiplicands[moff] * deltaValue + minValue + last;
+                        dimLookup[i] = value;
 
                         if (sequence_p) last = value;
 
-                        idxDiv *= lookupValueCount;
+                        idxDiv *= (uint)multiplicands.Length;
                     }
                 }
             }
@@ -288,17 +286,15 @@ namespace NVorbis
                 for (int idx = 0; idx < entries; idx++)
                 {
                     float last = 0f;
-                    nint moff = idx * dimensions;
-                    ref float dimLookup = ref Unsafe.Add(ref lookup, idx * dimensions);
+                    ReadOnlySpan<ushort> muls = multiplicands.AsSpan(idx * dimensions, dimensions);
+                    Span<float> dimLookup = lookupTable.AsSpan(idx * dimensions, dimensions);
 
                     for (int i = 0; i < dimensions; i++)
                     {
-                        float value = Unsafe.Add(ref muls, moff) * deltaValue + minValue + last;
-                        Unsafe.Add(ref dimLookup, i) = value;
+                        float value = muls[i] * deltaValue + minValue + last;
+                        dimLookup[i] = value;
 
                         if (sequence_p) last = value;
-
-                        ++moff;
                     }
                 }
             }

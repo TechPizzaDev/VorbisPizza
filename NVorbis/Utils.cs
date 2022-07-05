@@ -1,4 +1,4 @@
-﻿using System.Runtime.CompilerServices;
+using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 
@@ -73,16 +73,15 @@ namespace NVorbis
         {
             // do as much as possible with bit tricks in integer math
             int sign = ((int)bits >> 31);   // sign-extend to the full 32-bits
-            double exponent = (double)((int)((bits & 0x7fe00000) >> 21) - 788);  // grab the exponent, remove the bias, store as double (for the call to System.Math.Pow(...))
-            float mantissa = (float)(((bits & 0x1fffff) ^ sign) + (sign & 1));  // grab the mantissa and apply the sign bit.  store as float
+            int exponent = (int)((bits & 0x7fe00000) >> 21) - 788;  // grab the exponent, remove the bias.
+            float mantissa = ((int)(bits & 0x1fffff) ^ sign) + (sign & 1);  // grab the mantissa and apply the sign bit.
 
             // NB: We could use bit tricks to calc the exponent, but it can't be more than 63 in either direction.
             //     This creates an issue, since the exponent field allows for a *lot* more than that.
             //     On the flip side, larger exponent values don't seem to be used by the Vorbis codebooks...
             //     Either way, we'll play it safe and let the BCL calculate it.
 
-            // now switch to single-precision and calc the return value
-            return mantissa * (float)System.Math.Pow(2.0, exponent);
+            return System.MathF.ScaleB(mantissa, exponent);
         }
     }
 }

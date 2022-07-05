@@ -351,8 +351,8 @@ namespace NVorbis
             int ady = Abs(dy);
             int sy = 1 - (((dy >> 31) & 1) * 2);
             int b = dy / adx;
-            nint x = x0;
-            nint y = y0;
+            int x = x0;
+            int y = y0;
             int err = -adx;
 
             v[x] *= dbTable[y];
