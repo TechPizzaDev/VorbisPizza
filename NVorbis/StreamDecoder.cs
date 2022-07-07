@@ -161,7 +161,8 @@ namespace NVorbis
         {
             for (int i = 0; i < expected.Length; i++)
             {
-                if (expected[i] != packet.ReadBits(8))
+                ulong v = packet.ReadBits(8);
+                if (expected[i] != v)
                 {
                     return false;
                 }
@@ -370,17 +371,17 @@ namespace NVorbis
                         break;
                     }
 
-                    if (!ReadNextPacket(idx / _channels, out long? samplePosition))
+                    if (!ReadNextPacket(idx / _channels, out long samplePosition))
                     {
                         // drain the current packet (the windowing will fade it out)
                         _prevPacketEnd = _prevPacketStop;
                     }
 
                     // if we need to pick up a position, and the packet had one, apply the position now
-                    if (samplePosition.HasValue && !_hasPosition)
+                    if (samplePosition != -1 && !_hasPosition)
                     {
                         _hasPosition = true;
-                        _currentPosition = samplePosition.Value - (_prevPacketEnd - _prevPacketStart) - idx / _channels;
+                        _currentPosition = samplePosition - (_prevPacketEnd - _prevPacketStart) - idx / _channels;
                     }
                 }
 
@@ -513,7 +514,7 @@ namespace NVorbis
             return count * channels;
         }
 
-        private bool ReadNextPacket(nint bufferedSamples, out long? samplePosition)
+        private bool ReadNextPacket(nint bufferedSamples, out long samplePosition)
         {
             // decode the next packet now so we can start overlapping with it
             float[][]? curPacket = DecodeNextPacket(
@@ -528,10 +529,10 @@ namespace NVorbis
             }
 
             // if we get a max sample position, back off our valid length to match
-            if (samplePosition.HasValue && isEndOfStream)
+            if (samplePosition != -1 && isEndOfStream)
             {
                 long actualEnd = _currentPosition + bufferedSamples + validLen - startIndex;
-                int diff = (int)(samplePosition.Value - actualEnd);
+                int diff = (int)(samplePosition - actualEnd);
                 if (diff < 0)
                 {
                     validLen += diff;
@@ -569,7 +570,7 @@ namespace NVorbis
 
         private float[][]? DecodeNextPacket(
             out int packetStartindex, out int packetValidLength, out int packetTotalLength, out bool isEndOfStream,
-            out long? samplePosition, out int bitsRead, out int bitsRemaining, out int containerOverheadBits)
+            out long samplePosition, out int bitsRead, out int bitsRemaining, out int containerOverheadBits)
         {
             VorbisPacket packet = default;
             try
@@ -626,7 +627,7 @@ namespace NVorbis
                 packetStartindex = 0;
                 packetValidLength = 0;
                 packetTotalLength = 0;
-                samplePosition = null;
+                samplePosition = -1;
                 return null;
             }
             finally
