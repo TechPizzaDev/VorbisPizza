@@ -572,19 +572,18 @@ namespace NVorbis
             out int packetStartindex, out int packetValidLength, out int packetTotalLength, out bool isEndOfStream,
             out long samplePosition, out int bitsRead, out int bitsRemaining, out int containerOverheadBits)
         {
-            VorbisPacket packet = default;
-            try
+            VorbisPacket packet = _packetProvider.GetNextPacket();
+            if (!packet.IsValid)
             {
-                packet = _packetProvider.GetNextPacket();
-                if (!packet.IsValid)
-                {
-                    // no packet? we're at the end of the stream
-                    isEndOfStream = true;
-                    bitsRead = 0;
-                    bitsRemaining = 0;
-                    containerOverheadBits = 0;
-                }
-                else
+                // no packet? we're at the end of the stream
+                isEndOfStream = true;
+                bitsRead = 0;
+                bitsRemaining = 0;
+                containerOverheadBits = 0;
+            }
+            else
+            {
+                try
                 {
                     // if the packet is flagged as the end of the stream, we can safely mark _eosFound
                     isEndOfStream = packet.IsEndOfStream;
@@ -623,17 +622,17 @@ namespace NVorbis
                     bitsRead = packet.BitsRead;
                     bitsRemaining = packet.BitsRead + packet.BitsRemaining;
                 }
+                finally
+                {
+                    packet.Finish();
+                }
+            }
 
-                packetStartindex = 0;
-                packetValidLength = 0;
-                packetTotalLength = 0;
-                samplePosition = -1;
-                return null;
-            }
-            finally
-            {
-                packet.Finish();
-            }
+            packetStartindex = 0;
+            packetValidLength = 0;
+            packetTotalLength = 0;
+            samplePosition = -1;
+            return null;
         }
 
         private static unsafe void OverlapBuffers(
