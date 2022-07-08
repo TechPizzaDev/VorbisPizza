@@ -93,8 +93,10 @@ namespace NVorbis.Ogg
             try
             {
                 _foundStream = false;
-                while (_reader.ReadNextPage())
+                while (_reader.ReadNextPage(out PageData? pageData))
                 {
+                    pageData.DecrementRef();
+
                     if (_foundStream)
                     {
                         return true;
@@ -133,6 +135,15 @@ namespace NVorbis.Ogg
         /// <inheritdoc/>
         public void Dispose()
         {
+            foreach(WeakReference<IPacketProvider> provider in _packetProviders)
+            {
+                if (provider.TryGetTarget(out IPacketProvider? target))
+                {
+                    target.Dispose();
+                }
+            }
+            _packetProviders.Clear();
+
             _reader?.Dispose();
             _reader = null!;
         }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using NVorbis.Contracts.Ogg;
 
@@ -16,15 +17,19 @@ namespace NVorbis.Ogg
             _newStreamCallback = newStreamCallback;
         }
 
-        protected override bool AddPage(int streamSerial, byte[] pageBuf, bool isResync)
+        protected override bool AddPage(PageData pageData)
         {
+            PageHeader header = pageData.Header;
+            int streamSerial = header.StreamSerial;
+            PageFlags pageFlags = header.PageFlags;
+
             if (_packetProviders.TryGetValue(streamSerial, out IForwardOnlyPacketProvider? pp))
             {
                 // try to add the page...
-                if (pp.AddPage(pageBuf, isResync))
+                if (pp.AddPage(pageData))
                 {
                     // ..., then check to see if this is the end of the stream...
-                    if (((PageFlags)pageBuf[5] & PageFlags.EndOfStream) != 0)
+                    if ((pageFlags & PageFlags.EndOfStream) != 0)
                     {
                         // ... and if so tell the packet provider the remove it from our list
                         pp.SetEndOfStream();
@@ -39,14 +44,18 @@ namespace NVorbis.Ogg
 
             // try to add the stream to the list.
             pp = new ForwardOnlyPacketProvider(this, streamSerial);
-            if (pp.AddPage(pageBuf, isResync))
+            if (pp.AddPage(pageData))
             {
                 _packetProviders.Add(streamSerial, pp);
-                if (_newStreamCallback(pp))
+                if (_newStreamCallback.Invoke(pp))
                 {
                     return true;
                 }
-                _packetProviders.Remove(streamSerial);
+
+                if (_packetProviders.Remove(streamSerial, out pp))
+                {
+                    pp.Dispose();
+                }
             }
             return false;
         }
@@ -56,11 +65,17 @@ namespace NVorbis.Ogg
             foreach (KeyValuePair<int, IForwardOnlyPacketProvider> kvp in _packetProviders)
             {
                 kvp.Value.SetEndOfStream();
+                kvp.Value.Dispose();
             }
             _packetProviders.Clear();
         }
 
-        public override bool ReadPageAt(long offset)
+        public override bool ReadPageAt(long offset, [MaybeNullWhen(false)] out PageData pageData)
+        {
+            throw new NotSupportedException();
+        }
+
+        public override bool ReadPageHeaderAt(long offset, Span<byte> headerBuffer)
         {
             throw new NotSupportedException();
         }

@@ -1,18 +1,26 @@
 using System;
+using NVorbis.Ogg;
 
 namespace NVorbis.Contracts.Ogg
 {
-    internal interface IStreamPageReader
+    internal interface IStreamPageReader : IDisposable
     {
         IPacketProvider PacketProvider { get; }
 
-        void AddPage();
+        void AddPage(PageData page, long pageOffset);
 
         ArraySegment<byte>[] GetPagePackets(ulong pageIndex);
 
         ulong FindPage(long granulePos);
 
-        bool GetPage(ulong pageIndex, out long granulePos, out bool isResync, out bool isContinuation, out bool isContinued, out uint packetCount, out int pageOverhead);
+        bool GetPage(
+            ulong pageIndex, 
+            out long granulePos,
+            out bool isResync,
+            out bool isContinuation, 
+            out bool isContinued, 
+            out ushort packetCount, 
+            out int pageOverhead);
 
         void SetEndOfStream();
 

@@ -1,5 +1,4 @@
 using System;
-using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using NVorbis.Contracts;
@@ -10,18 +9,17 @@ namespace NVorbis.Ogg
     internal sealed class ForwardOnlyPacketProvider : IForwardOnlyPacketProvider
     {
         private int _lastSeqNo;
-        private readonly Queue<(byte[] buf, bool isResync)> _pageQueue = new();
+        private readonly Queue<(PageData page, bool isResync)> _pageQueue = new();
 
         private readonly IPageReader _reader;
-        private byte[]? _pageBuf;
         private int _packetIndex;
         private bool _isEndOfStream;
-        private int _dataStart;
 
-        private bool _hasPacketData;
         private bool _isPacketFinished;
-        private ArraySegment<byte> _packetBuf;
-        private PacketDataPart[] _dataParts;
+
+        private List<PageSlice> _packetPages = new();
+        private PacketDataPart[] _packetParts = Array.Empty<PacketDataPart>();
+        private bool _isDisposed;
 
         public ForwardOnlyPacketProvider(IPageReader reader, int streamSerial)
         {
@@ -31,45 +29,51 @@ namespace NVorbis.Ogg
             // force the first page to read
             _packetIndex = int.MaxValue;
             _isPacketFinished = true;
-
-            _dataParts = new PacketDataPart[1];
         }
 
         public bool CanSeek => false;
 
         public int StreamSerial { get; }
 
-        public bool AddPage(byte[] buf, bool isResync)
+        public bool AddPage(PageData pageData)
         {
-            if (((PageFlags)buf[5] & PageFlags.BeginningOfStream) != 0)
+            ReadOnlySpan<byte> pageSpan = pageData.AsSpan();
+            PageHeader header = new(pageSpan);
+            bool isResync = pageData.IsResync;
+
+            if ((header.PageFlags & PageFlags.BeginningOfStream) != 0)
             {
                 if (_isEndOfStream)
                 {
+                    pageData.DecrementRef();
                     return false;
                 }
                 isResync = true;
-                _lastSeqNo = BinaryPrimitives.ReadInt32LittleEndian(buf.AsSpan(18, sizeof(int)));
+                _lastSeqNo = header.SequenceNumber;
             }
             else
             {
                 // check the sequence number
-                int seqNo = BinaryPrimitives.ReadInt32LittleEndian(buf.AsSpan(18, sizeof(int)));
+                int seqNo = header.SequenceNumber;
                 isResync |= seqNo != _lastSeqNo + 1;
                 _lastSeqNo = seqNo;
             }
 
             // there must be at least one packet with data
             int ttl = 0;
-            for (int i = 0; i < buf[26]; i++)
+            int segmentCount = header.SegmentCount;
+            for (int i = 0; i < segmentCount; i++)
             {
-                ttl += buf[27 + i];
+                ttl += pageSpan[27 + i];
             }
             if (ttl == 0)
             {
+                pageData.DecrementRef();
                 return false;
             }
+            
+            _pageQueue.Enqueue((pageData, isResync));
 
-            _pageQueue.Enqueue((buf, isResync));
             return true;
         }
 
@@ -86,28 +90,40 @@ namespace NVorbis.Ogg
             }
 
             // if we don't already have a page, grab it
-            byte[]? pageBuf;
+            PageData? pageData;
             bool isResync;
             int dataStart;
             int packetIndex;
             bool isCont, isCntd;
-            if (_pageBuf != null && _packetIndex < 27 + _pageBuf[26])
+
+            if (_packetPages.Count > 0 &&
+                _packetIndex < _packetPages[^1].Page.Header.PageOverhead)
             {
-                pageBuf = _pageBuf;
+                PageSlice lastSlice = _packetPages[^1];
+                pageData = lastSlice.Page;
                 isResync = false;
-                dataStart = _dataStart;
+                dataStart = lastSlice.Start + lastSlice.Length;
                 packetIndex = _packetIndex;
                 isCont = false;
-                isCntd = pageBuf[26 + pageBuf[26]] == 255;
+                isCntd = pageData.AsSpan()[pageData.Header.PageOverhead - 1] == 255;
+
+                // Prevent the page from being disposed.
+                _packetPages.RemoveAt(_packetPages.Count - 1);
             }
             else
             {
-                if (!ReadNextPage(out pageBuf, out isResync, out dataStart, out packetIndex, out isCont, out isCntd))
+                if (!ReadNextPage(out pageData, out isResync, out dataStart, out packetIndex, out isCont, out isCntd))
                 {
                     // couldn't read the next page...
                     return default;
                 }
             }
+
+            ClearPacketPages();
+
+            ReadOnlySpan<byte> pageSpan = pageData.AsSpan();
+            PageHeader header = new(pageSpan);
+            int pageOverhead = header.PageOverhead;
 
             // first, set flags from the start page
             int contOverhead = dataStart;
@@ -120,12 +136,13 @@ namespace NVorbis.Ogg
                     isResync = true;
 
                     // skip the first packet; it's a partial
-                    contOverhead += GetPacketLength(pageBuf, ref packetIndex);
+                    contOverhead += GetPacketLength(pageSpan, ref packetIndex);
 
                     // if we moved to the end of the page, we can't satisfy the request from here...
-                    if (packetIndex == 27 + pageBuf[26])
+                    if (packetIndex == pageOverhead)
                     {
                         // ... so we'll just recurse and try again
+                        pageData.DecrementRef();
                         return GetNextPacket();
                     }
                 }
@@ -136,12 +153,11 @@ namespace NVorbis.Ogg
             }
 
             // second, determine how long the packet is
-            int dataLen = GetPacketLength(pageBuf, ref packetIndex);
-            ArraySegment<byte> packetBuf = new(pageBuf, dataStart, dataLen);
-            dataStart += dataLen;
+            int dataLen = GetPacketLength(pageSpan, ref packetIndex);
+            _packetPages.Add(new PageSlice(pageData, dataStart, dataLen));
 
             // third, determine if the packet is the last one in the page
-            bool isLast = packetIndex == 27 + pageBuf[26];
+            bool isLast = packetIndex == pageOverhead;
             if (isCntd)
             {
                 if (isLast)
@@ -153,8 +169,8 @@ namespace NVorbis.Ogg
                 {
                     // whelp, not quite...  gotta account for the continued packet
                     int pi = packetIndex;
-                    GetPacketLength(pageBuf, ref pi);
-                    isLast = pi == 27 + pageBuf[26];
+                    GetPacketLength(pageData.AsSpan(), ref pi);
+                    isLast = pi == pageOverhead;
                 }
             }
 
@@ -163,19 +179,19 @@ namespace NVorbis.Ogg
             long granulePos = -1;
             if (isLast)
             {
-                granulePos = BinaryPrimitives.ReadInt64LittleEndian(pageBuf.AsSpan(6, sizeof(long)));
+                granulePos = header.GranulePosition;
 
                 // fifth, set flags from the end page
-                if (((PageFlags)pageBuf[5] & PageFlags.EndOfStream) != 0 || (_isEndOfStream && _pageQueue.Count == 0))
+                if ((header.PageFlags & PageFlags.EndOfStream) != 0 || (_isEndOfStream && _pageQueue.Count == 0))
                 {
                     isEos = true;
                 }
             }
             else
             {
-                while (isCntd && packetIndex == 27 + pageBuf[26])
+                while (isCntd && packetIndex == pageData.Header.PageOverhead)
                 {
-                    if (!ReadNextPage(out pageBuf, out isResync, out dataStart, out packetIndex, out isCont, out isCntd)
+                    if (!ReadNextPage(out pageData, out isResync, out dataStart, out packetIndex, out isCont, out isCntd)
                         || isResync || !isCont)
                     {
                         // just use what data we can...
@@ -183,55 +199,48 @@ namespace NVorbis.Ogg
                     }
 
                     // we're in the right spot!
+                    ReadOnlySpan<byte> span = pageData.AsSpan();
 
                     // update the overhead count
-                    contOverhead += 27 + pageBuf[26];
-
-                    // save off the previous buffer data
-                    ArraySegment<byte> prevBuf = packetBuf;
+                    contOverhead += new PageHeader(span).PageOverhead;
 
                     // get the size of this page's portion
-                    int contSz = GetPacketLength(pageBuf, ref packetIndex);
+                    int contSz = GetPacketLength(span, ref packetIndex);
 
-                    // set up the new buffer and fill it
-                    packetBuf = new(new byte[prevBuf.Count + contSz]);
-                    prevBuf.CopyTo(packetBuf);
-                    pageBuf.AsSpan(dataStart, contSz).CopyTo(packetBuf.Slice(prevBuf.Count));
-
-                    // now that we've read, update our start position
-                    dataStart += contSz;
+                    _packetPages.Add(new PageSlice(pageData, dataStart, contSz));
                 }
             }
 
             // last, save off our state and return true
-            VorbisPacket packet = new(this, _dataParts)
+            ArraySegment<PacketDataPart> packetParts = GetPacketParts(_packetPages.Count);
+
+            VorbisPacket packet = new(this, packetParts)
             {
                 IsResync = isResync,
                 GranulePosition = granulePos,
                 IsEndOfStream = isEos,
                 ContainerOverheadBits = contOverhead * 8
             };
-            _pageBuf = pageBuf;
-            _dataStart = dataStart;
+
             _packetIndex = packetIndex;
-            _packetBuf = packetBuf;
             _isEndOfStream |= isEos;
-            _hasPacketData = true;
             _isPacketFinished = false;
             packet.Reset();
             return packet;
         }
 
         private bool ReadNextPage(
-            [MaybeNullWhen(false)] out byte[] pageBuf,
+            [MaybeNullWhen(false)] out PageData pageData,
             out bool isResync, out int dataStart, out int packetIndex, out bool isContinuation, out bool isContinued)
         {
             while (_pageQueue.Count == 0)
             {
-                if (_isEndOfStream || !_reader.ReadNextPage())
+                // Don't do anything with the read pages,
+                // they will be handled by AddPage.
+                if (_isEndOfStream || !_reader.ReadNextPage(out _))
                 {
                     // we must be done
-                    pageBuf = null;
+                    pageData = null;
                     isResync = false;
                     dataStart = 0;
                     packetIndex = 0;
@@ -241,28 +250,45 @@ namespace NVorbis.Ogg
                 }
             }
 
-            (byte[] buf, bool isResync) temp = _pageQueue.Dequeue();
-            pageBuf = temp.buf;
+            (PageData page, bool isResync) temp = _pageQueue.Dequeue();
+            pageData = temp.page;
             isResync = temp.isResync;
 
-            dataStart = pageBuf[26] + 27;
+            ReadOnlySpan<byte> pageSpan = pageData.AsSpan();
+            PageHeader header = new(pageSpan);
+            dataStart = header.PageOverhead;
             packetIndex = 27;
-            isContinuation = ((PageFlags)pageBuf[5] & PageFlags.ContinuesPacket) != 0;
-            isContinued = pageBuf[26 + pageBuf[26]] == 255;
+            isContinuation = (header.PageFlags & PageFlags.ContinuesPacket) != 0;
+            isContinued = pageSpan[dataStart - 1] == 255;
             return true;
         }
 
-        private static int GetPacketLength(byte[] pageBuf, ref int packetIndex)
+        private ArraySegment<PacketDataPart> GetPacketParts(int count)
+        {
+            if (_packetParts.Length < count)
+            {
+                int previousLength = _packetParts.Length;
+                Array.Resize(ref _packetParts, (count + 3) / 4 * 4);
+
+                for (int i = previousLength; i < _packetParts.Length; i++)
+                {
+                    _packetParts[i] = new PacketDataPart(i, 0);
+                }
+            }
+            return new ArraySegment<PacketDataPart>(_packetParts, 0, count);
+        }
+
+        private static int GetPacketLength(ReadOnlySpan<byte> pageData, ref int packetIndex)
         {
             int len = 0;
-            while (pageBuf[packetIndex] == 255 && packetIndex < pageBuf[26] + 27)
+            while (pageData[packetIndex] == 255 && packetIndex < pageData[26] + 27)
             {
-                len += pageBuf[packetIndex];
+                len += pageData[packetIndex];
                 ++packetIndex;
             }
-            if (packetIndex < pageBuf[26] + 27)
+            if (packetIndex < pageData[26] + 27)
             {
-                len += pageBuf[packetIndex];
+                len += pageData[packetIndex];
                 ++packetIndex;
             }
             return len;
@@ -270,19 +296,28 @@ namespace NVorbis.Ogg
 
         public ArraySegment<byte> GetPacketData(PacketDataPart dataPart)
         {
-            if (_hasPacketData)
+            ulong packetIndex = dataPart.PageIndex;
+            if (packetIndex < (ulong)_packetPages.Count)
             {
-                return _packetBuf;
+                PageSlice slice = _packetPages[(int)packetIndex];
+                ArraySegment<byte> segment = slice.AsSegment();
+                return segment;
             }
-
-            _hasPacketData = false;
             return ArraySegment<byte>.Empty;
         }
 
         public void FinishPacket(in VorbisPacket packet)
         {
-            _packetBuf = ArraySegment<byte>.Empty;
             _isPacketFinished = true;
+        }
+
+        private void ClearPacketPages()
+        {
+            for (int i = 0; i < _packetPages.Count; i++)
+            {
+                _packetPages[i].Page.DecrementRef();
+            }
+            _packetPages.Clear();
         }
 
         long IPacketProvider.GetGranuleCount()
@@ -293,6 +328,29 @@ namespace NVorbis.Ogg
         long IPacketProvider.SeekTo(long granulePos, uint preRoll, GetPacketGranuleCount getPacketGranuleCount)
         {
             throw new NotSupportedException();
+        }
+
+        private void Dispose(bool disposing)
+        {
+            if (!_isDisposed)
+            {
+                if (disposing)
+                {
+                    while (_pageQueue.TryDequeue(out (PageData page, bool isResync) item))
+                    {
+                        item.page.DecrementRef();
+                    }
+
+                    ClearPacketPages();
+                }
+                _isDisposed = true;
+            }
+        }
+
+        public void Dispose()
+        {
+            Dispose(disposing: true);
+            GC.SuppressFinalize(this);
         }
     }
 }

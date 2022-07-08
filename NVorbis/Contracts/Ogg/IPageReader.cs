@@ -1,4 +1,6 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
+using NVorbis.Ogg;
 
 namespace NVorbis.Contracts.Ogg
 {
@@ -10,8 +12,10 @@ namespace NVorbis.Contracts.Ogg
         long ContainerBits { get; }
         long WasteBits { get; }
 
-        bool ReadNextPage();
+        bool ReadNextPage([MaybeNullWhen(false)] out PageData pageData);
 
-        bool ReadPageAt(long offset);
+        bool ReadPageAt(long offset, [MaybeNullWhen(false)] out PageData pageData);
+
+        bool ReadPageHeaderAt(long offset, Span<byte> headerBuffer);
     }
 }

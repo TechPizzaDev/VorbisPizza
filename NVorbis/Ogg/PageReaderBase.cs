@@ -12,11 +12,13 @@ namespace NVorbis.Ogg
     internal abstract class PageReaderBase : IPageReader
     {
         private readonly HashSet<int> _ignoredSerials = new();
-        private byte[]? _overflowBuf;
-        private int _overflowBufIndex;
+
+        private List<PageSlice> _overflowPages = new();
 
         private Stream _stream;
         private bool _leaveOpen;
+
+        public bool IsDisposed { get; private set; }
 
         protected PageReaderBase(Stream stream, bool leaveOpen)
         {
@@ -30,12 +32,16 @@ namespace NVorbis.Ogg
 
         public long WasteBits { get; private set; }
 
-        private bool VerifyPage(ReadOnlySpan<byte> headerBuf, [MaybeNullWhen(false)] out byte[] pageBuf, out int bytesRead)
+        private bool VerifyPage(
+            ReadOnlySpan<byte> headerBuf,
+            bool isResync,
+            [MaybeNullWhen(false)] out PageData pageData,
+            out int bytesRead)
         {
             byte segCnt = headerBuf[26];
             if (headerBuf.Length < 27 + segCnt)
             {
-                pageBuf = null;
+                pageData = null;
                 bytesRead = 0;
                 return false;
             }
@@ -46,32 +52,42 @@ namespace NVorbis.Ogg
                 dataLen += headerBuf[i + 27];
             }
 
-            pageBuf = new byte[dataLen + segCnt + 27];
-            headerBuf.Slice(0, segCnt + 27).CopyTo(pageBuf);
-            bytesRead = EnsureRead(pageBuf.AsSpan(segCnt + 27, dataLen));
-            if (bytesRead != dataLen) return false;
+            pageData = new PageData(dataLen + segCnt + 27, isResync);
+            Span<byte> pageSpan = pageData.AsSpan();
+
+            headerBuf.Slice(0, segCnt + 27).CopyTo(pageSpan);
+            bytesRead = EnsureRead(pageSpan.Slice(segCnt + 27, dataLen));
+            if (bytesRead != dataLen)
+            {
+                pageData.DecrementRef();
+                pageData = null;
+                return false;
+            }
 
             Crc crc = Crc.Create();
-            Span<byte> pb0 = pageBuf.AsSpan(0, 22);
+            Span<byte> pb0 = pageSpan.Slice(0, 22);
             crc.Update(pb0);
             crc.Update(0);
             crc.Update(0);
             crc.Update(0);
             crc.Update(0);
 
-            Span<byte> pb1 = pageBuf.AsSpan(26, pageBuf.Length - 26);
+            Span<byte> pb1 = pageSpan.Slice(26, pageData.Length - 26);
             crc.Update(pb1);
-            return crc.Test(BinaryPrimitives.ReadUInt32BigEndian(pageBuf.AsSpan(22, sizeof(uint))));
+            return crc.Test(BinaryPrimitives.ReadUInt32BigEndian(pageSpan.Slice(22, sizeof(uint))));
         }
 
-        private bool AddPage(byte[] pageBuf, bool isResync)
+        private bool TryAddPage(PageData pageData)
         {
-            int streamSerial = BinaryPrimitives.ReadInt32LittleEndian(pageBuf.AsSpan(14, sizeof(int)));
+            PageHeader header = pageData.Header;
+            int streamSerial = header.StreamSerial;
+            int pageOverhead = header.PageOverhead;
+
             if (!_ignoredSerials.Contains(streamSerial))
             {
-                if (AddPage(streamSerial, pageBuf, isResync))
+                if (AddPage(pageData))
                 {
-                    ContainerBits += 8 * (27 + pageBuf[26]);
+                    ContainerBits += 8 * pageOverhead;
                     return true;
                 }
                 _ignoredSerials.Add(streamSerial);
@@ -79,47 +95,74 @@ namespace NVorbis.Ogg
             return false;
         }
 
-        private void EnqueueData(byte[] buf, int count)
+        private void EnqueueData(PageData pageData, int count)
         {
-            if (_overflowBuf != null)
+            pageData.IncrementRef();
+
+            int start = pageData.Length - count;
+            _overflowPages.Add(new PageSlice(pageData, start, count));
+        }
+
+        private void ConsumeOverflow(int count)
+        {
+            PageSlice page = _overflowPages[0];
+
+            int newLength = page.Length - count;
+            if (newLength == 0)
             {
-                byte[] newBuf = new byte[_overflowBuf.Length - _overflowBufIndex + count];
-                Buffer.BlockCopy(_overflowBuf, _overflowBufIndex, newBuf, 0, newBuf.Length - count);
-                int index = buf.Length - count;
-                Buffer.BlockCopy(buf, index, newBuf, newBuf.Length - count, count);
-                _overflowBufIndex = 0;
+                page.Page.DecrementRef();
+                _overflowPages.RemoveAt(0);
             }
             else
             {
-                _overflowBuf = buf;
-                _overflowBufIndex = buf.Length - count;
+                int newStart = page.Start + count;
+                _overflowPages[0] = new PageSlice(page.Page, newStart, newLength);
             }
         }
 
         private void ClearEnqueuedData(int count)
         {
-            if (_overflowBuf != null && (_overflowBufIndex += count) >= _overflowBuf.Length)
+            do
             {
-                _overflowBuf = null;
+                if (_overflowPages.Count <= 0)
+                {
+                    break;
+                }
+                PageSlice page = _overflowPages[0];
+
+                int toSkip = Math.Min(count, page.Length);
+                count -= toSkip;
+
+                ConsumeOverflow(toSkip);
             }
+            while (count > 0);
         }
 
-        private int FillHeader(Span<byte> buf, int maxTries = 10)
+        private int FillHeader(Span<byte> buffer)
         {
             int copyCount = 0;
-            if (_overflowBuf != null)
+            do
             {
-                copyCount = Math.Min(_overflowBuf.Length - _overflowBufIndex, buf.Length);
-                _overflowBuf.AsSpan(_overflowBufIndex, copyCount).CopyTo(buf);
-                buf = buf.Slice(copyCount);
-                if ((_overflowBufIndex += copyCount) == _overflowBuf.Length)
+                if (_overflowPages.Count <= 0)
                 {
-                    _overflowBuf = null;
+                    break;
                 }
+                PageSlice page = _overflowPages[0];
+
+                int toCopy = Math.Min(buffer.Length, page.Length);
+                ReadOnlySpan<byte> source = page.AsSpan().Slice(0, toCopy);
+
+                source.CopyTo(buffer);
+                buffer = buffer.Slice(toCopy);
+                copyCount += toCopy;
+
+                ConsumeOverflow(toCopy);
             }
-            if (buf.Length > 0)
+            while (buffer.Length > 0);
+
+            if (buffer.Length > 0)
             {
-                copyCount += EnsureRead(buf, maxTries);
+                copyCount += EnsureRead(buffer);
             }
             return copyCount;
         }
@@ -160,26 +203,20 @@ namespace NVorbis.Ogg
             return false;
         }
 
-        // Network streams don't always return the requested size immediately, so this
-        // method is used to ensure we fill the buffer if it is possible.
-        // Note that it will loop until getting a certain count of zero reads (default: 10).
-        // This means in most cases, the network stream probably died by the time we return
-        // a short read.
-        protected int EnsureRead(Span<byte> buf, int maxTries = 10)
+        protected int EnsureRead(Span<byte> buffer)
         {
-            int read = 0;
-            int tries = 0;
+            int totalRead = 0;
             do
             {
-                int cnt = _stream.Read(buf.Slice(read, buf.Length - read));
-                if (cnt == 0 && ++tries == maxTries)
+                int count = _stream.Read(buffer.Slice(totalRead));
+                totalRead += count;
+                if (count == 0)
                 {
                     break;
                 }
-                read += cnt;
             }
-            while (read < buf.Length);
-            return read;
+            while (totalRead < buffer.Length);
+            return totalRead;
         }
 
         /// <summary>
@@ -200,7 +237,8 @@ namespace NVorbis.Ogg
         protected long SeekStream(long offset)
         {
             // make sure we're locked; seeking won't matter if we aren't
-            if (!CheckLock()) throw new InvalidOperationException("Must be locked prior to reading!");
+            if (!CheckLock())
+                throw new InvalidOperationException("Must be locked prior to reading!");
 
             return _stream.Seek(offset, SeekOrigin.Begin);
         }
@@ -213,7 +251,7 @@ namespace NVorbis.Ogg
         {
         }
 
-        protected abstract bool AddPage(int streamSerial, byte[] pageBuf, bool isResync);
+        protected abstract bool AddPage(PageData pageData);
 
         protected abstract void SetEndOfStreams();
 
@@ -231,19 +269,20 @@ namespace NVorbis.Ogg
             return false;
         }
 
-        public bool ReadNextPage()
+        public bool ReadNextPage([MaybeNullWhen(false)] out PageData pageData)
         {
             // 27 - 4 + 27 + 255 (found sync at end of first buffer, and found page has full segment count)
             Span<byte> headerBuf = stackalloc byte[305];
 
             // make sure we're locked; no sense reading if we aren't
-            if (!CheckLock()) throw new InvalidOperationException("Must be locked prior to reading!");
+            if (!CheckLock())
+                throw new InvalidOperationException("Must be locked prior to reading!");
+
+            PrepareStreamForNextPage();
 
             bool isResync = false;
-
             int ofs = 0;
             int cnt;
-            PrepareStreamForNextPage();
             while ((cnt = FillHeader(headerBuf.Slice(ofs, 27 - ofs))) > 0)
             {
                 cnt += ofs;
@@ -251,7 +290,7 @@ namespace NVorbis.Ogg
                 {
                     if (VerifyHeader(headerBuf.Slice(i), ref cnt, true))
                     {
-                        if (VerifyPage(headerBuf.Slice(i, cnt), out byte[]? pageBuf, out int bytesRead))
+                        if (VerifyPage(headerBuf.Slice(i, cnt), isResync, out pageData, out int bytesRead))
                         {
                             // one way or the other, we have to clear out the page's bytes from the queue (if queued)
                             ClearEnqueuedData(bytesRead);
@@ -259,8 +298,10 @@ namespace NVorbis.Ogg
                             // also, we need to let our inheritors have a chance to save state for next time
                             SaveNextPageSearch();
 
+                            int pageLength = pageData.Length;
+
                             // pass it to our inheritor
-                            if (AddPage(pageBuf, isResync))
+                            if (TryAddPage(pageData))
                             {
                                 return true;
                             }
@@ -268,16 +309,16 @@ namespace NVorbis.Ogg
                             // otherwise, the whole page is useless...
 
                             // save off that we've burned that many bits
-                            WasteBits += pageBuf.Length * 8;
+                            WasteBits += pageLength * 8;
 
                             // set up to load the next page, then loop
                             ofs = 0;
                             cnt = 0;
                             break;
                         }
-                        else if (pageBuf != null)
+                        else if (pageData != null)
                         {
-                            EnqueueData(pageBuf, bytesRead);
+                            EnqueueData(pageData, bytesRead);
                         }
                     }
                     WasteBits += 8;
@@ -298,20 +339,41 @@ namespace NVorbis.Ogg
                 SetEndOfStreams();
             }
 
+            pageData = null;
             return false;
         }
 
-        public abstract bool ReadPageAt(long offset);
+        public abstract bool ReadPageAt(long offset, [MaybeNullWhen(false)] out PageData pageData);
+
+        public abstract bool ReadPageHeaderAt(long offset, Span<byte> headerBuffer);
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!IsDisposed)
+            {
+                if (disposing)
+                {
+                    foreach (PageSlice slice in _overflowPages)
+                    {
+                        slice.Page.DecrementRef();
+                    }
+
+                    SetEndOfStreams();
+
+                    if (!_leaveOpen)
+                    {
+                        _stream?.Dispose();
+                    }
+                    _stream = null!;
+                }
+                IsDisposed = true;
+            }
+        }
 
         public void Dispose()
         {
-            SetEndOfStreams();
-
-            if (!_leaveOpen)
-            {
-                _stream?.Dispose();
-            }
-            _stream = null!;
+            Dispose(disposing: true);
+            GC.SuppressFinalize(this);
         }
     }
 }

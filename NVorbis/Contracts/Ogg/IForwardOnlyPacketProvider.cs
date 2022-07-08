@@ -1,8 +1,11 @@
-﻿namespace NVorbis.Contracts.Ogg
+using NVorbis.Ogg;
+
+namespace NVorbis.Contracts.Ogg
 {
     internal interface IForwardOnlyPacketProvider : IPacketProvider
     {
-        bool AddPage(byte[] buf, bool isResync);
+        bool AddPage(PageData pageData);
+
         void SetEndOfStream();
     }
 }

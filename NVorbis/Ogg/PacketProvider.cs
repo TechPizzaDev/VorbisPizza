@@ -11,6 +11,7 @@ namespace NVorbis.Ogg
         private const int DataPartInitialArraySize = 2;
 
         private IStreamPageReader _reader;
+        private bool _isDisposed;
 
         private ulong _pageIndex;
         private uint _packetIndex;
@@ -116,7 +117,7 @@ namespace NVorbis.Ogg
             // now get the ending granule of the page
             if (!_reader.GetPage(
                 pageIndex, out long pageGranulePos, out bool isResync, out bool isContinuation, out isContinued,
-                out uint packetCount, out _))
+                out ushort packetCount, out _))
             {
                 throw new System.IO.InvalidDataException("Could not get found page?!");
             }
@@ -161,7 +162,7 @@ namespace NVorbis.Ogg
                 }
 
                 VorbisPacket packet = CreatePacket(
-                    ref prevPageIndex, ref prevPacketIndex, false, endGP, false, isContinuation, prevPacketIndex + 1, 0);
+                    ref prevPageIndex, ref prevPacketIndex, false, endGP, false, isContinuation, (ushort)(prevPacketIndex + 1), 0);
 
                 if (!packet.IsValid)
                 {
@@ -198,7 +199,7 @@ namespace NVorbis.Ogg
                 // get the previous packet
                 bool wasContinuation = isContinuation;
                 if (!_reader.GetPage(
-                    --pgIdx, out _, out isResync, out isContinuation, out bool isContinued, out uint packetCount, out _))
+                    --pgIdx, out _, out isResync, out isContinuation, out bool isContinued, out ushort packetCount, out _))
                 {
                     return false;
                 }
@@ -225,7 +226,7 @@ namespace NVorbis.Ogg
 
                 while (_reader.GetPage(
                     pageIndex, out long granulePos, out bool isResync, out _, out bool isContinued,
-                    out uint packetCount, out int pageOverhead))
+                    out ushort packetCount, out int pageOverhead))
                 {
                     _lastPacketPageIndex = pageIndex;
                     _lastPacketPacketIndex = packetIndex;
@@ -269,7 +270,7 @@ namespace NVorbis.Ogg
 
         private VorbisPacket CreatePacket(
             ref ulong pageIndex, ref uint packetIndex,
-            bool advance, long granulePos, bool isResync, bool isContinued, uint packetCount, int pageOverhead)
+            bool advance, long granulePos, bool isResync, bool isContinued, ushort packetCount, int pageOverhead)
         {
             // create the packet list and add the item to it
             PacketDataPart[] dataParts = GetDataPartArray(DataPartInitialArraySize);
@@ -420,6 +421,24 @@ namespace NVorbis.Ogg
             {
                 _lastPacket = default;
             }
+        }
+
+        private void Dispose(bool disposing)
+        {
+            if (!_isDisposed)
+            {
+                if (disposing)
+                {
+                    // TODO: dispose managed state (managed objects)
+                }
+                _isDisposed = true;
+            }
+        }
+
+        public void Dispose()
+        {
+            Dispose(disposing: true);
+            GC.SuppressFinalize(this);
         }
     }
 }

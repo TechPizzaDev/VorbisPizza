@@ -1,94 +1,26 @@
 using System;
-using System.Buffers.Binary;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Threading;
 using NVorbis.Contracts.Ogg;
 
 namespace NVorbis.Ogg
 {
-    internal sealed class PageReader : PageReaderBase, IPageData
+    internal sealed class PageReader : PageReaderBase
     {
         private readonly Dictionary<int, IStreamPageReader> _streamReaders = new();
         private readonly NewStreamCallback _newStreamCallback;
         private readonly object _readLock = new();
 
+        private PageData? _page;
+        private long _pageOffset;
         private long _nextPageOffset;
-        private ushort _pageSize;
-        private ArraySegment<byte>[]? _packets;
 
         public PageReader(Stream stream, bool leaveOpen, NewStreamCallback newStreamCallback)
             : base(stream, leaveOpen)
         {
             _newStreamCallback = newStreamCallback;
-        }
-
-        private ushort ParsePageHeader(ReadOnlySpan<byte> pageBuf, int? streamSerial, bool? isResync)
-        {
-            byte segCnt = pageBuf[26];
-            int dataLen = 0;
-            int pktCnt = 0;
-            bool isContinued = false;
-
-            int size = 0;
-            for (int i = 0, idx = 27; i < segCnt; i++, idx++)
-            {
-                byte seg = pageBuf[idx];
-                size += seg;
-                dataLen += seg;
-                if (seg < 255)
-                {
-                    if (size > 0)
-                    {
-                        ++pktCnt;
-                    }
-                    size = 0;
-                }
-            }
-            if (size > 0)
-            {
-                isContinued = pageBuf[segCnt + 26] == 255;
-                ++pktCnt;
-            }
-
-            StreamSerial = streamSerial ?? BinaryPrimitives.ReadInt32LittleEndian(pageBuf.Slice(14, sizeof(int)));
-            SequenceNumber = BinaryPrimitives.ReadInt32LittleEndian(pageBuf.Slice(18, sizeof(int)));
-            PageFlags = (PageFlags)pageBuf[5];
-            GranulePosition = BinaryPrimitives.ReadInt64LittleEndian(pageBuf.Slice(6, sizeof(long)));
-            PacketCount = (ushort)pktCnt;
-            IsResync = isResync;
-            IsContinued = isContinued;
-            PageOverhead = 27 + segCnt;
-            return (ushort)(PageOverhead + dataLen);
-        }
-
-        private static ArraySegment<byte>[] ReadPackets(int packetCount, Span<byte> segments, ArraySegment<byte> dataBuffer)
-        {
-            ArraySegment<byte>[] list = new ArraySegment<byte>[packetCount];
-            int listIdx = 0;
-            int dataIdx = 0;
-            int size = 0;
-
-            for (int i = 0; i < segments.Length; i++)
-            {
-                byte seg = segments[i];
-                size += seg;
-                if (seg < 255)
-                {
-                    if (size > 0)
-                    {
-                        list[listIdx++] = dataBuffer.Slice(dataIdx, size);
-                        dataIdx += size;
-                    }
-                    size = 0;
-                }
-            }
-            if (size > 0)
-            {
-                list[listIdx] = dataBuffer.Slice(dataIdx, size);
-            }
-
-            return list;
         }
 
         public override void Lock()
@@ -121,71 +53,144 @@ namespace NVorbis.Ogg
             SeekStream(_nextPageOffset);
         }
 
-        protected override bool AddPage(int streamSerial, byte[] pageBuf, bool isResync)
+        protected override bool AddPage(PageData pageData)
         {
-            PageOffset = StreamPosition - pageBuf.Length;
-            ParsePageHeader(pageBuf, streamSerial, isResync);
+            PageHeader header = pageData.Header;
+            header.GetPacketCount(out ushort packetCount, out int dataLength, out _);
 
             // if the page doesn't have any packets, we can't use it
-            if (PacketCount == 0) return false;
+            if (packetCount == 0)
+            {
+                return false;
+            }
 
-            _packets = ReadPackets(
-                PacketCount,
-                new Span<byte>(pageBuf, 27, pageBuf[26]),
-                new ArraySegment<byte>(pageBuf, 27 + pageBuf[26], pageBuf.Length - 27 - pageBuf[26]));
+            int streamSerial = header.StreamSerial;
+            long pageOffset = StreamPosition - (header.PageOverhead + dataLength);
+            PageFlags pageFlags = header.PageFlags;
 
             if (_streamReaders.TryGetValue(streamSerial, out IStreamPageReader? spr))
             {
-                spr.AddPage();
+                spr.AddPage(pageData, pageOffset);
 
                 // if we've read the last page, remove from our list so cleanup can happen.
                 // this is safe because the instance still has access to us for reading.
-                if ((PageFlags & PageFlags.EndOfStream) == PageFlags.EndOfStream)
+                if ((pageFlags & PageFlags.EndOfStream) == PageFlags.EndOfStream)
                 {
-                    _streamReaders.Remove(StreamSerial);
+                    _streamReaders.Remove(streamSerial);
                 }
             }
             else
             {
-                StreamPageReader streamReader = new(this, StreamSerial);
-                streamReader.AddPage();
-                _streamReaders.Add(StreamSerial, streamReader);
-                if (!_newStreamCallback(streamReader.PacketProvider))
+                StreamPageReader streamReader = new(this, streamSerial);
+                streamReader.AddPage(pageData, pageOffset);
+
+                _streamReaders.Add(streamSerial, streamReader);
+                if (!_newStreamCallback.Invoke(streamReader.PacketProvider))
                 {
-                    _streamReaders.Remove(StreamSerial);
+                    if (_streamReaders.Remove(streamSerial, out IStreamPageReader? reader))
+                    {
+                        reader.Dispose();
+                    }
                     return false;
                 }
             }
             return true;
         }
 
-        public override bool ReadPageAt(long offset)
+        public override bool ReadPageAt(long offset, [MaybeNullWhen(false)] out PageData pageData)
         {
-            Span<byte> hdrBuf = stackalloc byte[282];
+            Span<byte> hdrBuf = stackalloc byte[PageHeader.MaxHeaderSize];
 
             // make sure we're locked; no sense reading if we aren't
-            if (!CheckLock()) throw new InvalidOperationException("Must be locked prior to reading!");
+            if (!CheckLock())
+                throw new InvalidOperationException("Must be locked prior to reading!");
 
             // this should be safe; we've already checked the page by now
-
-            if (offset == PageOffset)
+            if (offset == _pageOffset)
             {
-                // short circuit for when we've already loaded the page
-                return true;
+                pageData = _page;
+                if (pageData != null)
+                {
+                    // short circuit for when we've already loaded the page
+                    return true;
+                }
             }
 
             SeekStream(offset);
             int cnt = EnsureRead(hdrBuf.Slice(0, 27));
 
-            PageOffset = offset;
+            _pageOffset = offset;
+            ClearLastPage();
+
             if (VerifyHeader(hdrBuf, ref cnt))
             {
-                // don't read the whole page yet; if our caller is seeking, they won't need packets anyway
-                _packets = null;
-                _pageSize = ParsePageHeader(hdrBuf, null, null);
+                PageHeader header = new(hdrBuf);
+                header.GetPacketCount(out _, out int dataLength, out _);
+
+                int length = header.PageOverhead + dataLength;
+                pageData = new PageData(length, false);
+
+                Span<byte> pageSpan = pageData.AsSpan();
+                hdrBuf.Slice(0, cnt).CopyTo(pageSpan);
+
+                Span<byte> dataSpan = pageSpan.Slice(cnt);
+                int read = EnsureRead(dataSpan);
+                if (read != dataSpan.Length)
+                {
+                    pageData.DecrementRef();
+                    pageData = null;
+                    return false;
+                }
+
+                _page = pageData;
+                return true;
+            }
+
+            pageData = null;
+            return false;
+        }
+
+        public override bool ReadPageHeaderAt(long offset, Span<byte> headerBuffer)
+        {
+            if (headerBuffer.Length < PageHeader.MaxHeaderSize)
+                throw new ArgumentException(null, nameof(headerBuffer));
+
+            // make sure we're locked; no sense reading if we aren't
+            if (!CheckLock())
+                throw new InvalidOperationException("Must be locked prior to reading!");
+
+            // this should be safe; we've already checked the page by now
+            if (offset == _pageOffset)
+            {
+                if (_page != null)
+                {
+                    // short circuit for when we've already loaded the page
+                    ReadOnlySpan<byte> data = _page.AsSpan();
+                    data.Slice(0, Math.Min(data.Length, headerBuffer.Length)).CopyTo(headerBuffer);
+                    return true;
+                }
+            }
+
+            SeekStream(offset);
+            int cnt = EnsureRead(headerBuffer.Slice(0, 27));
+
+            _pageOffset = offset;
+            ClearLastPage();
+
+            if (VerifyHeader(headerBuffer, ref cnt))
+            {
                 return true;
             }
             return false;
+        }
+
+        private void ClearLastPage()
+        {
+            if (_page != null)
+            {
+                _page.DecrementRef();
+                _page = null;
+            }
         }
 
         protected override void SetEndOfStreams()
@@ -193,46 +198,18 @@ namespace NVorbis.Ogg
             foreach (KeyValuePair<int, IStreamPageReader> kvp in _streamReaders)
             {
                 kvp.Value.SetEndOfStream();
+                kvp.Value.Dispose();
             }
             _streamReaders.Clear();
         }
 
-        public long PageOffset { get; private set; }
-
-        public int StreamSerial { get; private set; }
-
-        public int SequenceNumber { get; private set; }
-
-        public PageFlags PageFlags { get; private set; }
-
-        public long GranulePosition { get; private set; }
-
-        public ushort PacketCount { get; private set; }
-
-        public bool? IsResync { get; private set; }
-
-        public bool IsContinued { get; private set; }
-
-        public int PageOverhead { get; private set; }
-
-        public ArraySegment<byte>[] GetPackets()
+        protected override void Dispose(bool disposing)
         {
-            if (!CheckLock()) throw new InvalidOperationException("Must be locked!");
-
-            if (_packets == null)
+            if (!IsDisposed)
             {
-                byte[] pageBuf = new byte[_pageSize];
-                SeekStream(PageOffset);
-                EnsureRead(pageBuf);
-
-                byte length = pageBuf[26];
-                _packets = ReadPackets(
-                    PacketCount,
-                    pageBuf.AsSpan(27, length),
-                    new ArraySegment<byte>(pageBuf, 27 + length, pageBuf.Length - 27 - length));
+                ClearLastPage();
             }
-
-            return _packets;
+            base.Dispose(disposing);
         }
     }
 }
