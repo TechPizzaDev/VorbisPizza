@@ -12,13 +12,13 @@ namespace NVorbis.Ogg
         private readonly Dictionary<int, IStreamPageReader> _streamReaders = new();
         private readonly NewStreamCallback _newStreamCallback;
         private readonly object _readLock = new();
-
+        
         private PageData? _page;
         private long _pageOffset;
         private long _nextPageOffset;
 
-        public PageReader(Stream stream, bool leaveOpen, NewStreamCallback newStreamCallback)
-            : base(stream, leaveOpen)
+        public PageReader(VorbisConfig config, Stream stream, bool leaveOpen, NewStreamCallback newStreamCallback)
+            : base(config, stream, leaveOpen)
         {
             _newStreamCallback = newStreamCallback;
         }
@@ -128,7 +128,7 @@ namespace NVorbis.Ogg
                 header.GetPacketCount(out _, out int dataLength, out _);
 
                 int length = header.PageOverhead + dataLength;
-                pageData = new PageData(length, false);
+                pageData = Config.PageDataPool.Rent(length, false);
 
                 Span<byte> pageSpan = pageData.AsSpan();
                 hdrBuf.Slice(0, cnt).CopyTo(pageSpan);

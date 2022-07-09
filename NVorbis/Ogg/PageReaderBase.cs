@@ -18,11 +18,13 @@ namespace NVorbis.Ogg
         private Stream _stream;
         private bool _leaveOpen;
 
+        public VorbisConfig Config { get; }
         public bool IsDisposed { get; private set; }
 
-        protected PageReaderBase(Stream stream, bool leaveOpen)
+        protected PageReaderBase(VorbisConfig config, Stream stream, bool leaveOpen)
         {
-            _stream = stream;
+            Config = config ?? throw new ArgumentNullException(nameof(config));
+            _stream = stream ?? throw new ArgumentNullException(nameof(stream));
             _leaveOpen = leaveOpen;
         }
 
@@ -52,7 +54,7 @@ namespace NVorbis.Ogg
                 dataLen += headerBuf[i + 27];
             }
 
-            pageData = new PageData(dataLen + segCnt + 27, isResync);
+            pageData = Config.PageDataPool.Rent(dataLen + segCnt + 27, isResync);
             Span<byte> pageSpan = pageData.AsSpan();
 
             headerBuf.Slice(0, segCnt + 27).CopyTo(pageSpan);
@@ -72,7 +74,7 @@ namespace NVorbis.Ogg
             crc.Update(0);
             crc.Update(0);
 
-            Span<byte> pb1 = pageSpan.Slice(26, pageData.Length - 26);
+            Span<byte> pb1 = pageSpan.Slice(26, pageSpan.Length - 26);
             crc.Update(pb1);
             return crc.Test(BinaryPrimitives.ReadUInt32BigEndian(pageSpan.Slice(22, sizeof(uint))));
         }

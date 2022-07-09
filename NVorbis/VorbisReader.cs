@@ -26,26 +26,32 @@ namespace NVorbis
         /// </summary>
         /// <param name="fileName">The file to read from.</param>
         public VorbisReader(string fileName)
-            : this(File.OpenRead(fileName), true)
+            : this(VorbisConfig.Default, File.OpenRead(fileName), leaveOpen: false)
         {
         }
 
         /// <summary>
         /// Creates a new instance of <see cref="VorbisReader"/> reading from the specified stream, optionally taking ownership of it.
         /// </summary>
+        /// <param name="config">The configuration instance.</param>
         /// <param name="stream">The <see cref="Stream"/> to read from.</param>
         /// <param name="leaveOpen"><see langword="false"/> to dispose the stream when disposed, otherwise <see langword="true"/>.</param>
-        public VorbisReader(Stream stream, bool leaveOpen)
+        public VorbisReader(VorbisConfig config, Stream stream, bool leaveOpen)
         {
             _decoders = new List<IStreamDecoder>();
 
-            Ogg.ContainerReader containerReader = new(stream, leaveOpen);
+            Ogg.ContainerReader containerReader = new(config, stream, leaveOpen);
             containerReader.NewStreamCallback = ProcessNewStream;
 
             _leaveOpen = leaveOpen;
             _containerReader = containerReader;
 
             _streamDecoder = null!;
+        }
+
+        /// <inheritdoc cref="VorbisReader(VorbisConfig, Stream, bool)"/>
+        public VorbisReader(Stream stream, bool leaveOpen) : this(VorbisConfig.Default, stream, leaveOpen)
+        {
         }
 
         /// <inheritdoc />

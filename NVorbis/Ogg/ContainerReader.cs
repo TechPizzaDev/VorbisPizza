@@ -55,9 +55,10 @@ namespace NVorbis.Ogg
         /// <summary>
         /// Creates a new instance of <see cref="ContainerReader"/>.
         /// </summary>
+        /// <param name="config">The configuration instance.</param>
         /// <param name="stream">The <see cref="Stream"/> to read.</param>
         /// <param name="leaveOpen"><see langword="false"/> to close the stream when disposed, otherwise <see langword="true"/>.</param>
-        public ContainerReader(Stream stream, bool leaveOpen)
+        public ContainerReader(VorbisConfig config, Stream stream, bool leaveOpen)
         {
             if (stream == null) throw new ArgumentNullException(nameof(stream));
 
@@ -65,12 +66,12 @@ namespace NVorbis.Ogg
 
             if (stream.CanSeek)
             {
-                _reader = new PageReader(stream, leaveOpen, ProcessNewStream);
+                _reader = new PageReader(config, stream, leaveOpen, ProcessNewStream);
                 CanSeek = true;
             }
             else
             {
-                _reader = new ForwardOnlyPageReader(stream, leaveOpen, ProcessNewStream);
+                _reader = new ForwardOnlyPageReader(config, stream, leaveOpen, ProcessNewStream);
             }
         }
 
@@ -135,7 +136,7 @@ namespace NVorbis.Ogg
         /// <inheritdoc/>
         public void Dispose()
         {
-            foreach(WeakReference<IPacketProvider> provider in _packetProviders)
+            foreach (WeakReference<IPacketProvider> provider in _packetProviders)
             {
                 if (provider.TryGetTarget(out IPacketProvider? target))
                 {

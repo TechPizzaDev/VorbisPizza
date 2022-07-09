@@ -6,16 +6,17 @@ namespace NVorbis.Ogg
 {
     internal class PageData
     {
-        private byte[]? _pageData;
-        private int _refCount;
+        private readonly PageDataPool _pool;
+        internal ArraySegment<byte> _pageData;
+        internal int _refCount;
 
-        public bool IsResync { get; }
+        public bool IsResync { get; internal set; }
 
         public PageHeader Header
         {
             get
             {
-                if (_pageData == null)
+                if (_refCount <= 0)
                 {
                     ThrowObjectDisposed();
                 }
@@ -27,35 +28,33 @@ namespace NVorbis.Ogg
         {
             get
             {
-                if (_pageData == null)
+                if (_refCount <= 0)
                 {
                     ThrowObjectDisposed();
                 }
-                return _pageData.Length;
+                return _pageData.Count;
             }
         }
 
-        public PageData(int length, bool isResync)
+        internal PageData(PageDataPool pool)
         {
-            _refCount = 1;
+            _pool = pool ?? throw new ArgumentNullException(nameof(pool));
 
-            IsResync = isResync;
-
-            _pageData = new byte[length];
+            _pageData = Array.Empty<byte>();
         }
 
         public ArraySegment<byte> AsSegment()
         {
-            if (_pageData == null)
+            if (_refCount <= 0)
             {
                 ThrowObjectDisposed();
             }
-            return new ArraySegment<byte>(_pageData);
+            return _pageData;
         }
 
         public Span<byte> AsSpan()
         {
-            if (_pageData == null)
+            if (_refCount <= 0)
             {
                 ThrowObjectDisposed();
             }
@@ -128,7 +127,7 @@ namespace NVorbis.Ogg
 
         private void Dispose()
         {
-            _pageData = null;
+            _pool.Return(this);
         }
 
         [DoesNotReturn]

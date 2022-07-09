@@ -11,8 +11,8 @@ namespace NVorbis.Ogg
         private readonly Dictionary<int, IForwardOnlyPacketProvider> _packetProviders = new();
         private readonly NewStreamCallback _newStreamCallback;
 
-        public ForwardOnlyPageReader(Stream stream, bool leaveOpen, NewStreamCallback newStreamCallback)
-            : base(stream, leaveOpen)
+        public ForwardOnlyPageReader(VorbisConfig config, Stream stream, bool leaveOpen, NewStreamCallback newStreamCallback)
+            : base(config, stream, leaveOpen)
         {
             _newStreamCallback = newStreamCallback;
         }
