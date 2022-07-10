@@ -61,29 +61,21 @@ namespace NVorbis.Ogg
             return _pageData.AsSpan();
         }
 
-        public ArraySegment<byte>[] GetPackets()
+        public PageSlice GetPacket(uint packetIndex)
         {
-            ArraySegment<byte> segment = AsSegment();
-            PageHeader header = new(segment);
+            ReadOnlySpan<byte> pageSpan = AsSpan();
+            PageHeader header = new(pageSpan);
             header.GetPacketCount(out ushort packetCount, out _, out _);
+            if (packetIndex > packetCount)
+            {
+                return default;
+            }
 
             byte segmentCount = header.SegmentCount;
-
-            ArraySegment<byte>[] packets = ReadPackets(
-                packetCount,
-                segment.Slice(27, segmentCount),
-                segment.Slice(27 + segmentCount, segment.Count - 27 - segmentCount));
-
-            return packets;
-        }
-
-        private static ArraySegment<byte>[] ReadPackets(ushort packetCount, Span<byte> segments, ArraySegment<byte> dataBuffer)
-        {
-            ArraySegment<byte>[] list = new ArraySegment<byte>[packetCount];
-            int listIdx = 0;
-            int dataIdx = 0;
+            ReadOnlySpan<byte> segments = pageSpan.Slice(27, segmentCount);
+            int packetIdx = 0;
+            int dataIdx = 27 + segments.Length;
             int size = 0;
-
             for (int i = 0; i < segments.Length; i++)
             {
                 byte seg = segments[i];
@@ -92,18 +84,21 @@ namespace NVorbis.Ogg
                 {
                     if (size > 0)
                     {
-                        list[listIdx++] = dataBuffer.Slice(dataIdx, size);
+                        if (packetIndex == packetIdx)
+                        {
+                            return new PageSlice(this, dataIdx, size);
+                        }
+                        packetIdx++;
                         dataIdx += size;
                     }
                     size = 0;
                 }
             }
-            if (size > 0)
+            if (size > 0 && packetIndex == packetIdx)
             {
-                list[listIdx] = dataBuffer.Slice(dataIdx, size);
+                return new PageSlice(this, dataIdx, size);
             }
-
-            return list;
+            return default;
         }
 
         public void IncrementRef()

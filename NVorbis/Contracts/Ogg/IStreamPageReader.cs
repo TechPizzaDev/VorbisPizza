@@ -9,12 +9,12 @@ namespace NVorbis.Contracts.Ogg
 
         void AddPage(PageData page, long pageOffset);
 
-        ArraySegment<byte>[] GetPagePackets(ulong pageIndex);
+        PageData GetPage(ulong pageIndex);
 
         ulong FindPage(long granulePos);
 
         bool GetPage(
-            ulong pageIndex, 
+            ulong pageIndex,
             out long granulePos,
             out bool isResync,
             out bool isContinuation, 

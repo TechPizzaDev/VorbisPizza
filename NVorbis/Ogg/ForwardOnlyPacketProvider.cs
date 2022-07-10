@@ -18,7 +18,7 @@ namespace NVorbis.Ogg
         private bool _isPacketFinished;
 
         private List<PageSlice> _packetPages = new();
-        private PacketDataPart[] _packetParts = Array.Empty<PacketDataPart>();
+        private PacketData[] _packetParts = Array.Empty<PacketData>();
         private bool _isDisposed;
 
         public ForwardOnlyPacketProvider(IPageReader reader, int streamSerial)
@@ -71,7 +71,7 @@ namespace NVorbis.Ogg
                 pageData.DecrementRef();
                 return false;
             }
-            
+
             _pageQueue.Enqueue((pageData, isResync));
 
             return true;
@@ -212,7 +212,7 @@ namespace NVorbis.Ogg
             }
 
             // last, save off our state and return true
-            ArraySegment<PacketDataPart> packetParts = GetPacketParts(_packetPages.Count);
+            ArraySegment<PacketData> packetParts = GetPacketParts(_packetPages.Count);
 
             VorbisPacket packet = new(this, packetParts)
             {
@@ -225,7 +225,7 @@ namespace NVorbis.Ogg
             _packetIndex = packetIndex;
             _isEndOfStream |= isEos;
             _isPacketFinished = false;
-            packet.Reset();
+
             return packet;
         }
 
@@ -263,7 +263,7 @@ namespace NVorbis.Ogg
             return true;
         }
 
-        private ArraySegment<PacketDataPart> GetPacketParts(int count)
+        private ArraySegment<PacketData> GetPacketParts(int count)
         {
             if (_packetParts.Length < count)
             {
@@ -272,10 +272,10 @@ namespace NVorbis.Ogg
 
                 for (int i = previousLength; i < _packetParts.Length; i++)
                 {
-                    _packetParts[i] = new PacketDataPart(i, 0);
+                    _packetParts[i] = new PacketData(new PacketLocation(i, 0));
                 }
             }
-            return new ArraySegment<PacketDataPart>(_packetParts, 0, count);
+            return new ArraySegment<PacketData>(_packetParts, 0, count);
         }
 
         private static int GetPacketLength(ReadOnlySpan<byte> pageData, ref int packetIndex)
@@ -294,19 +294,19 @@ namespace NVorbis.Ogg
             return len;
         }
 
-        public ArraySegment<byte> GetPacketData(PacketDataPart dataPart)
+        public PageSlice GetPacketData(PacketLocation location)
         {
-            ulong packetIndex = dataPart.PageIndex;
+            ulong packetIndex = location.PageIndex;
             if (packetIndex < (ulong)_packetPages.Count)
             {
                 PageSlice slice = _packetPages[(int)packetIndex];
-                ArraySegment<byte> segment = slice.AsSegment();
-                return segment;
+                slice.Page.IncrementRef();
+                return slice;
             }
-            return ArraySegment<byte>.Empty;
+            return default;
         }
 
-        public void FinishPacket(in VorbisPacket packet)
+        public void FinishPacket(ref VorbisPacket packet)
         {
             _isPacketFinished = true;
         }

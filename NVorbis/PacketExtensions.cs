@@ -4,18 +4,10 @@ using System.IO;
 namespace NVorbis
 {
     /// <summary>
-    /// Provides extension methods for NVorbis types.
+    /// Provides extension methods for <see cref="VorbisPacket"/>.
     /// </summary>
     public static class PacketExtensions
     {
-        /// <summary>
-        /// Frees the buffers and caching for the packet instance.
-        /// </summary>
-        public static void Finish(in this VorbisPacket packet)
-        {
-            packet.PacketProvider.FinishPacket(packet);
-        }
-
         /// <summary>
         /// Reads into the specified buffer.
         /// </summary>

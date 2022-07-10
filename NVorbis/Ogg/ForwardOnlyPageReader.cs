@@ -52,10 +52,8 @@ namespace NVorbis.Ogg
                     return true;
                 }
 
-                if (_packetProviders.Remove(streamSerial, out pp))
-                {
-                    pp.Dispose();
-                }
+                pp.Dispose();
+                _packetProviders.Remove(streamSerial);
             }
             return false;
         }

@@ -5,7 +5,7 @@ namespace NVorbis.Ogg
     /// <summary>
     /// Represents the location of a packet within a logical stream.
     /// </summary>
-    public readonly struct PacketDataPart : IEquatable<PacketDataPart>
+    public readonly struct PacketLocation : IEquatable<PacketLocation>
     {
         /// <summary>
         /// The maximum value of <see cref="PageIndex"/>.
@@ -30,14 +30,14 @@ namespace NVorbis.Ogg
         public byte PacketIndex => (byte)(_value & 0xff);
 
         /// <summary>
-        /// Constructs the <see cref="PacketDataPart"/> with the given values.
+        /// Constructs the <see cref="PacketLocation"/> with the given values.
         /// </summary>
         /// <param name="pageIndex">The page index. Cannot be greater than <see cref="MaxPacketIndex"/>.</param>
         /// <param name="packetIndex">The packet index. Cannot be greater than <see cref="MaxPacketIndex"/>.</param>
         /// <exception cref="ArgumentOutOfRangeException">
         /// <paramref name="pageIndex"/> or <paramref name="packetIndex"/> was out of the allowed range.
         /// </exception>
-        public PacketDataPart(ulong pageIndex, uint packetIndex)
+        public PacketLocation(ulong pageIndex, uint packetIndex)
         {
             if (pageIndex > MaxPageIndex)
                 throw new ArgumentOutOfRangeException(nameof(packetIndex));
@@ -48,13 +48,13 @@ namespace NVorbis.Ogg
             _value = (pageIndex << 8) | packetIndex;
         }
 
-        /// <inheritdoc cref="PacketDataPart(ulong, uint)"/>
-        public PacketDataPart(long pageIndex, int packetIndex) : this((ulong)pageIndex, (uint)packetIndex)
+        /// <inheritdoc cref="PacketLocation(ulong, uint)"/>
+        public PacketLocation(long pageIndex, int packetIndex) : this((ulong)pageIndex, (uint)packetIndex)
         {
         }
 
         /// <inheritdoc />
-        public bool Equals(PacketDataPart other)
+        public bool Equals(PacketLocation other)
         {
             return _value == other._value;
         }
@@ -62,7 +62,7 @@ namespace NVorbis.Ogg
         /// <inheritdoc />
         public override bool Equals(object? obj)
         {
-            return obj is PacketDataPart other && Equals(other);
+            return obj is PacketLocation other && Equals(other);
         }
 
         /// <inheritdoc />

@@ -29,16 +29,16 @@ namespace NVorbis
         public IPacketProvider PacketProvider { get; }
 
         /// <summary>
-        /// Gets the packet data parts that represent the position in the stream.
+        /// Gets the packet data parts that represent the data in the stream.
         /// </summary>
-        public ArraySegment<PacketDataPart> DataParts { get; }
+        public ArraySegment<PacketData> DataParts { get; }
 
         /// <summary>
         /// Creates a new and readable <see cref="VorbisPacket"/>.
         /// </summary>
         /// <param name="packetProvider">The packet provider.</param>
         /// <param name="dataParts">The packet data parts.</param>
-        public VorbisPacket(IPacketProvider packetProvider, ArraySegment<PacketDataPart> dataParts) : this()
+        public VorbisPacket(IPacketProvider packetProvider, ArraySegment<PacketData> dataParts) : this()
         {
             PacketProvider = packetProvider;
             DataParts = dataParts;
@@ -120,6 +120,19 @@ namespace NVorbis
             }
         }
 
+        private void SetPagePart(int partIndex)
+        {
+            ref PacketData dataPart = ref DataParts.Get(partIndex);
+            if (dataPart.Slice.Page == null)
+            {
+                dataPart.Slice = PacketProvider.GetPacketData(dataPart.Location);
+            }
+
+            ArraySegment<byte> segment = dataPart.Slice.AsSegment();
+            SetData(segment);
+            _totalBits += segment.Count * 8;
+        }
+
         /// <summary>
         /// Resets the read buffers to the beginning of the packet.
         /// </summary>
@@ -129,11 +142,10 @@ namespace NVorbis
             _bitCount = 0;
             _overflowBits = 0;
             _readBits = 0;
-
             _dataPartIndex = 0;
-            ArraySegment<byte> data = PacketProvider.GetPacketData(DataParts[0]);
-            SetData(data);
-            _totalBits = data.Count * 8;
+            _totalBits = 0;
+
+            SetData(Array.Empty<byte>());
         }
 
         /// <summary>
@@ -298,9 +310,7 @@ namespace NVorbis
             int dataPartIndex = _dataPartIndex++;
             if (dataPartIndex < DataParts.Count)
             {
-                ArraySegment<byte> data = PacketProvider.GetPacketData(DataParts[dataPartIndex]);
-                SetData(data);
-                _totalBits += data.Count * 8;
+                SetPagePart(dataPartIndex);
                 return true;
             }
 
@@ -342,6 +352,24 @@ namespace NVorbis
             while (destination.Length > 0);
 
             return length - destination.Length;
+        }
+
+        /// <summary>
+        /// Frees the buffers and caching for the packet instance.
+        /// </summary>
+        public void Finish()
+        {
+            for (int i = 0; i < DataParts.Count; i++)
+            {
+                ref PacketData packetData = ref DataParts.Get(i);
+                if (packetData.Slice.Page != null)
+                {
+                    packetData.Slice.Page.DecrementRef();
+                    packetData.Slice = default;
+                }
+            }
+
+            PacketProvider.FinishPacket(ref this);
         }
 
         /// <summary>

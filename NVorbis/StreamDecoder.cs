@@ -104,7 +104,7 @@ namespace NVorbis
             }
             finally
             {
-                packet.Reset();
+                packet.Finish();
             }
         }
 

@@ -49,16 +49,16 @@ namespace NVorbis.Contracts
         long GetGranuleCount();
 
         /// <summary>
-        /// Gets packet data for the requested position.
+        /// Gets packet data for the requested location.
         /// </summary>
-        /// <param name="dataPart">The packet data position.</param>
-        /// <returns>The packet data segment.</returns>
-        ArraySegment<byte> GetPacketData(PacketDataPart dataPart);
+        /// <param name="location">The packet data location.</param>
+        /// <returns>The packet data slice.</returns>
+        PageSlice GetPacketData(PacketLocation location);
 
         /// <summary>
         /// Used to finish a packet. Using a finished packet is undefined behavior.
         /// </summary>
         /// <param name="packet">The packet to finish.</param>
-        void FinishPacket(in VorbisPacket packet);
+        void FinishPacket(ref VorbisPacket packet);
     }
 }

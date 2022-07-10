@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using NVorbis.Contracts.Ogg;
 
 namespace NVorbis.Ogg
@@ -8,14 +9,15 @@ namespace NVorbis.Ogg
     {
         private readonly IPageReader _reader;
         private readonly List<long> _pageOffsets = new();
-        
+
         private bool _isDisposed;
 
         private int _lastSeqNbr;
         private ulong? _firstDataPageIndex;
         private long _maxGranulePos;
 
-        private ulong _lastPageIndex = PacketDataPart.MaxPageIndex;
+        private PageData? _lastPage;
+        private ulong _lastPageIndex = PacketLocation.MaxPageIndex;
         private long _lastPageGranulePos;
         private bool _lastPageIsResync;
         private bool _lastPageIsContinuation;
@@ -23,8 +25,6 @@ namespace NVorbis.Ogg
         private ushort _lastPagePacketCount;
         private int _lastPageOverhead;
 
-        private ArraySegment<byte>[]? _cachedPagePackets;
-        
         public Contracts.IPacketProvider PacketProvider { get; private set; }
 
         public StreamPageReader(IPageReader pageReader, int streamSerial)
@@ -96,11 +96,12 @@ namespace NVorbis.Ogg
             _lastSeqNbr = header.SequenceNumber;
         }
 
-        public ArraySegment<byte>[] GetPagePackets(ulong pageIndex)
+        public PageData GetPage(ulong pageIndex)
         {
-            if (_cachedPagePackets != null && _lastPageIndex == pageIndex)
+            if (_lastPage != null && _lastPageIndex == pageIndex)
             {
-                return _cachedPagePackets;
+                _lastPage.IncrementRef();
+                return _lastPage;
             }
 
             long pageOffset = _pageOffsets[(int)pageIndex];
@@ -114,12 +115,13 @@ namespace NVorbis.Ogg
             {
                 if (_reader.ReadPageAt(pageOffset, out PageData? page))
                 {
-                    ArraySegment<byte>[] packets = page.GetPackets();
                     if (pageIndex == _lastPageIndex)
                     {
-                        _cachedPagePackets = packets;
+                        Debug.Assert(_lastPage == null);
+                        _lastPage = page;
+                        _lastPage.IncrementRef();
                     }
-                    return packets;
+                    return page;
                 }
                 throw new ArgumentOutOfRangeException(nameof(pageIndex));
             }
@@ -306,8 +308,13 @@ namespace NVorbis.Ogg
         }
 
         public bool GetPage(
-            ulong pageIndex, out long granulePos, out bool isResync, out bool isContinuation, out bool isContinued,
-            out ushort packetCount, out int pageOverhead)
+            ulong pageIndex,
+            out long granulePos,
+            out bool isResync,
+            out bool isContinuation,
+            out bool isContinued,
+            out ushort packetCount,
+            out int pageOverhead)
         {
             if (_lastPageIndex == pageIndex)
             {
@@ -329,23 +336,17 @@ namespace NVorbis.Ogg
                     {
                         break;
                     }
-                    try
+                    // if we found our page, return it from here so we don't have to do further processing
+                    if (pageIndex < (ulong)_pageOffsets.Count)
                     {
-                        // if we found our page, return it from here so we don't have to do further processing
-                        if (pageIndex < (ulong)_pageOffsets.Count)
-                        {
-                            isResync = pageData.IsResync;
-
-                            ReadPageData(
-                                pageData.Header, pageIndex,
-                                out granulePos, out isContinuation, out isContinued, out packetCount, out pageOverhead);
-                            return true;
-                        }
+                        isResync = pageData.IsResync;
+                    
+                        ReadPageData(
+                            pageData.Header, pageData, pageIndex,
+                            out granulePos, out isContinuation, out isContinued, out packetCount, out pageOverhead);
+                        return true;
                     }
-                    finally
-                    {
-                        pageData.DecrementRef();
-                    }
+                    pageData.DecrementRef();
                 }
             }
             finally
@@ -375,8 +376,9 @@ namespace NVorbis.Ogg
                         PageHeader header = new(headerBuffer);
 
                         _lastPageIsResync = isResync;
+                        
                         ReadPageData(
-                            header, pageIndex,
+                            header, null, pageIndex,
                             out granulePos, out isContinuation, out isContinued, out packetCount, out pageOverhead);
                         return true;
                     }
@@ -397,12 +399,14 @@ namespace NVorbis.Ogg
         }
 
         private void ReadPageData(
-            PageHeader header, ulong pageIndex,
+            PageHeader header, PageData? pageData, ulong pageIndex,
             out long granulePos, out bool isContinuation, out bool isContinued, out ushort packetCount, out int pageOverhead)
         {
             header.GetPacketCount(out packetCount, out _, out isContinued);
 
-            _cachedPagePackets = null;
+            _lastPage?.DecrementRef();
+            _lastPage = pageData;
+
             _lastPageGranulePos = granulePos = header.GranulePosition;
             _lastPageIsContinuation = isContinuation = (header.PageFlags & PageFlags.ContinuesPacket) != 0;
             _lastPageIsContinued = isContinued;
@@ -430,7 +434,8 @@ namespace NVorbis.Ogg
             {
                 if (disposing)
                 {
-                    // TODO: dispose managed state (managed objects)
+                    _lastPage?.DecrementRef();
+                    _lastPage = null;
                 }
                 _isDisposed = true;
             }

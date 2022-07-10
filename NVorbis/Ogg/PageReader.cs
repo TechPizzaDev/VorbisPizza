@@ -87,10 +87,8 @@ namespace NVorbis.Ogg
                 _streamReaders.Add(streamSerial, streamReader);
                 if (!_newStreamCallback.Invoke(streamReader.PacketProvider))
                 {
-                    if (_streamReaders.Remove(streamSerial, out IStreamPageReader? reader))
-                    {
-                        reader.Dispose();
-                    }
+                    streamReader.Dispose();
+                    _streamReaders.Remove(streamSerial);
                     return false;
                 }
             }
@@ -205,8 +203,14 @@ namespace NVorbis.Ogg
 
         protected override void Dispose(bool disposing)
         {
-            if (!IsDisposed)
+            if (disposing && !IsDisposed)
             {
+                foreach (KeyValuePair<int, IStreamPageReader> kvp in _streamReaders)
+                {
+                    kvp.Value.Dispose();
+                }
+                _streamReaders.Clear();
+
                 ClearLastPage();
             }
             base.Dispose(disposing);
