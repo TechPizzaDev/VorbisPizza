@@ -67,7 +67,7 @@ namespace NVorbis
             Huffman huffman = InitTree(ref packet, out _maxBits);
             _prefixList = huffman.PrefixTree;
             _prefixBitLength = huffman.TableBits;
-            _overflowList = huffman.OverflowList ?? Array.Empty<HuffmanListNode>();
+            _overflowList = huffman.OverflowList;
 
             _lookupTable = InitLookupTable(ref packet);
         }

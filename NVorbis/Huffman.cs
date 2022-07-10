@@ -46,16 +46,23 @@ namespace NVorbis
 
             HuffmanListNode[] prefixList = new HuffmanListNode[1 << tableBits];
 
-            List<HuffmanListNode>? overflowList = null;
+            HuffmanListNode[] overflowList = Array.Empty<HuffmanListNode>();
+            int overflowIndex = 0;
+
             for (int i = 0; i < list.Length && list[i].Length < 99999; i++)
             {
                 int itemBits = list[i].Length;
                 if (itemBits > tableBits)
                 {
-                    overflowList = new List<HuffmanListNode>(list.Length - i);
+                    int maxOverflowLength = list.Length - i;
+                    if (overflowList.Length < maxOverflowLength)
+                        overflowList = new HuffmanListNode[maxOverflowLength];
+                    
+                    overflowIndex = 0;
+
                     for (; i < list.Length && list[i].Length < 99999; i++)
                     {
-                        overflowList.Add(list[i]);
+                        overflowList[overflowIndex++] = list[i];
                     }
                 }
                 else
@@ -70,11 +77,16 @@ namespace NVorbis
                 }
             }
 
+            if (overflowIndex < overflowList.Length)
+            {
+                Array.Resize(ref overflowList, overflowIndex);
+            }
+
             return new Huffman
             {
                 TableBits = tableBits,
                 PrefixTree = prefixList,
-                OverflowList = overflowList?.ToArray() ?? Array.Empty<HuffmanListNode>()
+                OverflowList = overflowList,
             };
         }
     }
