@@ -1,10 +1,12 @@
 
+using System;
+
 namespace NVorbis.Ogg
 {
     /// <summary>
     /// Represents a packet location and potentially a data slice.
     /// </summary>
-    public struct PacketData
+    public struct PacketData : IEquatable<PacketData>
     {
         /// <summary>
         /// Gets the packet location for this packet data.
@@ -33,6 +35,24 @@ namespace NVorbis.Ogg
         /// <inheritdoc cref="PacketData(PacketLocation, PageSlice)"/>
         public PacketData(PacketLocation location) : this(location, default)
         {
+        }
+
+        /// <inheritdoc/>
+        public bool Equals(PacketData other)
+        {
+            return Location.Equals(other.Location);
+        }
+        
+        /// <inheritdoc />
+        public override bool Equals(object? obj)
+        {
+            return obj is PacketData other && Equals(other);
+        }
+
+        /// <inheritdoc />
+        public override int GetHashCode()
+        {
+            return Location.GetHashCode();
         }
     }
 }

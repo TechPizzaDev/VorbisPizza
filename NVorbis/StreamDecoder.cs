@@ -6,13 +6,14 @@ using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 using NVorbis.Contracts;
+using NVorbis.Ogg;
 
 namespace NVorbis
 {
     /// <summary>
     /// Implements a stream decoder for Vorbis data.
     /// </summary>
-    public sealed class StreamDecoder : IStreamDecoder
+    public sealed class StreamDecoder : IStreamDecoder, IPacketGranuleCountProvider
     {
         private IPacketProvider _packetProvider;
         private StreamStats _stats;
@@ -364,9 +365,6 @@ namespace NVorbis
                 {
                     if (_eosFound)
                     {
-                        _nextPacketBuf = null;
-                        _prevPacketBuf = null;
-
                         // no more samples, so just return
                         break;
                     }
@@ -718,13 +716,13 @@ namespace NVorbis
             if (samplePosition == 0)
             {
                 // short circuit for the looping case...
-                _packetProvider.SeekTo(0, 0, GetPacketGranules);
+                _packetProvider.SeekTo(0, 0, this);
                 rollForward = 0;
             }
             else
             {
                 // seek the stream to the correct position
-                long pos = _packetProvider.SeekTo(samplePosition, 1, GetPacketGranules);
+                long pos = _packetProvider.SeekTo(samplePosition, 1, this);
                 rollForward = (int)(samplePosition - pos);
             }
 
@@ -742,7 +740,7 @@ namespace NVorbis
                     throw new InvalidOperationException(
                         "Could not read pre-roll packet!  Try seeking again prior to reading more samples.");
                 }
-                _prevPacketStart = _prevPacketStop;
+                _prevPacketStart = _prevPacketStop; 
                 _currentPosition = samplePosition;
                 return;
             }
@@ -762,7 +760,7 @@ namespace NVorbis
             _currentPosition = samplePosition;
         }
 
-        private int GetPacketGranules(ref VorbisPacket curPacket, bool isLastInPage)
+        int IPacketGranuleCountProvider.GetPacketGranuleCount(ref VorbisPacket curPacket, bool isLastInPage)
         {
             try
             {
@@ -800,6 +798,9 @@ namespace NVorbis
         {
             (_packetProvider as IDisposable)?.Dispose();
             _packetProvider = null!;
+
+            _nextPacketBuf = null;
+            _prevPacketBuf = null;
         }
 
         #region Properties

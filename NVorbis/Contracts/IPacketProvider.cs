@@ -4,14 +4,6 @@ using NVorbis.Ogg;
 namespace NVorbis.Contracts
 {
     /// <summary>
-    /// Encapsulates a method that calculates the number of granules decodable from the specified packet.
-    /// </summary>
-    /// <param name="packet">The <see cref="VorbisPacket"/> to calculate.</param>
-    /// <param name="isLastInPage"><see langword="true"/> if the packet is the last in the page, otherise <see langword="false"/>.</param>
-    /// <returns>The calculated number of granules.</returns>
-    public delegate int GetPacketGranuleCount(ref VorbisPacket packet, bool isLastInPage);
-
-    /// <summary>
     /// Describes an interface for a packet stream reader.
     /// </summary>
     public interface IPacketProvider : IDisposable
@@ -37,11 +29,9 @@ namespace NVorbis.Contracts
         /// </summary>
         /// <param name="granulePos">The granule position to seek to.</param>
         /// <param name="preRoll">The number of packets to seek backward prior to the granule position.</param>
-        /// <param name="getPacketGranuleCount">
-        /// A <see cref="GetPacketGranuleCount"/> delegate that returns the number of granules in the specified packet.
-        /// </param>
+        /// <param name="packetGranuleCountProvider">A provider that calculates the number of granules in packets.</param>
         /// <returns>The granule position at the start of the packet containing the requested position.</returns>
-        long SeekTo(long granulePos, uint preRoll, GetPacketGranuleCount getPacketGranuleCount);
+        long SeekTo(long granulePos, uint preRoll, IPacketGranuleCountProvider packetGranuleCountProvider);
 
         /// <summary>
         /// Gets the total number of granule available in the stream.

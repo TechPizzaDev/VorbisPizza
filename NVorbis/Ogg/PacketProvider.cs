@@ -50,7 +50,7 @@ namespace NVorbis.Ogg
             return GetNextPacket(ref _pageIndex, ref _packetIndex);
         }
 
-        public long SeekTo(long granulePos, uint preRoll, GetPacketGranuleCount getPacketGranuleCount)
+        public long SeekTo(long granulePos, uint preRoll, IPacketGranuleCountProvider packetGranuleCountProvider)
         {
             if (_reader == null) throw new ObjectDisposedException(nameof(PacketProvider));
 
@@ -76,7 +76,7 @@ namespace NVorbis.Ogg
                 }
                 else
                 {
-                    packetIndex = FindPacket(pageIndex, ref granulePos, getPacketGranuleCount);
+                    packetIndex = FindPacket(pageIndex, ref granulePos, packetGranuleCountProvider);
                 }
                 packetIndex -= preRoll;
             }
@@ -98,7 +98,7 @@ namespace NVorbis.Ogg
             return granulePos;
         }
 
-        private uint FindPacket(ulong pageIndex, ref long granulePos, GetPacketGranuleCount getPacketGranuleCount)
+        private uint FindPacket(ulong pageIndex, ref long granulePos, IPacketGranuleCountProvider packetGranuleCountProvider)
         {
             // pageIndex is the correct page; we just need to figure out which packet
             int firstRealPacket = 0;
@@ -146,7 +146,7 @@ namespace NVorbis.Ogg
                     throw new System.IO.InvalidDataException("Could not find end of continuation!");
                 }
 
-                endGP -= getPacketGranuleCount(ref packet, isLastInPage);
+                endGP -= packetGranuleCountProvider.GetPacketGranuleCount(ref packet, isLastInPage);
                 isLastInPage = false;
             }
 
@@ -169,7 +169,7 @@ namespace NVorbis.Ogg
                     throw new System.IO.InvalidDataException("Could not load previous packet!");
                 }
 
-                granulePos = endGP - getPacketGranuleCount(ref packet, false);
+                granulePos = endGP - packetGranuleCountProvider.GetPacketGranuleCount(ref packet, false);
                 return uint.MaxValue;
             }
 
