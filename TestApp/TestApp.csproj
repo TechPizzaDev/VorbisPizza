@@ -1,16 +1,17 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <TargetFramework>net6.0</TargetFramework>
-    <NeutralLanguage>en</NeutralLanguage>
-    <OutputType>Exe</OutputType>
-    <AssemblyName>TestApp</AssemblyName>
-    <RootNamespace>TestApp</RootNamespace>
-    <StartupObject>TestApp.Program</StartupObject>
-    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
-    <IsPackable>false</IsPackable>
-  </PropertyGroup>
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <TargetFramework>net6.0</TargetFramework>
+        <NeutralLanguage>en</NeutralLanguage>
+        <OutputType>Exe</OutputType>
+        <AssemblyName>TestApp</AssemblyName>
+        <RootNamespace>TestApp</RootNamespace>
+        <StartupObject>TestApp.Program</StartupObject>
+        <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+        <IsPackable>false</IsPackable>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    </PropertyGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\NVorbis\NVorbis.csproj" />
-  </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\NVorbis\NVorbis.csproj" />
+    </ItemGroup>
 </Project>

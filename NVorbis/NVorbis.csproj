@@ -1,37 +1,36 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <TargetFramework>net6.0</TargetFramework>
-    <RootNamespace>NVorbis</RootNamespace>
-    <Description>A fully managed implementation of a Xiph.org Foundation Ogg Vorbis decoder.</Description>
-    <Company>Andrew Ward</Company>
-    <Copyright>Copyright © Andrew Ward 2021</Copyright>
-    <AssemblyVersion>0.10.4.0</AssemblyVersion>
-    <FileVersion>0.10.4.0</FileVersion>
-    <Authors>Andrew Ward</Authors>
-    <Version>0.10.4</Version>
-    <PackageLicenseUrl></PackageLicenseUrl>
-    <PackageProjectUrl>https://github.com/NVorbis/NVorbis</PackageProjectUrl>
-    <PackageReleaseNotes>- Fix seeking issues
-- Fix issue where loading a file would throw due to split packets in the header pages</PackageReleaseNotes>
-    <PackageTags>ogg vorbis xiph audio c# sound .NET</PackageTags>
-    <NeutralLanguage>en</NeutralLanguage>
-    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
-    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <RepositoryUrl>https://github.com/NVorbis/NVorbis</RepositoryUrl>
-    <RepositoryType>git</RepositoryType>
-    <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <PackageLicenseFile>LICENSE</PackageLicenseFile>
-    <IncludeSymbols>true</IncludeSymbols>
-    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
-    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <Nullable>enable</Nullable> 
-  </PropertyGroup>
+    <PropertyGroup>
+        <TargetFramework>net6.0</TargetFramework>
+        <RootNamespace>NVorbis</RootNamespace>
+        <Description>A fully managed implementation of a Xiph.org Foundation Ogg Vorbis decoder.</Description>
+        <Copyright>Copyright © TechPizza 2022</Copyright>
+        <AssemblyName>VorbisPizza</AssemblyName>
+        <AssemblyVersion>1.0.0.0</AssemblyVersion>
+        <FileVersion>1.0.0.0</FileVersion>
+        <Authors>Andrew Ward;TechPizza</Authors>
+        <Version>1.0.0</Version>
+		<PackageId>VorbisPizza</PackageId>
+        <PackageProjectUrl>https://github.com/TechPizzaDev/VorbisPizza</PackageProjectUrl>
+        <PackageReleaseNotes>-First release</PackageReleaseNotes>
+        <PackageTags>Ogg;Vorbis;Xiph;Audio;Sound</PackageTags>
+        <NeutralLanguage>en</NeutralLanguage>
+        <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+        <RepositoryUrl>https://github.com/TechPizzaDev/VorbisPizza</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <PackageLicenseFile>LICENSE</PackageLicenseFile>
+        <IncludeSymbols>true</IncludeSymbols>
+        <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+        <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
 
-  <ItemGroup>
-    <None Include="..\LICENSE">
-      <Pack>True</Pack>
-      <PackagePath></PackagePath>
-    </None>
-  </ItemGroup>
+    <ItemGroup>
+        <None Include="..\LICENSE">
+            <Pack>True</Pack>
+            <PackagePath></PackagePath>
+        </None>
+    </ItemGroup>
 </Project>
