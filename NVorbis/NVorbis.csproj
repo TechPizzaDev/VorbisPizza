@@ -10,6 +10,7 @@
         <FileVersion>1.0.0.0</FileVersion>
         <Authors>Andrew Ward;TechPizza</Authors>
         <Version>1.0.0</Version>
+		<Title>VorbisPizza</Title>
 		<PackageId>TechPizza.VorbisPizza</PackageId>
         <PackageProjectUrl>https://github.com/TechPizzaDev/VorbisPizza</PackageProjectUrl>
         <PackageReleaseNotes>-First release</PackageReleaseNotes>
