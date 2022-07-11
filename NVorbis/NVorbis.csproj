@@ -4,12 +4,13 @@
         <RootNamespace>NVorbis</RootNamespace>
         <Description>A fully managed implementation of a Xiph.org Foundation Ogg Vorbis decoder.</Description>
         <Copyright>Copyright © TechPizza 2022</Copyright>
+		<Company>TechPizza</Company>
         <AssemblyName>VorbisPizza</AssemblyName>
         <AssemblyVersion>1.0.0.0</AssemblyVersion>
         <FileVersion>1.0.0.0</FileVersion>
         <Authors>Andrew Ward;TechPizza</Authors>
         <Version>1.0.0</Version>
-		<PackageId>VorbisPizza</PackageId>
+		<PackageId>TechPizza.VorbisPizza</PackageId>
         <PackageProjectUrl>https://github.com/TechPizzaDev/VorbisPizza</PackageProjectUrl>
         <PackageReleaseNotes>-First release</PackageReleaseNotes>
         <PackageTags>Ogg;Vorbis;Xiph;Audio;Sound</PackageTags>
