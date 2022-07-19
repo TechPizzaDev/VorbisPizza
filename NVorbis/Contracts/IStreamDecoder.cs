@@ -105,7 +105,7 @@ namespace NVorbis.Contracts
         void SeekTo(long samplePosition, SeekOrigin seekOrigin = SeekOrigin.Begin);
 
         /// <summary>
-        /// Reads samples into the specified buffer.
+        /// Reads interleaved samples into the specified buffer.
         /// </summary>
         /// <param name="buffer">
         /// The buffer to read the samples into. Length must be a multiple of <see cref="Channels"/>.
@@ -118,5 +118,22 @@ namespace NVorbis.Contracts
         /// Left, Right, Left, Right, Left, Right
         /// </remarks>
         int Read(Span<float> buffer);
+
+        /// <summary>
+        /// Reads non-interleaved samples into the specified buffer.
+        /// </summary>
+        /// <param name="buffer">
+        /// The buffer to read the samples into. Length must be a multiple of <see cref="Channels"/>.
+        /// </param>
+        /// <param name="samplesToRead">
+        /// The amount of samples to read per channel.
+        /// </param>
+        /// <param name="stride">
+        /// The buffer stride for each channel.
+        /// </param>
+        /// <exception cref="ArgumentException">
+        /// Thrown when the buffer is too small or the length is not a multiple of <see cref="Channels"/>.
+        /// </exception>
+        int Read(Span<float> buffer, int samplesToRead, int stride);
     }
 }

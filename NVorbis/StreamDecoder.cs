@@ -339,9 +339,22 @@ namespace NVorbis
         #region Decoding
 
         /// <inheritdoc/>
-        public unsafe int Read(Span<float> buffer)
+        public int Read(Span<float> buffer)
         {
-            if (buffer.Length % _channels != 0)
+            return Read(buffer, buffer.Length, 0, interleave: true);
+        }
+
+        /// <inheritdoc/>
+        public int Read(Span<float> buffer, int samplesToRead, int stride)
+        {
+            return Read(buffer, samplesToRead, stride, interleave: true);
+        }
+
+        /// <inheritdoc/>
+        public unsafe int Read(Span<float> buffer, int samplesToRead, int stride, bool interleave)
+        {
+            int channels = _channels;
+            if (buffer.Length % channels != 0)
                 throw new ArgumentException("Length must be a multiple of Channels.", nameof(buffer));
 
             if (_packetProvider == null)
@@ -354,8 +367,8 @@ namespace NVorbis
             }
 
             // save off value to track when we're done with the request
-            nint idx = 0;
-            int tgt = buffer.Length;
+            int idx = 0;
+            int tgt = samplesToRead;
 
             // try to fill the buffer; drain the last buffer if EOS, resync, bad packet, or parameter change
             while (idx < tgt)
@@ -369,7 +382,7 @@ namespace NVorbis
                         break;
                     }
 
-                    if (!ReadNextPacket(idx / _channels, out long samplePosition))
+                    if (!ReadNextPacket(idx / channels, out long samplePosition))
                     {
                         // drain the current packet (the windowing will fade it out)
                         _prevPacketEnd = _prevPacketStop;
@@ -379,43 +392,53 @@ namespace NVorbis
                     if (samplePosition != -1 && !_hasPosition)
                     {
                         _hasPosition = true;
-                        _currentPosition = samplePosition - (_prevPacketEnd - _prevPacketStart) - idx / _channels;
+                        _currentPosition = samplePosition - (_prevPacketEnd - _prevPacketStart) - idx / channels;
                     }
                 }
 
                 // we read out the valid samples from the previous packet
-                nint copyLen = Math.Min((tgt - idx) / _channels, _prevPacketEnd - _prevPacketStart);
+                int copyLen = Math.Min((tgt - idx) / channels, _prevPacketEnd - _prevPacketStart);
                 if (copyLen > 0)
                 {
-                    fixed (float* target = buffer)
+                    if (interleave)
                     {
-                        if (ClipSamples)
+                        fixed (float* target = buffer)
                         {
-                            idx += ClippingCopyBuffer(target + idx, copyLen);
-                        }
-                        else
-                        {
-                            idx += CopyBuffer(target + idx, copyLen);
+                            if (ClipSamples)
+                            {
+                                ClippingCopyBuffer(target + idx, copyLen);
+                            }
+                            else
+                            {
+                                CopyBuffer(target + idx, copyLen);
+                            }
                         }
                     }
+                    else
+                    {
+                        CopyBufferContiguous(buffer.Slice(idx), copyLen, stride, ClipSamples);
+                    }
+
+                    idx += copyLen * channels;
+                    _prevPacketStart += copyLen;
                 }
             }
 
             // update the position
-            _currentPosition += idx / _channels;
+            _currentPosition += idx / channels;
 
             // return count of floats written
-            return (int)idx;
+            return idx;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
-        private unsafe nint ClippingCopyBuffer(float* target, nint count)
+        private unsafe void ClippingCopyBuffer(float* target, int count)
         {
-            Debug.Assert(_prevPacketBuf != null);
+            float[][]? prevPacketBuf = _prevPacketBuf;
+            Debug.Assert(prevPacketBuf != null);
 
-            float[][] prevPacketBuf = _prevPacketBuf;
-            nint channels = _channels;
-            nint j = 0;
+            int channels = _channels;
+            int j = 0;
 
             if (Sse.IsSupported)
             {
@@ -429,7 +452,7 @@ namespace NVorbis
                         float* prev0 = prev0Ptr + _prevPacketStart;
                         float* prev1 = prev1Ptr + _prevPacketStart;
 
-                        for (; j + 4 <= count; j += 4)
+                        for (; j + Vector128<float>.Count <= count; j += Vector128<float>.Count)
                         {
                             Vector128<float> p0 = Unsafe.ReadUnaligned<Vector128<float>>(prev0 + j);
                             Vector128<float> p1 = Unsafe.ReadUnaligned<Vector128<float>>(prev1 + j);
@@ -443,8 +466,8 @@ namespace NVorbis
                             ts0 = Utils.ClipValue(ts0, ref clipped);
                             ts1 = Utils.ClipValue(ts1, ref clipped);
 
-                            Unsafe.WriteUnaligned(target + j * 2 + 0, ts0);
-                            Unsafe.WriteUnaligned(target + j * 2 + 4, ts1);
+                            Unsafe.WriteUnaligned(target + j * 2, ts0);
+                            Unsafe.WriteUnaligned(target + j * 2 + Vector128<float>.Count, ts1);
                         }
                     }
                 }
@@ -454,7 +477,7 @@ namespace NVorbis
                     {
                         float* prev0 = prev0Ptr + _prevPacketStart;
 
-                        for (; j + 4 <= count; j += 4)
+                        for (; j + Vector128<float>.Count <= count; j += Vector128<float>.Count)
                         {
                             Vector128<float> p0 = Unsafe.ReadUnaligned<Vector128<float>>(prev0 + j);
                             p0 = Utils.ClipValue(p0, ref clipped);
@@ -467,49 +490,85 @@ namespace NVorbis
                 _hasClipped |= Sse.MoveMask(mask) != 0xf;
             }
 
-            for (nint ch = 0; ch < channels; ch++)
+            for (int ch = 0; ch < channels; ch++)
             {
                 fixed (float* prevPtr = prevPacketBuf[ch])
                 {
                     float* prev = prevPtr + _prevPacketStart;
                     float* tar = target + ch;
 
-                    for (nint i = j; i < count; i++)
+                    for (int i = j; i < count; i++)
                     {
                         tar[i * channels] = Utils.ClipValue(prev[i], ref _hasClipped);
                     }
                 }
             }
-
-            _prevPacketStart += (int)count;
-
-            return count * channels;
         }
 
-        private unsafe nint CopyBuffer(float* target, nint count)
+        private unsafe void CopyBuffer(float* target, int count)
         {
-            Debug.Assert(_prevPacketBuf != null);
+            float[][]? prevPacketBuf = _prevPacketBuf;
+            Debug.Assert(prevPacketBuf != null);
 
-            float[][] prevPacketBuf = _prevPacketBuf;
-            nint channels = _channels;
+            int channels = _channels;
 
-            for (nint ch = 0; ch < channels; ch++)
+            for (int ch = 0; ch < channels; ch++)
             {
                 fixed (float* prevPtr = prevPacketBuf[ch])
                 {
                     float* prev = prevPtr + _prevPacketStart;
                     float* tar = target + ch;
 
-                    for (nint i = 0; i < count; i++)
+                    for (int i = 0; i < count; i++)
                     {
                         tar[i * channels] = prev[i];
                     }
                 }
             }
+        }
 
-            _prevPacketStart += (int)count;
+        private unsafe void CopyBufferContiguous(Span<float> buffer, int count, int stride, bool clip)
+        {
+            float[][]? prevPacketBuf = _prevPacketBuf;
+            Debug.Assert(prevPacketBuf != null);
 
-            return count * channels;
+            for (int i = 0; i < _channels; i++)
+            {
+                Span<float> destination = buffer.Slice(i * stride, count);
+                Span<float> source = prevPacketBuf[i].AsSpan(_prevPacketStart, count);
+
+                if (clip)
+                {
+                    fixed (float* dst = destination)
+                    fixed (float* src = source)
+                    {
+                        int j = 0;
+
+                        if (Vector.IsHardwareAccelerated)
+                        {
+                            Vector<int> clipped = Vector<int>.Zero;
+
+                            for (; j + Vector<float>.Count <= count; j += Vector<float>.Count)
+                            {
+                                Vector<float> p0 = Unsafe.ReadUnaligned<Vector<float>>(src + j);
+                                p0 = Utils.ClipValue(p0, ref clipped);
+                                Unsafe.WriteUnaligned(dst + j, p0);
+                            }
+
+                            _hasClipped |= !Vector.EqualsAll(clipped, Vector<int>.Zero);
+                        }
+
+                        for (; j < count; j++)
+                        {
+                            dst[j] = Utils.ClipValue(src[j], ref _hasClipped);
+                        }
+                    }
+                }
+                else
+                {
+                    source.CopyTo(destination);
+                }
+            }
         }
 
         private bool ReadNextPacket(nint bufferedSamples, out long samplePosition)
@@ -740,7 +799,7 @@ namespace NVorbis
                     throw new InvalidOperationException(
                         "Could not read pre-roll packet!  Try seeking again prior to reading more samples.");
                 }
-                _prevPacketStart = _prevPacketStop; 
+                _prevPacketStart = _prevPacketStop;
                 _currentPosition = samplePosition;
                 return;
             }
