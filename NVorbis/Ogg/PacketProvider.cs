@@ -191,7 +191,7 @@ namespace NVorbis.Ogg
             ulong pgIdx = pageIndex;
             uint pktIdx = packetIndex;
 
-            while (pktIdx < (isContinuation ? 1 : 0))
+            while ((int)pktIdx < (isContinuation ? 1 : 0))
             {
                 // can't merge across resync
                 if (isContinuation && isResync) return false;
@@ -275,7 +275,10 @@ namespace NVorbis.Ogg
             // create the packet list and add the item to it
             PacketData[] dataParts = GetDataPartArray(DataPartInitialArraySize);
             int partCount = 0;
-            dataParts[partCount++] = new PacketData(new PacketLocation(pageIndex, packetIndex));
+
+            PacketLocation firstLocation = new(pageIndex, packetIndex);
+            PageSlice firstSlice = GetPacketData(firstLocation);
+            dataParts[partCount++] = new PacketData(firstLocation, firstSlice);
 
             // make sure we handle continuations
             bool isLastPacket;
@@ -323,7 +326,10 @@ namespace NVorbis.Ogg
                     {
                         Array.Resize(ref dataParts, dataParts.Length + 2);
                     }
-                    dataParts[partCount++] = new PacketData(new PacketLocation(contPageIdx, 0));
+
+                    PacketLocation location = new(contPageIdx, 0);
+                    PageSlice slice = GetPacketData(location);
+                    dataParts[partCount++] = new PacketData(location, slice);
                 }
 
                 // we're now the first packet in the final page, so we'll act like it...

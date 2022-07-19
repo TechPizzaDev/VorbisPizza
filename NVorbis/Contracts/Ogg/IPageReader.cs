@@ -9,6 +9,7 @@ namespace NVorbis.Contracts.Ogg
         void Lock();
         bool Release();
 
+        bool CanSeek { get; }
         long ContainerBits { get; }
         long WasteBits { get; }
 

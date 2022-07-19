@@ -17,8 +17,10 @@ namespace NVorbis.Ogg
 
         private Stream _stream;
         private bool _leaveOpen;
+        private long _streamPosition;
 
         public VorbisConfig Config { get; }
+
         public bool IsDisposed { get; private set; }
 
         protected PageReaderBase(VorbisConfig config, Stream stream, bool leaveOpen)
@@ -28,7 +30,9 @@ namespace NVorbis.Ogg
             _leaveOpen = leaveOpen;
         }
 
-        protected long StreamPosition => _stream?.Position ?? throw new ObjectDisposedException(nameof(PageReaderBase));
+        protected long StreamPosition => _streamPosition;
+
+        public bool CanSeek => _stream.CanSeek;
 
         public long ContainerBits { get; private set; }
 
@@ -211,11 +215,12 @@ namespace NVorbis.Ogg
             do
             {
                 int count = _stream.Read(buffer.Slice(totalRead));
-                totalRead += count;
                 if (count == 0)
                 {
                     break;
                 }
+                _streamPosition += count;
+                totalRead += count;
             }
             while (totalRead < buffer.Length);
             return totalRead;
@@ -242,7 +247,14 @@ namespace NVorbis.Ogg
             if (!CheckLock())
                 throw new InvalidOperationException("Must be locked prior to reading!");
 
-            return _stream.Seek(offset, SeekOrigin.Begin);
+            if (_streamPosition == offset)
+            {
+                return offset;
+            }
+
+            long result = _stream.Seek(offset, SeekOrigin.Begin);
+            _streamPosition = result;
+            return result;
         }
 
         protected virtual void PrepareStreamForNextPage()
@@ -292,7 +304,7 @@ namespace NVorbis.Ogg
                 {
                     if (VerifyHeader(headerBuf.Slice(i), ref cnt, true))
                     {
-                        if (VerifyPage(headerBuf.Slice(i, cnt), isResync, out pageData, out int bytesRead))
+                        if (VerifyPage(headerBuf.Slice(i, cnt), isResync, out PageData? page, out int bytesRead))
                         {
                             // one way or the other, we have to clear out the page's bytes from the queue (if queued)
                             ClearEnqueuedData(bytesRead);
@@ -300,13 +312,16 @@ namespace NVorbis.Ogg
                             // also, we need to let our inheritors have a chance to save state for next time
                             SaveNextPageSearch();
 
-                            int pageLength = pageData.Length;
+                            int pageLength = page.Length;
 
                             // pass it to our inheritor
-                            if (TryAddPage(pageData))
+                            if (TryAddPage(page))
                             {
+                                pageData = page;
                                 return true;
                             }
+
+                            page.DecrementRef();
 
                             // otherwise, the whole page is useless...
 
@@ -318,9 +333,9 @@ namespace NVorbis.Ogg
                             cnt = 0;
                             break;
                         }
-                        else if (pageData != null)
+                        else if (page != null)
                         {
-                            EnqueueData(pageData, bytesRead);
+                            EnqueueData(page, bytesRead);
                         }
                     }
                     WasteBits += 8;

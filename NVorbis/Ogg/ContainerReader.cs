@@ -44,7 +44,7 @@ namespace NVorbis.Ogg
         /// <summary>
         /// Gets whether the underlying stream can seek.
         /// </summary>
-        public bool CanSeek { get; }
+        public bool CanSeek => _reader.CanSeek;
 
         /// <inheritdoc/>
         public long WasteBits => _reader.WasteBits;
@@ -64,15 +64,7 @@ namespace NVorbis.Ogg
 
             _packetProviders = new List<WeakReference<IPacketProvider>>();
 
-            if (stream.CanSeek)
-            {
-                _reader = new PageReader(config, stream, leaveOpen, ProcessNewStream);
-                CanSeek = true;
-            }
-            else
-            {
-                _reader = new ForwardOnlyPageReader(config, stream, leaveOpen, ProcessNewStream);
-            }
+            _reader = new PageReader(config, stream, leaveOpen, ProcessNewStream);
         }
 
         /// <summary>

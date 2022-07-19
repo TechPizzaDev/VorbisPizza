@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Threading;
@@ -10,9 +11,10 @@ namespace NVorbis.Ogg
     internal sealed class PageReader : PageReaderBase
     {
         private readonly Dictionary<int, IStreamPageReader> _streamReaders = new();
+        private readonly List<IStreamPageReader> _readersToDispose = new();
         private readonly NewStreamCallback _newStreamCallback;
         private readonly object _readLock = new();
-        
+
         private PageData? _page;
         private long _pageOffset;
         private long _nextPageOffset;
@@ -76,7 +78,11 @@ namespace NVorbis.Ogg
                 // this is safe because the instance still has access to us for reading.
                 if ((pageFlags & PageFlags.EndOfStream) == PageFlags.EndOfStream)
                 {
-                    _streamReaders.Remove(streamSerial);
+                    if (_streamReaders.Remove(streamSerial, out IStreamPageReader? sprToDispose))
+                    {
+                        Debug.Assert(spr == sprToDispose);
+                        _readersToDispose.Add(spr);
+                    }
                 }
             }
             else
@@ -110,6 +116,7 @@ namespace NVorbis.Ogg
                 if (pageData != null)
                 {
                     // short circuit for when we've already loaded the page
+                    pageData.IncrementRef();
                     return true;
                 }
             }
@@ -140,6 +147,7 @@ namespace NVorbis.Ogg
                     return false;
                 }
 
+                pageData.IncrementRef();
                 _page = pageData;
                 return true;
             }
@@ -210,6 +218,12 @@ namespace NVorbis.Ogg
                     kvp.Value.Dispose();
                 }
                 _streamReaders.Clear();
+
+                foreach (IStreamPageReader spr in _readersToDispose)
+                {
+                    spr.Dispose();
+                }
+                _readersToDispose.Clear();
 
                 ClearLastPage();
             }

@@ -94,10 +94,26 @@ namespace NVorbis.Ogg
             }
 
             _lastSeqNbr = header.SequenceNumber;
+
+            pageData.IncrementRef();
+            _lastPage?.DecrementRef();
+            _lastPage = pageData;
+
+            _lastPageGranulePos = granulePosition;
+            _lastPageIsContinuation = (header.PageFlags & PageFlags.ContinuesPacket) != 0;
+            _lastPageIsContinued = isContinued;
+            _lastPagePacketCount = packetCount;
+            _lastPageOverhead = header.PageOverhead;
+            _lastPageIndex = (ulong)(_pageOffsets.Count - 1);
         }
 
         public PageData GetPage(ulong pageIndex)
         {
+            if (_isDisposed)
+            {
+                throw new ObjectDisposedException(GetType().Name);
+            }
+
             if (_lastPage != null && _lastPageIndex == pageIndex)
             {
                 _lastPage.IncrementRef();
@@ -340,7 +356,7 @@ namespace NVorbis.Ogg
                     if (pageIndex < (ulong)_pageOffsets.Count)
                     {
                         isResync = pageData.IsResync;
-                    
+
                         ReadPageData(
                             pageData.Header, pageData, pageIndex,
                             out granulePos, out isContinuation, out isContinued, out packetCount, out pageOverhead);
@@ -376,7 +392,7 @@ namespace NVorbis.Ogg
                         PageHeader header = new(headerBuffer);
 
                         _lastPageIsResync = isResync;
-                        
+
                         ReadPageData(
                             header, null, pageIndex,
                             out granulePos, out isContinuation, out isContinued, out packetCount, out pageOverhead);
