@@ -57,7 +57,7 @@ namespace NVorbis
         {
             lock (_objectPool)
             {
-                if (_objectPool.Count < 4)
+                if (_objectPool.Count <= 4)
                 {
                     _objectPool.Enqueue(pageData);
                     return;
