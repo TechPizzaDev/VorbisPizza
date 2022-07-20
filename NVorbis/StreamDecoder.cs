@@ -341,7 +341,7 @@ namespace NVorbis
         /// <inheritdoc/>
         public int Read(Span<float> buffer)
         {
-            return Read(buffer, buffer.Length, 0, interleave: true);
+            return Read(buffer, buffer.Length / _channels, 0, interleave: true);
         }
 
         /// <inheritdoc/>
@@ -352,17 +352,24 @@ namespace NVorbis
 
         private unsafe int Read(Span<float> buffer, int samplesToRead, int stride, bool interleave)
         {
-            int channels = _channels;
-            if (buffer.Length % channels != 0)
-                throw new ArgumentException("Length must be a multiple of Channels.", nameof(buffer));
-
-            if (_packetProvider == null)
-                throw new ObjectDisposedException(nameof(StreamDecoder));
-
             // if the caller didn't ask for any data, bail early
             if (buffer.Length == 0)
             {
                 return 0;
+            }
+
+            int channels = _channels;
+            if (buffer.Length % channels != 0)
+            {
+                throw new ArgumentException("Length must be a multiple of Channels.", nameof(buffer));
+            }
+            if (buffer.Length < samplesToRead * channels)
+            {
+                throw new ArgumentException("The buffer is too small for the requested amount.");
+            }
+            if (_packetProvider == null)
+            {
+                throw new ObjectDisposedException(nameof(StreamDecoder));
             }
 
             // save off value to track when we're done with the request
@@ -401,15 +408,15 @@ namespace NVorbis
                 {
                     if (interleave)
                     {
-                        fixed (float* target = buffer)
+                        fixed (float* target = buffer.Slice(idx * channels, copyLen * channels))
                         {
                             if (ClipSamples)
                             {
-                                ClippingCopyBuffer(target + idx * channels, copyLen);
+                                ClippingCopyBuffer(target, copyLen);
                             }
                             else
                             {
-                                CopyBuffer(target + idx * channels, copyLen);
+                                CopyBuffer(target, copyLen);
                             }
                         }
                     }
