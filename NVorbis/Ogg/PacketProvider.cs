@@ -322,7 +322,7 @@ namespace NVorbis.Ogg
                     }
 
                     // add the packet to the list
-                    if (dataParts.Length < partCount)
+                    if (dataParts.Length <= partCount)
                     {
                         Array.Resize(ref dataParts, dataParts.Length + 2);
                     }
