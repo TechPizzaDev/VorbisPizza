@@ -279,26 +279,6 @@ namespace NVorbis
             _streamDecoder.SeekTo(samplePosition, seekOrigin);
         }
 
-        /// <summary>
-        /// Reads samples into the specified buffer.
-        /// </summary>
-        /// <param name="buffer">The buffer to read the samples into.</param>
-        /// <param name="offset">The index to start reading samples into the buffer.</param>
-        /// <param name="count">The number of samples that should be read into the buffer.</param>
-        /// <returns>The number of floats read into the buffer.</returns>
-        /// <exception cref="ArgumentException">
-        /// The buffer is too small or the length is not a multiple of <see cref="Channels"/>.
-        /// </exception>
-        /// <exception cref="ArgumentOutOfRangeException"><paramref name="offset"/> is less than zero.</exception>
-        /// <remarks>
-        /// The data populated into <paramref name="buffer"/> is interleaved by channel 
-        /// in normal PCM fashion: Left, Right, Left, Right, Left, Right.
-        /// </remarks>
-        public int ReadSamples(float[] buffer, int offset, int count)
-        {
-            return ReadSamples(buffer.AsSpan(offset, count));
-        }
-
         /// <inheritdoc/>
         public int ReadSamples(Span<float> buffer)
         {
@@ -307,6 +287,18 @@ namespace NVorbis
             if (count != 0)
             {
                 return _streamDecoder.Read(buffer.Slice(0, count));
+            }
+            return 0;
+        }
+
+        /// <inheritdoc/>
+        public int ReadSamples(Span<float> buffer, int samplesToRead, int stride)
+        {
+            // don't allow non-aligned reads (always on a full sample boundary!)
+            int count = buffer.Length - buffer.Length % _streamDecoder.Channels;
+            if (count != 0)
+            {
+                return _streamDecoder.Read(buffer.Slice(0, count), samplesToRead, stride);
             }
             return 0;
         }

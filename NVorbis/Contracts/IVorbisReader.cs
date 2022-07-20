@@ -134,32 +134,16 @@ namespace NVorbis.Contracts
         /// </returns>
         bool SwitchStreams(int index);
 
-        /// <summary>
-        /// Reads samples into the specified buffer.
-        /// </summary>
-        /// <param name="buffer">The buffer to read the samples into.</param>
-        /// <returns>The number of samples read into the buffer.</returns>
-        /// <exception cref="ArgumentException">
-        /// The buffer is too small or the length is not a multiple of <see cref="Channels"/>.
-        /// </exception>
-        /// <remarks>
-        /// The data populated into <paramref name="buffer"/> is interleaved by channel in normal PCM fashion: 
-        /// Left, Right, Left, Right, Left, Right.
-        /// </remarks>
+        /// <inheritdoc cref="IStreamDecoder.Read(Span{float})"/>
         int ReadSamples(Span<float> buffer);
 
-        /// <summary>
-        /// Seeks the stream by the specified duration.
-        /// </summary>
-        /// <param name="timePosition">The relative time to seek to.</param>
-        /// <param name="seekOrigin">The reference point used to obtain the new position.</param>
+        /// <inheritdoc cref="IStreamDecoder.Read(Span{float}, int, int)"/>
+        int ReadSamples(Span<float> buffer, int samplesToRead, int stride);
+
+        /// <inheritdoc cref="IStreamDecoder.SeekTo(TimeSpan, SeekOrigin)"/>
         void SeekTo(TimeSpan timePosition, SeekOrigin seekOrigin = SeekOrigin.Begin);
 
-        /// <summary>
-        /// Seeks the stream by the specified sample count.
-        /// </summary>
-        /// <param name="samplePosition">The relative sample position to seek to.</param>
-        /// <param name="seekOrigin">The reference point used to obtain the new position.</param>
+        /// <inheritdoc cref="IStreamDecoder.SeekTo(long, SeekOrigin)"/>
         void SeekTo(long samplePosition, SeekOrigin seekOrigin = SeekOrigin.Begin);
     }
 }

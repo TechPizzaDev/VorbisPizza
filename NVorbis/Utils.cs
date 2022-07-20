@@ -57,8 +57,8 @@ namespace NVorbis
             Vector<int> lt = Vector.LessThan(value, lower);
             clipped = Vector.BitwiseOr(clipped, Vector.BitwiseOr(gt, lt));
 
-            value = Vector.ConditionalSelect(gt, value, upper);
-            value = Vector.ConditionalSelect(lt, value, lower);
+            value = Vector.ConditionalSelect(gt, upper, value);
+            value = Vector.ConditionalSelect(lt, lower, value);
 
             return value;
         }
