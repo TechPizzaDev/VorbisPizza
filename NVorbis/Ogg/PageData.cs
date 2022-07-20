@@ -82,12 +82,15 @@ namespace NVorbis.Ogg
                 size += seg;
                 if (seg < 255)
                 {
+                    if (size > 0)
+                    {
                     if (packetIndex == packetIdx)
                     {
                         return new PageSlice(this, dataIdx, size);
                     }
                     packetIdx++;
                     dataIdx += size;
+                    }
                     size = 0;
                 }
             }
