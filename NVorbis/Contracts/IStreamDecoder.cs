@@ -120,8 +120,8 @@ namespace NVorbis.Contracts
         /// The buffer is too small or the length is not a multiple of <see cref="Channels"/>.
         /// </exception>
         /// <remarks>
-        /// The data populated into <paramref name="buffer"/> is interleaved by channel in normal PCM fashion: 
-        /// Left, Right, Left, Right, Left, Right
+        /// The <paramref name="buffer"/> is interleaved by channel
+        /// (Left, Right, Left, Right, Left, Right).
         /// </remarks>
         int Read(Span<float> buffer);
 
@@ -135,7 +135,7 @@ namespace NVorbis.Contracts
         /// The amount of samples to read per channel.
         /// </param>
         /// <param name="stride">
-        /// The buffer stride for each channel.
+        /// The buffer stride in values for each channel.
         /// </param>
         /// <returns>
         /// The amount of samples read.
@@ -143,6 +143,10 @@ namespace NVorbis.Contracts
         /// <exception cref="ArgumentException">
         /// The buffer is too small or the length is not a multiple of <see cref="Channels"/>.
         /// </exception>
+        /// <remarks>
+        /// The <paramref name="buffer"/> is not interleaved
+        /// (Left, Left, Left, Right, Right, Right).
+        /// </remarks>
         int Read(Span<float> buffer, int samplesToRead, int stride);
     }
 }
