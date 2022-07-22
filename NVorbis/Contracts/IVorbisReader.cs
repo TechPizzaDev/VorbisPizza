@@ -76,7 +76,7 @@ namespace NVorbis.Contracts
         long TotalSamples { get; }
 
         /// <summary>
-        /// Gets or sets whether to clip samples returned by <see cref="ReadSamples"/>.
+        /// Gets or sets whether to clip read samples.
         /// </summary>
         bool ClipSamples { get; set; }
 
@@ -91,8 +91,11 @@ namespace NVorbis.Contracts
         long SamplePosition { get; set; }
 
         /// <summary>
-        /// Gets whether <see cref="ReadSamples"/> has returned any clipped samples.
+        /// Gets whether any samples have been clipped.
         /// </summary>
+        /// <remarks>
+        /// Depends on <see cref="ClipSamples"/> being <see langword="true"/>.
+        /// </remarks>
         bool HasClipped { get; }
 
         /// <summary>
