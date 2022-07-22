@@ -5,9 +5,10 @@ namespace TestApp
 {
     class ForwardOnlyStream : Stream
     {
-        private Stream _steam;
+        private Stream _stream;
+        private bool _leaveOpen;
 
-        public override bool CanRead => _steam.CanRead;
+        public override bool CanRead => _stream.CanRead;
 
         public override bool CanSeek => false;
 
@@ -15,11 +16,12 @@ namespace TestApp
 
         public override long Length => throw new NotSupportedException();
 
-        public override long Position { get => _steam.Position; set => throw new NotSupportedException(); }
+        public override long Position { get => _stream.Position; set => throw new NotSupportedException(); }
 
-        public ForwardOnlyStream(Stream stream)
+        public ForwardOnlyStream(Stream stream, bool leaveOpen)
         {
-            _steam = stream;
+            _stream = stream;
+            _leaveOpen = leaveOpen;
         }
 
         public override void Flush()
@@ -29,7 +31,7 @@ namespace TestApp
 
         public override int Read(byte[] buffer, int offset, int count)
         {
-            return _steam.Read(buffer, offset, count);
+            return _stream.Read(buffer, offset, count);
         }
 
         public override long Seek(long offset, SeekOrigin origin)
@@ -51,8 +53,11 @@ namespace TestApp
         {
             if (disposing)
             {
-                _steam?.Dispose();
-                _steam = null;
+                if (!_leaveOpen)
+                {
+                    _stream?.Dispose();
+                }
+                _stream = null!;
             }
 
             base.Dispose(disposing);

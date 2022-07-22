@@ -1,24 +1,23 @@
 using System;
-using System.Collections.Generic;
+using System.Buffers.Binary;
 using System.IO;
-using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
 
 namespace TestApp
 {
-    sealed class WaveWriter : IDisposable
+    public sealed class WaveWriter : IDisposable
     {
-        const string BLANK_HEADER = "RIFF\0\0\0\0WAVEfmt ";
-        const string BLANK_DATA_HEADER = "data\0\0\0\0";
+        private const string BLANK_HEADER = "RIFF\0\0\0\0WAVEfmt ";
+        private const string BLANK_DATA_HEADER = "data\0\0\0\0";
 
-        Stream _stream;
-        BinaryWriter _writer;
+        private BinaryWriter _writer;
 
-        public WaveWriter(string fileName, int sampleRate, int channels)
+        public WaveWriter(Stream stream, bool leaveOpen, int sampleRate, int channels)
         {
-            _stream = File.Create(fileName);
-            _writer = new BinaryWriter(_stream, Encoding.UTF8, true);
+            if (stream == null)
+                throw new ArgumentNullException(nameof(stream));
+
+            _writer = new BinaryWriter(stream, Encoding.UTF8, leaveOpen);
 
             // basic header
             _writer.Write(Encoding.UTF8.GetBytes(BLANK_HEADER));
@@ -43,11 +42,24 @@ namespace TestApp
             _writer.Write(Encoding.UTF8.GetBytes(BLANK_DATA_HEADER));
         }
 
-        public void WriteSamples(float[] buf, int offset, int count)
+        public void WriteSamples(ReadOnlySpan<float> buf)
         {
-            for (int i = 0; i < count; i++, offset++)
+            Span<byte> tmp = stackalloc byte[2048];
+
+            while (buf.Length > 0)
             {
-                _writer.Write(buf[offset]);
+                int toRead = Math.Min(tmp.Length / sizeof(float), buf.Length);
+
+                ReadOnlySpan<float> src = buf.Slice(0, toRead);
+                Span<byte> dst = tmp.Slice(0, toRead * sizeof(float));
+
+                for (int i = 0; i < src.Length; i++)
+                {
+                    BinaryPrimitives.WriteSingleLittleEndian(dst.Slice(i * sizeof(float), sizeof(float)), src[i]);
+                }
+
+                _writer.Write(dst);
+                buf = buf.Slice(toRead);
             }
         }
 
@@ -55,17 +67,14 @@ namespace TestApp
         {
             // RIFF chunk size
             _writer.Seek(4, SeekOrigin.Begin);
-            _writer.Write((uint)(_stream.Length - 8));
+            _writer.Write((uint)(_writer.BaseStream.Length - 8));
 
             // data chunk size
             _writer.Seek(44, SeekOrigin.Begin);
-            _writer.Write((uint)(_stream.Length - 48));
+            _writer.Write((uint)(_writer.BaseStream.Length - 48));
 
             _writer?.Dispose();
-            _writer = null;
-
-            _stream?.Dispose();
-            _stream = null;
+            _writer = null!;
         }
     }
 }
