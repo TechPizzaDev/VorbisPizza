@@ -82,19 +82,19 @@ namespace NVorbis
 
         private int[] SynthesizeBarkCurve(int n)
         {
-            float scale = _bark_map_size / toBARK(_rate / 2);
+            float scale = _bark_map_size / ToBARK(_rate / 2);
 
             int[] map = new int[n + 1];
 
-            for (int i = 0; i < n - 1; i++)
+            for (int i = 0; i < map.Length - 2; i++)
             {
-                map[i] = Math.Min(_bark_map_size - 1, (int)Math.Floor(toBARK((_rate / 2f) / n * i) * scale));
+                map[i] = Math.Min(_bark_map_size - 1, (int)Math.Floor(ToBARK((_rate / 2f) / n * i) * scale));
             }
             map[n] = -1;
             return map;
         }
 
-        private static float toBARK(double lsp)
+        private static float ToBARK(double lsp)
         {
             return (float)(13.1 * Math.Atan(0.00074 * lsp) + 2.24 * Math.Atan(0.0000000185 * lsp * lsp) + .0001 * lsp);
         }
@@ -104,9 +104,9 @@ namespace NVorbis
             float wdel = (float)(Math.PI / _bark_map_size);
 
             float[] map = new float[n];
-            for (int i = 0; i < n; i++)
+            for (int i = 0; i < map.Length; i++)
             {
-                map[i] = 2f * (float)Math.Cos(wdel * i);
+                map[i] = 2f * MathF.Cos(wdel * i);
             }
             return map;
         }
@@ -174,13 +174,13 @@ namespace NVorbis
                 int[] barkMap = _barkMaps[blockSize];
                 float[] wMap = _wMap[blockSize];
 
-                int i;
-                for (i = 0; i < _order; i++)
+                Span<float> coeff = data.Coeff.AsSpan(0, _order);
+                for (int j = 0; j < coeff.Length; j++)
                 {
-                    data.Coeff[i] = 2f * (float)Math.Cos(data.Coeff[i]);
+                    coeff[j] = 2f * MathF.Cos(coeff[j]);
                 }
 
-                i = 0;
+                int i = 0;
                 while (i < n)
                 {
                     int j;
@@ -208,10 +208,10 @@ namespace NVorbis
                     }
 
                     // calc the dB of this bark section
-                    q = data.Amp / (float)Math.Sqrt(p + q) - _ampOfs;
+                    q = data.Amp / MathF.Sqrt(p + q) - _ampOfs;
 
                     // now convert to a linear sample multiplier
-                    q = (float)Math.Exp(q * 0.11512925f);
+                    q = MathF.Exp(q * 0.11512925f);
 
                     residue[i] *= q;
 
