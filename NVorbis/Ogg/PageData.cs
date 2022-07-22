@@ -65,11 +65,6 @@ namespace NVorbis.Ogg
         {
             ReadOnlySpan<byte> pageSpan = AsSpan();
             PageHeader header = new(pageSpan);
-            header.GetPacketCount(out ushort packetCount, out _, out _);
-            if (packetIndex > packetCount)
-            {
-                return default;
-            }
 
             byte segmentCount = header.SegmentCount;
             ReadOnlySpan<byte> segments = pageSpan.Slice(27, segmentCount);
@@ -82,19 +77,16 @@ namespace NVorbis.Ogg
                 size += seg;
                 if (seg < 255)
                 {
-                    if (size > 0)
-                    {
                     if (packetIndex == packetIdx)
                     {
                         return new PageSlice(this, dataIdx, size);
                     }
                     packetIdx++;
                     dataIdx += size;
-                    }
                     size = 0;
                 }
             }
-            if (size > 0 && packetIndex == packetIdx)
+            if (packetIndex == packetIdx)
             {
                 return new PageSlice(this, dataIdx, size);
             }

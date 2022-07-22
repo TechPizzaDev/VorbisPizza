@@ -39,31 +39,20 @@ namespace NVorbis.Ogg
             int dataLen = 0;
             ushort pktCnt = 0;
 
-            int size = 0;
-            for (int i = 0, idx = 27; i < segCnt; i++, idx++)
+            ReadOnlySpan<byte> segments = headerData.Slice(27, segCnt);
+            for (int i = 0; i < segments.Length; i++)
             {
-                byte seg = headerData[idx];
-                size += seg;
+                byte seg = segments[i];
                 dataLen += seg;
                 if (seg < 255)
                 {
-                    if (size > 0)
-                    {
-                        ++pktCnt;
-                    }
-                    size = 0;
+                    ++pktCnt;
                 }
             }
 
-            if (size > 0)
-            {
-                isContinued = headerData[segCnt + 26] == 255;
+            isContinued = segments[^1] == 255;
+            if (isContinued)
                 ++pktCnt;
-            }
-            else
-            {
-                isContinued = false;
-            }
 
             packetCount = pktCnt;
             dataLength = dataLen;
