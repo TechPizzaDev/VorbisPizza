@@ -5,7 +5,7 @@ using System.IO;
 namespace NVorbis.Contracts
 {
     /// <summary>
-    /// Raised when a new stream has been encountered in the file or container.
+    /// Raised when a new stream has been encountered in the container.
     /// </summary>
     public delegate void NewStreamEventHandler(IVorbisReader reader, ref NewStreamEventArgs eventArgs);
 
@@ -15,7 +15,7 @@ namespace NVorbis.Contracts
     public interface IVorbisReader : IDisposable
     {
         /// <summary>
-        /// Raised when a new stream has been encountered in the file or container.
+        /// Raised when a new stream has been encountered in the container.
         /// </summary>
         event NewStreamEventHandler NewStream;
 
@@ -30,7 +30,7 @@ namespace NVorbis.Contracts
         long ContainerWasteBits { get; }
 
         /// <summary>
-        /// Gets the list of <see cref="IStreamDecoder"/> instances associated with the loaded file / container.
+        /// Gets the list of <see cref="IStreamDecoder"/> instances associated with the loaded container.
         /// </summary>
         IReadOnlyList<IStreamDecoder> Streams { get; }
 
@@ -75,9 +75,7 @@ namespace NVorbis.Contracts
         /// </summary>
         long TotalSamples { get; }
 
-        /// <summary>
-        /// Gets or sets whether to clip read samples.
-        /// </summary>
+        /// <inheritdoc cref="IStreamDecoder.ClipSamples"/>
         bool ClipSamples { get; set; }
 
         /// <summary>
@@ -90,12 +88,7 @@ namespace NVorbis.Contracts
         /// </summary>
         long SamplePosition { get; set; }
 
-        /// <summary>
-        /// Gets whether any samples have been clipped.
-        /// </summary>
-        /// <remarks>
-        /// Depends on <see cref="ClipSamples"/> being <see langword="true"/>.
-        /// </remarks>
+        /// <inheritdoc cref="IStreamDecoder.HasClipped"/>
         bool HasClipped { get; }
 
         /// <summary>
@@ -120,7 +113,7 @@ namespace NVorbis.Contracts
         void Initialize();
 
         /// <summary>
-        /// Searches for the next stream in a concatenated file. 
+        /// Searches for the next stream in a concatenated container. 
         /// Will raise <see cref="NewStream"/> for the found stream, 
         /// and will add it to <see cref="Streams"/> if not marked as ignored.
         /// </summary>

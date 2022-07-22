@@ -60,7 +60,7 @@ namespace NVorbis.Contracts
         long SamplePosition { get; set; }
 
         /// <summary>
-        /// Gets or sets whether to clip samples returned by <see cref="Read(Span{float})"/>.
+        /// Gets or sets whether to clip samples between negative one and one.
         /// </summary>
         bool ClipSamples { get; set; }
 
@@ -70,8 +70,11 @@ namespace NVorbis.Contracts
         bool SkipTags { get; set; }
 
         /// <summary>
-        /// Gets whether <see cref="Read(Span{float})"/> has returned any clipped samples.
+        /// Gets whether any samples have been clipped between negative one and one.
         /// </summary>
+        /// <remarks>
+        /// Depends on <see cref="ClipSamples"/> being <see langword="true"/>.
+        /// </remarks>
         bool HasClipped { get; }
 
         /// <summary>

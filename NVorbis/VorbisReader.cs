@@ -16,9 +16,7 @@ namespace NVorbis
 
         private IStreamDecoder _streamDecoder;
 
-        /// <summary>
-        /// Raised when a new stream has been encountered in the file or container.
-        /// </summary>
+        /// <inheritdoc/>
         public event NewStreamEventHandler? NewStream;
 
         /// <summary>
@@ -110,9 +108,7 @@ namespace NVorbis
             }
         }
 
-        /// <summary>
-        /// Gets the list of <see cref="IStreamDecoder"/> instances associated with the loaded file / container.
-        /// </summary>
+        /// <inheritdoc/>
         public IReadOnlyList<IStreamDecoder> Streams => _decoders;
 
         #region Convenience Helpers
@@ -120,19 +116,13 @@ namespace NVorbis
         // Since most uses of VorbisReader are for single-stream audio files,
         // we can make life simpler for users by exposing the first stream's properties and methods here.
 
-        /// <summary>
-        /// Gets the number of channels in the stream.
-        /// </summary>
+        /// <inheritdoc/>
         public int Channels => _streamDecoder.Channels;
 
-        /// <summary>
-        /// Gets the sample rate of the stream.
-        /// </summary>
+        /// <inheritdoc/>
         public int SampleRate => _streamDecoder.SampleRate;
 
-        /// <summary>
-        /// Gets the upper bitrate limit for the stream, if specified.
-        /// </summary>
+        /// <inheritdoc/>
         public int UpperBitrate => _streamDecoder.UpperBitrate;
 
         /// <summary>
@@ -141,86 +131,58 @@ namespace NVorbis
         /// </summary>
         public int NominalBitrate => _streamDecoder.NominalBitrate;
 
-        /// <summary>
-        /// Gets the lower bitrate limit for the stream, if specified.
-        /// </summary>
+        /// <inheritdoc/>
         public int LowerBitrate => _streamDecoder.LowerBitrate;
 
-        /// <summary>
-        /// Gets the tag data from the stream's header.
-        /// </summary>
+        /// <inheritdoc/>
         public ITagData Tags => _streamDecoder.Tags;
 
-        /// <summary>
-        /// Gets the number of bits read that are related to framing and transport alone.
-        /// </summary>
+        /// <inheritdoc/>
         public long ContainerOverheadBits => _containerReader?.ContainerBits ?? 0;
 
-        /// <summary>
-        /// Gets the number of bits skipped in the container due to framing, ignored streams, or sync loss.
-        /// </summary>
+        /// <inheritdoc/>
         public long ContainerWasteBits => _containerReader?.WasteBits ?? 0;
 
-        /// <summary>
-        /// Gets the currently-selected stream's index.
-        /// </summary>
+        /// <inheritdoc/>
         public int StreamIndex => _decoders.IndexOf(_streamDecoder);
 
-        /// <summary>
-        /// Gets the total duration of the decoded stream.
-        /// </summary>
+        /// <inheritdoc/>
         public TimeSpan TotalTime => _streamDecoder.TotalTime;
 
-        /// <summary>
-        /// Gets the total number of samples in the decoded stream.
-        /// </summary>
+        /// <inheritdoc/>
         public long TotalSamples => _streamDecoder.TotalSamples;
 
-        /// <summary>
-        /// Gets or sets the current time position of the stream.
-        /// </summary>
+        /// <inheritdoc/>
         public TimeSpan TimePosition
         {
             get => _streamDecoder.TimePosition;
             set => _streamDecoder.TimePosition = value;
         }
 
-        /// <summary>
-        /// Gets or sets the current sample position of the stream.
-        /// </summary>
+        /// <inheritdoc/>
         public long SamplePosition
         {
             get => _streamDecoder.SamplePosition;
             set => _streamDecoder.SamplePosition = value;
         }
 
-        /// <summary>
-        /// Gets whether the current stream has ended.
-        /// </summary>
+        /// <inheritdoc/>
         public bool IsEndOfStream => _streamDecoder.IsEndOfStream;
 
-        /// <summary>
-        /// Gets or sets whether to clip samples returned by <see cref="ReadSamples(Span{float})"/>.
-        /// </summary>
+        /// <inheritdoc/>
         public bool ClipSamples
         {
             get => _streamDecoder.ClipSamples;
             set => _streamDecoder.ClipSamples = value;
         }
 
-        /// <summary>
-        /// Gets whether <see cref="ReadSamples(Span{float})"/> has returned any clipped samples.
-        /// </summary>
+        /// <inheritdoc/>
         public bool HasClipped => _streamDecoder.HasClipped;
 
-        /// <summary>
-        /// Gets the <see cref="IStreamStats"/> instance for this stream.
-        /// </summary>
+        /// <inheritdoc/>
         public IStreamStats StreamStats => _streamDecoder.Stats;
 
-        /// <summary>
-        /// Gets whether the underlying stream can seek.
-        /// </summary>
+        /// <inheritdoc/>
         public bool CanSeek => _containerReader.CanSeek;
 
         /// <summary>
@@ -234,15 +196,8 @@ namespace NVorbis
             if (_containerReader == null) return false;
             return _containerReader.FindNextStream();
         }
-
-        /// <summary>
-        /// Switches to an alternate logical stream.
-        /// </summary>
-        /// <param name="index">The logical stream index to switch to</param>
-        /// <returns>
-        /// <see langword="true"/> if the properties of the logical stream differ from 
-        /// those of the one previously being decoded. Otherwise, <see langword="false"/>.
-        /// </returns>
+        
+        /// <inheritdoc/>
         public bool SwitchStreams(int index)
         {
             if (index < 0 || index >= _decoders.Count) throw new ArgumentOutOfRangeException(nameof(index));
@@ -259,21 +214,13 @@ namespace NVorbis
             return newDecoder.Channels != oldDecoder.Channels || newDecoder.SampleRate != oldDecoder.SampleRate;
         }
 
-        /// <summary>
-        /// Seeks the stream by the specified duration.
-        /// </summary>
-        /// <param name="timePosition">The relative time to seek to.</param>
-        /// <param name="seekOrigin">The reference point used to obtain the new position.</param>
+        /// <inheritdoc/>
         public void SeekTo(TimeSpan timePosition, SeekOrigin seekOrigin = SeekOrigin.Begin)
         {
             _streamDecoder.SeekTo(timePosition, seekOrigin);
         }
 
-        /// <summary>
-        /// Seeks the stream by the specified sample count.
-        /// </summary>
-        /// <param name="samplePosition">The relative sample position to seek to.</param>
-        /// <param name="seekOrigin">The reference point used to obtain the new position.</param>
+        /// <inheritdoc/>
         public void SeekTo(long samplePosition, SeekOrigin seekOrigin = SeekOrigin.Begin)
         {
             _streamDecoder.SeekTo(samplePosition, seekOrigin);
