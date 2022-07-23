@@ -6,14 +6,13 @@
         <Copyright>Copyright © TechPizza 2022</Copyright>
         <Company>TechPizza</Company>
         <AssemblyName>VorbisPizza</AssemblyName>
-        <AssemblyVersion>1.2.0.0</AssemblyVersion>
-        <FileVersion>1.2.0.0</FileVersion>
+        <AssemblyVersion>1.2.1.0</AssemblyVersion>
+        <FileVersion>1.2.1.0</FileVersion>
         <Authors>Andrew Ward;TechPizza</Authors>
-        <Version>1.2.0</Version>
+        <Version>1.2.1</Version>
         <PackageId>VorbisPizza</PackageId>
         <PackageProjectUrl>https://github.com/TechPizzaDev/VorbisPizza</PackageProjectUrl>
-        <PackageReleaseNotes>-Added non-interleaved sample reading
--Fixed memory leaks and parsing bugs</PackageReleaseNotes>
+        <PackageReleaseNotes>-Fixed seeking and added dedicated seek exceptions</PackageReleaseNotes>
         <PackageTags>Ogg;Vorbis;Xiph;Audio;Sound</PackageTags>
         <NeutralLanguage>en</NeutralLanguage>
         <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
