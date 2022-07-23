@@ -13,11 +13,11 @@ namespace NVorbis.Ogg
         private bool _isDisposed;
 
         private int _lastSeqNbr;
-        private ulong? _firstDataPageIndex;
+        private long? _firstDataPageIndex;
         private long _maxGranulePos;
 
         private PageData? _lastPage;
-        private ulong _lastPageIndex = PacketLocation.MaxPageIndex;
+        private long _lastPageIndex = -1;
         private long _lastPageGranulePos;
         private bool _lastPageIsResync;
         private bool _lastPageIsContinuation;
@@ -59,7 +59,7 @@ namespace NVorbis.Ogg
             {
                 if (_firstDataPageIndex == null && granulePosition > 0)
                 {
-                    _firstDataPageIndex = (uint)_pageOffsets.Count;
+                    _firstDataPageIndex = _pageOffsets.Count;
                 }
                 else if (_maxGranulePos > granulePosition)
                 {
@@ -104,10 +104,10 @@ namespace NVorbis.Ogg
             _lastPageIsContinued = isContinued;
             _lastPagePacketCount = packetCount;
             _lastPageOverhead = header.PageOverhead;
-            _lastPageIndex = (ulong)(_pageOffsets.Count - 1);
+            _lastPageIndex = _pageOffsets.Count - 1;
         }
 
-        public PageData GetPage(ulong pageIndex)
+        public PageData GetPage(long pageIndex)
         {
             if (_isDisposed)
             {
@@ -139,18 +139,18 @@ namespace NVorbis.Ogg
                     }
                     return page;
                 }
-                throw new ArgumentOutOfRangeException(nameof(pageIndex));
             }
             finally
             {
                 _reader.Release();
             }
+            throw new SeekOutOfRangeException();
         }
 
-        public ulong FindPage(long granulePos)
+        public long FindPage(long granulePos)
         {
             // if we're being asked for the first granule, just grab the very first data page
-            ulong pageIndex = ulong.MaxValue;
+            long pageIndex = -1;
             if (granulePos == 0)
             {
                 pageIndex = FindFirstDataPage();
@@ -158,7 +158,7 @@ namespace NVorbis.Ogg
             else
             {
                 // start by looking at the last read page's position...
-                uint lastPageIndex = (uint)(_pageOffsets.Count - 1);
+                int lastPageIndex = _pageOffsets.Count - 1;
                 if (GetPageRaw(lastPageIndex, out long pageGP))
                 {
                     // most likely, we can look at previous pages for the appropriate one...
@@ -179,18 +179,18 @@ namespace NVorbis.Ogg
                     }
                 }
             }
-            if (pageIndex == ulong.MaxValue)
+            if (pageIndex == -1)
             {
-                throw new ArgumentOutOfRangeException(nameof(granulePos));
+                throw new SeekOutOfRangeException();
             }
             return pageIndex;
         }
 
-        private ulong FindFirstDataPage()
+        private long FindFirstDataPage()
         {
             while (!_firstDataPageIndex.HasValue)
             {
-                if (!GetPageRaw((ulong)_pageOffsets.Count, out _))
+                if (!GetPageRaw(_pageOffsets.Count, out _))
                 {
                     return uint.MaxValue;
                 }
@@ -198,7 +198,7 @@ namespace NVorbis.Ogg
             return _firstDataPageIndex.Value;
         }
 
-        private uint FindPageForward(uint pageIndex, long pageGranulePos, long granulePos)
+        private int FindPageForward(int pageIndex, long pageGranulePos, long granulePos)
         {
             while (pageGranulePos <= granulePos)
             {
@@ -209,7 +209,7 @@ namespace NVorbis.Ogg
                         // if we couldn't get a page because we're EOS, allow finding the last granulePos
                         if (MaxGranulePosition < granulePos)
                         {
-                            pageIndex = uint.MaxValue;
+                            pageIndex = -1;
                         }
                         break;
                     }
@@ -218,7 +218,7 @@ namespace NVorbis.Ogg
                 {
                     if (!GetPageRaw(pageIndex, out pageGranulePos))
                     {
-                        pageIndex = uint.MaxValue;
+                        pageIndex = -1;
                         break;
                     }
                 }
@@ -257,20 +257,20 @@ namespace NVorbis.Ogg
             return false;
         }
 
-        private ulong FindPageBisection(long granulePos, ulong low, ulong high, long highGranulePos)
+        private long FindPageBisection(long granulePos, long low, long high, long highGranulePos)
         {
             // we can treat low as always being before the first sample; later work will correct that if needed
             long lowGranulePos = 0L;
-            ulong dist;
+            long dist;
             while ((dist = high - low) > 0)
             {
                 // try to find the right page by assumming they are all about the same size
-                ulong index = low + (ulong)(dist * ((granulePos - lowGranulePos) / (double)(highGranulePos - lowGranulePos)));
+                long index = low + (long)(dist * ((granulePos - lowGranulePos) / (double)(highGranulePos - lowGranulePos)));
 
                 // go get the actual position of the selected page
                 if (!GetPageRaw(index, out long idxGranulePos))
                 {
-                    return ulong.MaxValue;
+                    return -1;
                 }
 
                 // figure out where to go from here
@@ -295,7 +295,7 @@ namespace NVorbis.Ogg
             return low;
         }
 
-        private bool GetPageRaw(ulong pageIndex, out long pageGranulePos)
+        private bool GetPageRaw(long pageIndex, out long pageGranulePos)
         {
             long offset = _pageOffsets[(int)pageIndex];
             if (offset < 0)
@@ -324,7 +324,7 @@ namespace NVorbis.Ogg
         }
 
         public bool GetPage(
-            ulong pageIndex,
+            long pageIndex,
             out long granulePos,
             out bool isResync,
             out bool isContinuation,
@@ -346,14 +346,14 @@ namespace NVorbis.Ogg
             _reader.Lock();
             try
             {
-                while (pageIndex >= (ulong)_pageOffsets.Count && !HasAllPages)
+                while (pageIndex >= _pageOffsets.Count && !HasAllPages)
                 {
                     if (!_reader.ReadNextPage(out PageData? pageData))
                     {
                         break;
                     }
                     // if we found our page, return it from here so we don't have to do further processing
-                    if (pageIndex < (ulong)_pageOffsets.Count)
+                    if (pageIndex < _pageOffsets.Count)
                     {
                         isResync = pageData.IsResync;
 
@@ -370,7 +370,7 @@ namespace NVorbis.Ogg
                 _reader.Release();
             }
 
-            if (pageIndex < (ulong)_pageOffsets.Count)
+            if (pageIndex < _pageOffsets.Count)
             {
                 long offset = _pageOffsets[(int)pageIndex];
                 if (offset < 0)
@@ -415,7 +415,7 @@ namespace NVorbis.Ogg
         }
 
         private void ReadPageData(
-            PageHeader header, PageData? pageData, ulong pageIndex,
+            PageHeader header, PageData? pageData, long pageIndex,
             out long granulePos, out bool isContinuation, out bool isContinued, out ushort packetCount, out int pageOverhead)
         {
             header.GetPacketCount(out packetCount, out _, out isContinued);
@@ -436,13 +436,13 @@ namespace NVorbis.Ogg
             HasAllPages = true;
         }
 
-        public ulong PageCount => (uint)_pageOffsets.Count;
+        public long PageCount => _pageOffsets.Count;
 
         public bool HasAllPages { get; private set; }
 
         public long? MaxGranulePosition => HasAllPages ? _maxGranulePos : null;
 
-        public ulong FirstDataPageIndex => FindFirstDataPage();
+        public long FirstDataPageIndex => FindFirstDataPage();
 
         private void Dispose(bool disposing)
         {

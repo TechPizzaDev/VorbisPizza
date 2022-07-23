@@ -13,14 +13,14 @@ namespace NVorbis.Ogg
         private IStreamPageReader _reader;
         private bool _isDisposed;
 
-        private ulong _pageIndex;
-        private uint _packetIndex;
+        private long _pageIndex;
+        private int _packetIndex;
 
-        private ulong _lastPacketPageIndex;
-        private uint _lastPacketPacketIndex;
+        private long _lastPacketPageIndex;
+        private int _lastPacketPacketIndex;
         private VorbisPacket _lastPacket;
-        private ulong _nextPacketPageIndex;
-        private uint _nextPacketPacketIndex;
+        private long _nextPacketPageIndex;
+        private int _nextPacketPacketIndex;
 
         public bool CanSeek => true;
 
@@ -54,8 +54,8 @@ namespace NVorbis.Ogg
         {
             if (_reader == null) throw new ObjectDisposedException(nameof(PacketProvider));
 
-            ulong pageIndex;
-            uint packetIndex;
+            long pageIndex;
+            int packetIndex;
             if (granulePos == 0)
             {
                 // for this, we can generically say the first packet on the first page having a non-zero granule
@@ -78,7 +78,7 @@ namespace NVorbis.Ogg
                 {
                     packetIndex = FindPacket(pageIndex, ref granulePos, packetGranuleCountProvider);
                 }
-                packetIndex -= preRoll;
+                packetIndex -= (int)preRoll;
             }
 
             if (!NormalizePacketIndex(ref pageIndex, ref packetIndex))
@@ -98,7 +98,7 @@ namespace NVorbis.Ogg
             return granulePos;
         }
 
-        private uint FindPacket(ulong pageIndex, ref long granulePos, IPacketGranuleCountProvider packetGranuleCountProvider)
+        private int FindPacket(long pageIndex, ref long granulePos, IPacketGranuleCountProvider packetGranuleCountProvider)
         {
             // pageIndex is the correct page; we just need to figure out which packet
             int firstRealPacket = 0;
@@ -128,7 +128,7 @@ namespace NVorbis.Ogg
                 packetCount--;
             }
 
-            uint packetIndex = packetCount;
+            int packetIndex = packetCount;
             bool isLastInPage = !isContinued;
             long endGP = pageGranulePos;
             while (endGP > granulePos && --packetIndex >= firstRealPacket)
@@ -154,8 +154,8 @@ namespace NVorbis.Ogg
             {
                 // either it's a continued packet OR we've hit the "long->short over page boundary" bug.
                 // in both cases we'll just return the last packet of the previous page.
-                ulong prevPageIndex = pageIndex;
-                uint prevPacketIndex = uint.MaxValue;
+                long prevPageIndex = pageIndex;
+                int prevPacketIndex = -1;
                 if (!NormalizePacketIndex(ref prevPageIndex, ref prevPacketIndex))
                 {
                     throw new System.IO.InvalidDataException("Failed to normalize packet index?");
@@ -170,7 +170,7 @@ namespace NVorbis.Ogg
                 }
 
                 granulePos = endGP - packetGranuleCountProvider.GetPacketGranuleCount(ref packet, false);
-                return uint.MaxValue;
+                return -1;
             }
 
             // normal seek; that wasn't so hard, right?
@@ -181,17 +181,17 @@ namespace NVorbis.Ogg
         // this method calc's the appropriate page and packet prior to the one specified,
         // honoring continuations and handling negative packetIndex values
         // if packet index is larger than the current page allows, we just return it as-is
-        private bool NormalizePacketIndex(ref ulong pageIndex, ref uint packetIndex)
+        private bool NormalizePacketIndex(ref long pageIndex, ref int packetIndex)
         {
             if (!_reader.GetPage(pageIndex, out _, out bool isResync, out bool isContinuation, out _, out _, out _))
             {
                 return false;
             }
 
-            ulong pgIdx = pageIndex;
-            uint pktIdx = packetIndex;
+            long pgIdx = pageIndex;
+            int pktIdx = packetIndex;
 
-            while ((int)pktIdx < (isContinuation ? 1 : 0))
+            while (pktIdx < (isContinuation ? 1 : 0))
             {
                 // can't merge across resync
                 if (isContinuation && isResync) return false;
@@ -208,7 +208,7 @@ namespace NVorbis.Ogg
                 if (wasContinuation && !isContinued) return false;
 
                 // add the previous packet's packetCount
-                pktIdx += packetCount - (wasContinuation ? 1u : 0);
+                pktIdx += packetCount - (wasContinuation ? 1 : 0);
             }
 
             pageIndex = pgIdx;
@@ -216,7 +216,7 @@ namespace NVorbis.Ogg
             return true;
         }
 
-        private VorbisPacket GetNextPacket(ref ulong pageIndex, ref uint packetIndex)
+        private VorbisPacket GetNextPacket(ref long pageIndex, ref int packetIndex)
         {
             if (_reader == null) throw new ObjectDisposedException(nameof(PacketProvider));
 
@@ -269,21 +269,21 @@ namespace NVorbis.Ogg
         }
 
         private VorbisPacket CreatePacket(
-            ref ulong pageIndex, ref uint packetIndex,
+            ref long pageIndex, ref int packetIndex,
             bool advance, long granulePos, bool isResync, bool isContinued, ushort packetCount, int pageOverhead)
         {
             // create the packet list and add the item to it
             PacketData[] dataParts = GetDataPartArray(DataPartInitialArraySize);
             int partCount = 0;
 
-            PacketLocation firstLocation = new(pageIndex, packetIndex);
+            PacketLocation firstLocation = new((ulong)pageIndex, (uint)packetIndex);
             PageSlice firstSlice = GetPacketData(firstLocation);
             dataParts[partCount++] = new PacketData(firstLocation, firstSlice);
 
             // make sure we handle continuations
             bool isLastPacket;
             bool isFirstPacket;
-            ulong finalPage = pageIndex;
+            long finalPage = pageIndex;
             if (isContinued && packetIndex == packetCount - 1)
             {
                 // by definition, it's the first packet in the page it ends on
@@ -296,7 +296,7 @@ namespace NVorbis.Ogg
                 }
 
                 // go read the next page(s) that include this packet
-                ulong contPageIdx = pageIndex;
+                long contPageIdx = pageIndex;
                 while (isContinued)
                 {
                     if (!_reader.GetPage(
@@ -408,7 +408,7 @@ namespace NVorbis.Ogg
             ulong pageIndex = location.PageIndex;
             uint packetIndex = location.PacketIndex;
 
-            PageData? pageData = _reader.GetPage(pageIndex);
+            PageData? pageData = _reader.GetPage((long)pageIndex);
             return pageData.GetPacket(packetIndex);
         }
 

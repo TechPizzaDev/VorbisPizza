@@ -739,6 +739,7 @@ namespace NVorbis
         /// </summary>
         /// <param name="timePosition">The relative time to seek to.</param>
         /// <param name="seekOrigin">The reference point used to obtain the new position.</param>
+        /// <inheritdoc cref="SeekTo(long, SeekOrigin)"/>
         public void SeekTo(TimeSpan timePosition, SeekOrigin seekOrigin = SeekOrigin.Begin)
         {
             SeekTo((long)(SampleRate * timePosition.TotalSeconds), seekOrigin);
@@ -749,6 +750,10 @@ namespace NVorbis
         /// </summary>
         /// <param name="samplePosition">The relative sample position to seek to.</param>
         /// <param name="seekOrigin">The reference point used to obtain the new position.</param>
+        /// <exception cref="PreRollPacketException">
+        /// Could not read pre-roll packet. Try seeking again prior to reading more samples.
+        /// </exception>
+        /// <exception cref="SeekOutOfRangeException">The requested seek position extends beyond the stream.</exception>
         public void SeekTo(long samplePosition, SeekOrigin seekOrigin = SeekOrigin.Begin)
         {
             if (_packetProvider == null)
@@ -775,7 +780,8 @@ namespace NVorbis
                     throw new ArgumentOutOfRangeException(nameof(seekOrigin));
             }
 
-            if (samplePosition < 0) throw new ArgumentOutOfRangeException(nameof(samplePosition));
+            if (samplePosition < 0) 
+                throw new ArgumentOutOfRangeException(nameof(samplePosition));
 
             int rollForward;
             if (samplePosition == 0)
@@ -802,8 +808,7 @@ namespace NVorbis
                 _eosFound = true;
                 if (_packetProvider.GetGranuleCount() != samplePosition)
                 {
-                    throw new InvalidOperationException(
-                        "Could not read pre-roll packet!  Try seeking again prior to reading more samples.");
+                    throw new PreRollPacketException();
                 }
                 _prevPacketStart = _prevPacketStop;
                 _currentPosition = samplePosition;
@@ -816,8 +821,7 @@ namespace NVorbis
                 ResetDecoder();
                 // we'll use this to force ReadSamples to fail to read
                 _eosFound = true;
-                throw new InvalidOperationException(
-                    "Could not read pre-roll packet!  Try seeking again prior to reading more samples.");
+                throw new PreRollPacketException();
             }
 
             // adjust our indexes to match what we want

@@ -9,12 +9,12 @@ namespace NVorbis.Contracts.Ogg
 
         void AddPage(PageData page, long pageOffset);
 
-        PageData GetPage(ulong pageIndex);
+        PageData GetPage(long pageIndex);
 
-        ulong FindPage(long granulePos);
+        long FindPage(long granulePos);
 
         bool GetPage(
-            ulong pageIndex,
+            long pageIndex,
             out long granulePos,
             out bool isResync,
             out bool isContinuation, 
@@ -24,12 +24,12 @@ namespace NVorbis.Contracts.Ogg
 
         void SetEndOfStream();
 
-        ulong PageCount { get; }
+        long PageCount { get; }
 
         bool HasAllPages { get; }
 
         long? MaxGranulePosition { get; }
 
-        ulong FirstDataPageIndex { get; }
+        long FirstDataPageIndex { get; }
     }
 }
