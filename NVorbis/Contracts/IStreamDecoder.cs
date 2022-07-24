@@ -129,13 +129,14 @@ namespace NVorbis.Contracts
         /// Reads non-interleaved samples into the specified buffer.
         /// </summary>
         /// <param name="buffer">
-        /// The buffer to read the samples into. Length must be a multiple of <see cref="Channels"/>.
+        /// The buffer to read the samples into, 
+        /// of which length must be a multiple of <see cref="Channels"/>.
         /// </param>
         /// <param name="samplesToRead">
         /// The amount of samples to read per channel.
         /// </param>
-        /// <param name="stride">
-        /// The buffer stride in values for each channel.
+        /// <param name="channelStride">
+        /// The offset in values between each channel in the buffer.
         /// </param>
         /// <returns>
         /// The amount of samples read.
@@ -147,6 +148,6 @@ namespace NVorbis.Contracts
         /// The <paramref name="buffer"/> is not interleaved
         /// (Left, Left, Left, Right, Right, Right).
         /// </remarks>
-        int Read(Span<float> buffer, int samplesToRead, int stride);
+        int Read(Span<float> buffer, int samplesToRead, int channelStride);
     }
 }

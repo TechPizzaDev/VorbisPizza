@@ -345,12 +345,12 @@ namespace NVorbis
         }
 
         /// <inheritdoc/>
-        public int Read(Span<float> buffer, int samplesToRead, int stride)
+        public int Read(Span<float> buffer, int samplesToRead, int channelStride)
         {
-            return Read(buffer, samplesToRead, stride, interleave: false);
+            return Read(buffer, samplesToRead, channelStride, interleave: false);
         }
 
-        private unsafe int Read(Span<float> buffer, int samplesToRead, int stride, bool interleave)
+        private unsafe int Read(Span<float> buffer, int samplesToRead, int channelStride, bool interleave)
         {
             // if the caller didn't ask for any data, bail early
             if (buffer.Length == 0)
@@ -422,7 +422,7 @@ namespace NVorbis
                     }
                     else
                     {
-                        CopyBufferContiguous(buffer.Slice(idx), copyLen, stride, ClipSamples);
+                        CopyBufferContiguous(buffer.Slice(idx), copyLen, channelStride, ClipSamples);
                     }
 
                     idx += copyLen;
@@ -533,14 +533,14 @@ namespace NVorbis
             }
         }
 
-        private unsafe void CopyBufferContiguous(Span<float> buffer, int count, int stride, bool clip)
+        private unsafe void CopyBufferContiguous(Span<float> buffer, int count, int channelStride, bool clip)
         {
             float[][]? prevPacketBuf = _prevPacketBuf;
             Debug.Assert(prevPacketBuf != null);
 
             for (int i = 0; i < _channels; i++)
             {
-                Span<float> destination = buffer.Slice(i * stride, count);
+                Span<float> destination = buffer.Slice(i * channelStride, count);
                 Span<float> source = prevPacketBuf[i].AsSpan(_prevPacketStart, count);
 
                 if (clip)

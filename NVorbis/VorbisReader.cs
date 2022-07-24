@@ -239,13 +239,13 @@ namespace NVorbis
         }
 
         /// <inheritdoc/>
-        public int ReadSamples(Span<float> buffer, int samplesToRead, int stride)
+        public int ReadSamples(Span<float> buffer, int samplesToRead, int channelStride)
         {
             // don't allow non-aligned reads (always on a full sample boundary!)
             int count = buffer.Length - buffer.Length % _streamDecoder.Channels;
             if (count != 0)
             {
-                return _streamDecoder.Read(buffer.Slice(0, count), samplesToRead, stride);
+                return _streamDecoder.Read(buffer.Slice(0, count), samplesToRead, channelStride);
             }
             return 0;
         }

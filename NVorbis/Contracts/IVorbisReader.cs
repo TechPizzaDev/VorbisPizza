@@ -134,7 +134,7 @@ namespace NVorbis.Contracts
         int ReadSamples(Span<float> buffer);
 
         /// <inheritdoc cref="IStreamDecoder.Read(Span{float}, int, int)"/>
-        int ReadSamples(Span<float> buffer, int samplesToRead, int stride);
+        int ReadSamples(Span<float> buffer, int samplesToRead, int channelStride);
 
         /// <inheritdoc cref="IStreamDecoder.SeekTo(TimeSpan, SeekOrigin)"/>
         void SeekTo(TimeSpan timePosition, SeekOrigin seekOrigin = SeekOrigin.Begin);
