@@ -122,7 +122,7 @@ namespace NVorbis
 
         private void SetPagePart(int partIndex)
         {
-            ref PacketData dataPart = ref DataParts.Get(partIndex);
+            ref PacketData dataPart = ref DataParts.AsSpan()[partIndex];
             if (dataPart.Slice.Page == null)
             {
                 dataPart.Slice = PacketProvider.GetPacketData(dataPart.Location);
@@ -359,9 +359,10 @@ namespace NVorbis
         /// </summary>
         public void Finish()
         {
-            for (int i = 0; i < DataParts.Count; i++)
+            Span<PacketData> dataParts = DataParts;
+            for (int i = 0; i < dataParts.Length; i++)
             {
-                ref PacketData packetData = ref DataParts.Get(i);
+                ref PacketData packetData = ref dataParts[i];
                 if (packetData.Slice.Page != null)
                 {
                     packetData.Slice.Page.DecrementRef();
