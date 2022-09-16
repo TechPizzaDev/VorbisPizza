@@ -70,5 +70,11 @@ namespace NVorbis.Ogg
         {
             return _value.GetHashCode();
         }
+
+        /// <inheritdoc />
+        public override string ToString()
+        {
+            return $"{PageIndex}[{PacketIndex}]";
+        }
     }
 }
