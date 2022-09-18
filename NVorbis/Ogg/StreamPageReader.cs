@@ -149,36 +149,30 @@ namespace NVorbis.Ogg
 
         public long FindPage(long granulePos)
         {
-            // if we're being asked for the first granule, just grab the very first data page
             long pageIndex = -1;
-            if (granulePos == 0)
+
+            // start by looking at the last read page's position...
+            int lastPageIndex = _pageOffsets.Count - 1;
+            if (GetPageRaw(lastPageIndex, out long pageGP))
             {
-                pageIndex = FindFirstDataPage();
-            }
-            else
-            {
-                // start by looking at the last read page's position...
-                int lastPageIndex = _pageOffsets.Count - 1;
-                if (GetPageRaw(lastPageIndex, out long pageGP))
+                // most likely, we can look at previous pages for the appropriate one...
+                if (granulePos < pageGP)
                 {
-                    // most likely, we can look at previous pages for the appropriate one...
-                    if (granulePos < pageGP)
-                    {
-                        pageIndex = FindPageBisection(granulePos, FindFirstDataPage(), lastPageIndex, pageGP);
-                    }
-                    // unless we're seeking forward, which is merely an excercise in reading forward...
-                    else if (granulePos > pageGP)
-                    {
-                        pageIndex = FindPageForward(lastPageIndex, pageGP, granulePos);
-                    }
-                    // but of course, it's possible (though highly unlikely) that
-                    // the last read page ended on the granule we're looking for.
-                    else
-                    {
-                        pageIndex = lastPageIndex + 1;
-                    }
+                    pageIndex = FindPageBisection(granulePos, FindFirstDataPage(), lastPageIndex, pageGP);
+                }
+                // unless we're seeking forward, which is merely an excercise in reading forward...
+                else if (granulePos > pageGP)
+                {
+                    pageIndex = FindPageForward(lastPageIndex, pageGP, granulePos);
+                }
+                // but of course, it's possible (though highly unlikely) that
+                // the last read page ended on the granule we're looking for.
+                else
+                {
+                    pageIndex = lastPageIndex + 1;
                 }
             }
+
             if (pageIndex == -1)
             {
                 throw new SeekOutOfRangeException();

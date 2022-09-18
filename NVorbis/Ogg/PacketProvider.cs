@@ -50,30 +50,17 @@ namespace NVorbis.Ogg
             if (_reader == null)
                 throw new ObjectDisposedException(nameof(PacketProvider));
 
-            long pageIndex;
-            int packetIndex;
-            if (granulePos == 0)
+            long pageIndex = _reader.FindPage(granulePos);
+            if (_reader.HasAllPages && _reader.MaxGranulePosition == granulePos)
             {
-                // for this, we can generically say the first packet on the first page having a non-zero granule
-                pageIndex = _reader.FirstDataPageIndex;
-                packetIndex = 0;
+                // allow seek to the offset immediately after the last available (for what good it'll do)
+                _pageIndex = pageIndex;
+                _packetIndex = 0;
+                return granulePos;
             }
-            else
-            {
-                pageIndex = _reader.FindPage(granulePos);
-                if (_reader.HasAllPages && _reader.MaxGranulePosition == granulePos)
-                {
-                    // allow seek to the offset immediately after the last available (for what good it'll do)
-                    _pageIndex = pageIndex;
-                    _packetIndex = 0;
-                    return granulePos;
-                }
-                else
-                {
-                    packetIndex = FindPacket(pageIndex, ref granulePos, packetGranuleCountProvider);
-                }
-                packetIndex -= (int)preRoll;
-            }
+
+            int packetIndex = FindPacket(pageIndex, ref granulePos, packetGranuleCountProvider);
+            packetIndex -= (int)preRoll;
 
             if (!NormalizePacketIndex(ref pageIndex, ref packetIndex))
             {
