@@ -16,12 +16,6 @@ namespace NVorbis.Ogg
         private long _pageIndex;
         private int _packetIndex;
 
-        private long _lastPacketPageIndex;
-        private int _lastPacketPacketIndex;
-        private VorbisPacket _lastPacket;
-        private long _nextPacketPageIndex;
-        private int _nextPacketPacketIndex;
-
         public bool CanSeek => true;
 
         public int StreamSerial { get; }
@@ -35,7 +29,8 @@ namespace NVorbis.Ogg
 
         public long GetGranuleCount()
         {
-            if (_reader == null) throw new ObjectDisposedException(nameof(PacketProvider));
+            if (_reader == null)
+                throw new ObjectDisposedException(nameof(PacketProvider));
 
             if (!_reader.HasAllPages)
             {
@@ -52,7 +47,8 @@ namespace NVorbis.Ogg
 
         public long SeekTo(long granulePos, uint preRoll, IPacketGranuleCountProvider packetGranuleCountProvider)
         {
-            if (_reader == null) throw new ObjectDisposedException(nameof(PacketProvider));
+            if (_reader == null)
+                throw new ObjectDisposedException(nameof(PacketProvider));
 
             long pageIndex;
             int packetIndex;
@@ -67,9 +63,7 @@ namespace NVorbis.Ogg
                 pageIndex = _reader.FindPage(granulePos);
                 if (_reader.HasAllPages && _reader.MaxGranulePosition == granulePos)
                 {
-                    // allow seek to the offset immediatly after the last available (for what good it'll do)
-                    _lastPacket = default;
-
+                    // allow seek to the offset immediately after the last available (for what good it'll do)
                     _pageIndex = pageIndex;
                     _packetIndex = 0;
                     return granulePos;
@@ -92,7 +86,6 @@ namespace NVorbis.Ogg
                 packetIndex = 0;
             }
 
-            _lastPacket = default;
             _pageIndex = pageIndex;
             _packetIndex = (byte)packetIndex;
             return granulePos;
@@ -146,7 +139,8 @@ namespace NVorbis.Ogg
                     throw new System.IO.InvalidDataException("Could not find end of continuation!");
                 }
 
-                endGP -= packetGranuleCountProvider.GetPacketGranuleCount(ref packet, isLastInPage);
+                int count = packetGranuleCountProvider.GetPacketGranuleCount(ref packet, isLastInPage);
+                endGP -= count;
                 isLastInPage = false;
             }
 
@@ -169,7 +163,8 @@ namespace NVorbis.Ogg
                     throw new System.IO.InvalidDataException("Could not load previous packet!");
                 }
 
-                granulePos = endGP - packetGranuleCountProvider.GetPacketGranuleCount(ref packet, false);
+                int count = packetGranuleCountProvider.GetPacketGranuleCount(ref packet, false);
+                granulePos = endGP - count;
                 return -1;
             }
 
@@ -183,7 +178,8 @@ namespace NVorbis.Ogg
         // if packet index is larger than the current page allows, we just return it as-is
         private bool NormalizePacketIndex(ref long pageIndex, ref int packetIndex)
         {
-            if (!_reader.GetPage(pageIndex, out _, out bool isResync, out bool isContinuation, out _, out _, out _))
+            if (!_reader.GetPage(
+                pageIndex, out _, out bool isResync, out bool isContinuation, out _, out _, out _))
             {
                 return false;
             }
@@ -194,7 +190,8 @@ namespace NVorbis.Ogg
             while (pktIdx < (isContinuation ? 1 : 0))
             {
                 // can't merge across resync
-                if (isContinuation && isResync) return false;
+                if (isContinuation && isResync)
+                    return false;
 
                 // get the previous packet
                 bool wasContinuation = isContinuation;
@@ -218,34 +215,20 @@ namespace NVorbis.Ogg
 
         private VorbisPacket GetNextPacket(ref long pageIndex, ref int packetIndex)
         {
-            if (_reader == null) throw new ObjectDisposedException(nameof(PacketProvider));
+            if (_reader == null)
+                throw new ObjectDisposedException(nameof(PacketProvider));
 
-            if (_lastPacketPacketIndex != packetIndex || _lastPacketPageIndex != pageIndex || !_lastPacket.IsValid)
+            if (_reader.GetPage(
+                pageIndex, out long granulePos, out bool isResync, out _, out bool isContinued,
+                out ushort packetCount, out int pageOverhead))
             {
-                _lastPacket = default;
+                VorbisPacket packet = CreatePacket(
+                    ref pageIndex, ref packetIndex, true, granulePos, isResync, isContinued, packetCount, pageOverhead);
 
-                while (_reader.GetPage(
-                    pageIndex, out long granulePos, out bool isResync, out _, out bool isContinued,
-                    out ushort packetCount, out int pageOverhead))
-                {
-                    _lastPacketPageIndex = pageIndex;
-                    _lastPacketPacketIndex = packetIndex;
-
-                    _lastPacket = CreatePacket(
-                        ref pageIndex, ref packetIndex, true, granulePos, isResync, isContinued, packetCount, pageOverhead);
-
-                    _nextPacketPageIndex = pageIndex;
-                    _nextPacketPacketIndex = packetIndex;
-                    break;
-                }
-            }
-            else
-            {
-                pageIndex = _nextPacketPageIndex;
-                packetIndex = _nextPacketPacketIndex;
+                return packet;
             }
 
-            return _lastPacket;
+            return default;
         }
 
         private static PacketData[] GetDataPartArray(int minimumLength)
@@ -417,11 +400,6 @@ namespace NVorbis.Ogg
             if (packet.DataParts.Array != null)
             {
                 ReturnDataPartArray(packet.DataParts.Array);
-            }
-
-            if (_lastPacket.DataParts.AsSpan().SequenceEqual(packet.DataParts))
-            {
-                _lastPacket = default;
             }
         }
 
