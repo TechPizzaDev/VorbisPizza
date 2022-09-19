@@ -143,7 +143,7 @@ namespace NVorbis
         public unsafe bool Decode(
             ref VorbisPacket packet,
             float[][] buffer,
-            out int packetStartindex,
+            out int packetStartIndex,
             out int packetValidLength,
             out int packetTotalLength)
         {
@@ -153,7 +153,7 @@ namespace NVorbis
                 out int blockSize,
                 out int windowIndex,
                 out _,
-                out packetStartindex,
+                out packetStartIndex,
                 out packetValidLength,
                 out packetTotalLength))
             {
