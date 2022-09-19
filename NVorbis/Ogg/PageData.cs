@@ -90,7 +90,7 @@ namespace NVorbis.Ogg
             {
                 return new PageSlice(this, dataIdx, size);
             }
-            return default;
+            return new PageSlice(this, 0, 0);
         }
 
         public void IncrementRef()
