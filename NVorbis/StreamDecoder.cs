@@ -389,6 +389,7 @@ namespace NVorbis
                     }
 
                     if (!ReadNextPacket(idx, out long samplePosition))
+                    if (!ReadNextPacket(idx, out long samplePosition, out long positiveDiff))
                     {
                         // drain the current packet (the windowing will fade it out)
                         _prevPacketEnd = _prevPacketStop;
@@ -398,7 +399,7 @@ namespace NVorbis
                     if (samplePosition != -1 && !_hasPosition)
                     {
                         _hasPosition = true;
-                        _currentPosition = samplePosition - (_prevPacketEnd - _prevPacketStart) - idx;
+                        _currentPosition = samplePosition - (_prevPacketEnd - _prevPacketStart) - idx - positiveDiff;
                     }
                 }
 
@@ -577,13 +578,14 @@ namespace NVorbis
             }
         }
 
-        private bool ReadNextPacket(int bufferedSamples, out long samplePosition)
+        private bool ReadNextPacket(int bufferedSamples, out long samplePosition, out long positiveDiff)
         {
             // decode the next packet now so we can start overlapping with it
             float[][]? curPacket = DecodeNextPacket(
                 out int startIndex, out int validLen, out int totalLen, out bool isEndOfStream,
                 out samplePosition, out int bitsRead, out int bitsRemaining, out int containerOverheadBits);
 
+            positiveDiff = 0;
             _eosFound |= isEndOfStream;
             if (curPacket == null)
             {
@@ -592,7 +594,7 @@ namespace NVorbis
             }
 
             // if we get a max sample position, back off our valid length to match
-            if (samplePosition != -1 && isEndOfStream)
+            if (samplePosition != -1)
             {
                 long actualEnd = _currentPosition + bufferedSamples + validLen - startIndex;
                 int diff = (int)(samplePosition - actualEnd);
@@ -601,6 +603,10 @@ namespace NVorbis
                     Debug.Assert(validLen + diff >= 0);
                     validLen += diff;
                 }
+                else
+                {
+                    positiveDiff = diff;
+            }
             }
 
             // start overlapping (if we don't have an previous packet data,
@@ -797,7 +803,7 @@ namespace NVorbis
             _hasPosition = true;
 
             // read the pre-roll packet
-            if (!ReadNextPacket(0, out _))
+            if (!ReadNextPacket(0, out _, out _))
             {
                 // we'll use this to force ReadSamples to fail to read
                 _eosFound = true;
@@ -813,7 +819,7 @@ namespace NVorbis
             }
 
             // read the actual packet
-            if (!ReadNextPacket(-rollForward, out _))
+            if (!ReadNextPacket(-rollForward, out _, out _))
             {
                 ResetDecoder();
                 // we'll use this to force ReadSamples to fail to read
