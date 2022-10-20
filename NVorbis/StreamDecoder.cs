@@ -829,7 +829,7 @@ namespace NVorbis
             _currentPosition = samplePosition;
         }
 
-        int IPacketGranuleCountProvider.GetPacketGranuleCount(ref VorbisPacket curPacket, bool isLastInPage)
+        int IPacketGranuleCountProvider.GetPacketGranuleCount(ref VorbisPacket curPacket)
         {
             try
             {
@@ -850,7 +850,7 @@ namespace NVorbis
                 if (modeIdx >= (uint)_modes.Length)
                     return 0;
 
-                return _modes[modeIdx].GetPacketSampleCount(ref curPacket, isLastInPage);
+                return _modes[modeIdx].GetPacketSampleCount(ref curPacket);
             }
             finally
             {

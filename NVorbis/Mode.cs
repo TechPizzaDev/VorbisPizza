@@ -6,17 +6,23 @@ namespace NVorbis
 {
     internal struct Mode
     {
+        private struct OverlapInfo
+        {
+            public int PacketStartIndex;
+            public int PacketTotalLength;
+            public int PacketValidLength;
+        }
+
         private int _channels;
         private bool _blockFlag;
-        private int _block0Size;
-        private int _block1Size;
+        private int _blockSize;
         private Mapping _mapping;
+        private float[][] _windows;
+        private OverlapInfo[] _overlapInfo;
 
         public Mode(ref VorbisPacket packet, int channels, int block0Size, int block1Size, Mapping[] mappings)
         {
             _channels = channels;
-            _block0Size = block0Size;
-            _block1Size = block1Size;
 
             _blockFlag = packet.ReadBit();
             if (0 != packet.ReadBits(32))
@@ -33,110 +39,114 @@ namespace NVorbis
 
             if (_blockFlag)
             {
-                Windows = new float[][]
+                _blockSize = block1Size;
+                _windows = new float[][]
                 {
-                    new float[_block1Size],
-                    new float[_block1Size],
-                    new float[_block1Size],
-                    new float[_block1Size],
+                    CalcWindow(block0Size, block1Size, block0Size),
+                    CalcWindow(block1Size, block1Size, block0Size),
+                    CalcWindow(block0Size, block1Size, block1Size),
+                    CalcWindow(block1Size, block1Size, block1Size),
+                };
+                _overlapInfo = new OverlapInfo[]
+                {
+                    CalcOverlap(block0Size, block1Size, block0Size),
+                    CalcOverlap(block1Size, block1Size, block0Size),
+                    CalcOverlap(block0Size, block1Size, block1Size),
+                    CalcOverlap(block1Size, block1Size, block1Size),
                 };
             }
             else
             {
-                Windows = new float[][]
+                _blockSize = block0Size;
+                _windows = new float[][]
                 {
-                    new float[_block0Size],
+                    CalcWindow(block0Size, block0Size, block0Size),
                 };
-            }
-            CalcWindows();
-        }
-
-        private void CalcWindows()
-        {
-            // 0: prev = s, next = s || BlockFlag = false
-            // 1: prev = l, next = s
-            // 2: prev = s, next = l
-            // 3: prev = l, next = l
-
-            for (int idx = 0; idx < Windows.Length; idx++)
-            {
-                float[] array = Windows[idx];
-
-                int left = ((idx & 1) == 0 ? _block0Size : _block1Size) / 2;
-                int wnd = BlockSize;
-                int right = ((idx & 2) == 0 ? _block0Size : _block1Size) / 2;
-
-                int leftbegin = wnd / 4 - left / 2;
-                int rightbegin = wnd - wnd / 4 - right / 2;
-
-                for (int i = 0; i < left; i++)
-                {
-                    double x = Math.Sin((i + .5) / left * Math.PI / 2);
-                    x *= x;
-                    array[leftbegin + i] = (float)Math.Sin(x * Math.PI / 2);
-                }
-
-                for (int i = leftbegin + left; i < rightbegin; i++)
-                {
-                    array[i] = 1.0f;
-                }
-
-                for (int i = 0; i < right; i++)
-                {
-                    double x = Math.Sin((right - i - .5) / right * Math.PI / 2);
-                    x *= x;
-                    array[rightbegin + i] = (float)Math.Sin(x * Math.PI / 2);
-                }
+                _overlapInfo = Array.Empty<OverlapInfo>();
             }
         }
 
-        private bool GetPacketInfo(
-            ref VorbisPacket packet,
-            bool isLastInPage,
-            out int blockSize,
-            out int windowIndex,
-            out int leftOverlapHalfSize,
-            out int packetStartIndex,
-            out int packetValidLength,
-            out int packetTotalLength)
+        private static float[] CalcWindow(int prevBlockSize, int blockSize, int nextBlockSize)
         {
-            bool prevFlag, nextFlag;
-            if (_blockFlag)
+            float[] array = new float[blockSize];
+
+            int left = prevBlockSize / 2;
+            int wnd = blockSize;
+            int right = nextBlockSize / 2;
+
+            int leftbegin = wnd / 4 - left / 2;
+            int rightbegin = wnd - wnd / 4 - right / 2;
+
+            for (int i = 0; i < left; i++)
             {
-                blockSize = _block1Size;
-                prevFlag = packet.ReadBit();
-                nextFlag = packet.ReadBit();
-            }
-            else
-            {
-                blockSize = _block0Size;
-                prevFlag = nextFlag = false;
+                double x = Math.Sin((i + .5) / left * Math.PI / 2);
+                x *= x;
+                array[leftbegin + i] = (float)Math.Sin(x * Math.PI / 2);
             }
 
+            for (int i = leftbegin + left; i < rightbegin; i++)
+            {
+                array[i] = 1.0f;
+            }
+
+            for (int i = 0; i < right; i++)
+            {
+                double x = Math.Sin((right - i - .5) / right * Math.PI / 2);
+                x *= x;
+                array[rightbegin + i] = (float)Math.Sin(x * Math.PI / 2);
+            }
+
+            return array;
+        }
+
+        private static OverlapInfo CalcOverlap(int prevBlockSize, int blockSize, int nextBlockSize)
+        {
+            int leftOverlapHalfSize = prevBlockSize / 4;
+            int rightOverlapHalfSize = nextBlockSize / 4;
+
+            int packetStartIndex = blockSize / 4 - leftOverlapHalfSize;
+            int packetTotalLength = blockSize / 4 * 3 + rightOverlapHalfSize;
+            int packetValidLength = packetTotalLength - rightOverlapHalfSize * 2;
+
+            return new OverlapInfo
+            {
+                PacketStartIndex = packetStartIndex,
+                PacketValidLength = packetValidLength,
+                PacketTotalLength = packetTotalLength,
+            };
+        }
+
+        private bool GetPacketInfo(ref VorbisPacket packet, out int windowIndex, out int packetStartIndex, out int packetValidLength, out int packetTotalLength)
+        {
             if (packet.IsShort)
             {
                 windowIndex = 0;
-                leftOverlapHalfSize = 0;
                 packetStartIndex = 0;
                 packetValidLength = 0;
                 packetTotalLength = 0;
                 return false;
             }
 
-            int rightOverlapHalfSize = (nextFlag ? _block1Size : _block0Size) / 4;
-
-            windowIndex = (prevFlag ? 1 : 0) + (nextFlag ? 2 : 0);
-            leftOverlapHalfSize = (prevFlag ? _block1Size : _block0Size) / 4;
-            packetStartIndex = blockSize / 4 - leftOverlapHalfSize;
-            packetTotalLength = blockSize / 4 * 3 + rightOverlapHalfSize;
-            packetValidLength = packetTotalLength - rightOverlapHalfSize * 2;
-
-            if (isLastInPage && _blockFlag && !nextFlag)
+            if (_blockFlag)
             {
-                // this fixes a bug in certain libvorbis versions where a long->short that crosses
-                // a page boundary doesn't get counted correctly in the first page's granulePos
-                packetValidLength -= _block1Size / 4 - _block0Size / 4;
+                bool prevFlag = packet.ReadBit();
+                bool nextFlag = packet.ReadBit();
+
+                windowIndex = (prevFlag ? 1 : 0) + (nextFlag ? 2 : 0);
+
+                ref OverlapInfo overlapInfo = ref _overlapInfo[windowIndex];
+                packetStartIndex = overlapInfo.PacketStartIndex;
+                packetValidLength = overlapInfo.PacketValidLength;
+                packetTotalLength = overlapInfo.PacketTotalLength;
             }
+            else
+            {
+                windowIndex = 0;
+                packetStartIndex = 0;
+                packetValidLength = _blockSize / 2;
+                packetTotalLength = _blockSize;
+            }
+
             return true;
         }
 
@@ -149,17 +159,14 @@ namespace NVorbis
         {
             if (GetPacketInfo(
                 ref packet,
-                isLastInPage: false,
-                out int blockSize,
                 out int windowIndex,
-                out _,
                 out packetStartindex,
                 out packetValidLength,
                 out packetTotalLength))
             {
-                _mapping.DecodePacket(ref packet, blockSize, _channels, buffer);
+                _mapping.DecodePacket(ref packet, _blockSize, _channels, buffer);
 
-                Span<float> window = Windows[windowIndex].AsSpan(0, blockSize);
+                Span<float> window = _windows[windowIndex].AsSpan(0, _blockSize);
                 for (int ch = 0; ch < _channels; ch++)
                 {
                     Span<float> span = buffer[ch].AsSpan(0, window.Length);
@@ -190,14 +197,10 @@ namespace NVorbis
             return false;
         }
 
-        public int GetPacketSampleCount(ref VorbisPacket packet, bool isLastInPage)
+        public int GetPacketSampleCount(ref VorbisPacket packet)
         {
-            GetPacketInfo(ref packet, isLastInPage, out _, out _, out _, out int packetStartIndex, out int packetValidLength, out _);
+            GetPacketInfo(ref packet, out _, out int packetStartIndex, out int packetValidLength, out _);
             return packetValidLength - packetStartIndex;
         }
-
-        public int BlockSize => _blockFlag ? _block1Size : _block0Size;
-
-        public float[][] Windows { get; private set; }
     }
 }

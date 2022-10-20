@@ -50,40 +50,12 @@ namespace NVorbis.Ogg
             if (_reader == null)
                 throw new ObjectDisposedException(nameof(PacketProvider));
 
-            long pageIndex;
-            int packetIndex;
-            if (granulePos == 0)
-            {
-                // for this, we can generically say the first packet on the first page having a non-zero granule
-                pageIndex = _reader.FirstDataPageIndex;
-                packetIndex = 0;
-            }
-            else
-            {
-                pageIndex = _reader.FindPage(granulePos);
-                if (_reader.HasAllPages && _reader.MaxGranulePosition == granulePos)
-                {
-                    // allow seek to the offset immediately after the last available (for what good it'll do)
-                    _pageIndex = pageIndex;
-                    _packetIndex = 0;
-                    return granulePos;
-                }
-                else
-                {
-                    packetIndex = FindPacket(pageIndex, ref granulePos, packetGranuleCountProvider);
-                }
-                packetIndex -= (int)preRoll;
-            }
+            long pageIndex = _reader.FindPage(granulePos);
+            int packetIndex = FindPacket(pageIndex, preRoll, ref granulePos, packetGranuleCountProvider);
 
             if (!NormalizePacketIndex(ref pageIndex, ref packetIndex))
             {
                 throw new ArgumentOutOfRangeException(nameof(granulePos));
-            }
-
-            if (pageIndex < _reader.FirstDataPageIndex)
-            {
-                pageIndex = _reader.FirstDataPageIndex;
-                packetIndex = 0;
             }
 
             _pageIndex = pageIndex;
@@ -91,25 +63,46 @@ namespace NVorbis.Ogg
             return granulePos;
         }
 
-        private int FindPacket(long pageIndex, ref long granulePos, IPacketGranuleCountProvider packetGranuleCountProvider)
+        private (long lastPageGranulePos, int lastPagePacketLength, int firstRealPacket) GetPreviousPageInfo(long pageIndex, IPacketGranuleCountProvider packetGranuleCountProvider)
         {
-            // pageIndex is the correct page; we just need to figure out which packet
-            int firstRealPacket = 0;
-            if (_reader.GetPage(pageIndex - 1, out _, out _, out _, out bool isContinued, out _, out _))
+            if (pageIndex > 0)
             {
-                if (isContinued)
+                int lastPagePacketLength;
+                if (_reader.GetPage(pageIndex - 1, out var lastPageGranulePos, out _, out _, out var isContinued, out var lastPacketCount, out _))
                 {
-                    firstRealPacket = 1;
+                    if (pageIndex > _reader.FirstDataPageIndex)
+                    {
+                        --pageIndex;
+                        int lastPacketIndex = lastPacketCount - 1;
+                        
+                        // this will either be a continued packet OR the last packet of the last page
+                        // in both cases that's precisely the value we need
+                        VorbisPacket lastPacket = CreatePacket(ref pageIndex, ref lastPacketIndex, false, 0, false, isContinued, lastPacketCount, 0);
+                        if (!lastPacket.IsValid)
+                        {
+                            throw new System.IO.InvalidDataException("Could not find end of continuation!");
+                        }
+                        
+                        lastPagePacketLength = packetGranuleCountProvider.GetPacketGranuleCount(ref lastPacket);
+                    }
+                    else
+                    {
+                        lastPagePacketLength = 0;
+                    }
+                    return (lastPageGranulePos, lastPagePacketLength, isContinued ? 1 : 0);
                 }
+                throw new System.IO.InvalidDataException("Could not get preceding page?!");
             }
             else
             {
-                throw new System.IO.InvalidDataException("Could not get page?!");
+                return (0, 0, 0);
             }
+        }
 
-            // now get the ending granule of the page
+        private (long[] gps, long endGP) GetTargetPageInfo(long pageIndex, int firstRealPacket, int lastPagePacketLength, IPacketGranuleCountProvider packetGranuleCountProvider)
+        {
             if (!_reader.GetPage(
-                pageIndex, out long pageGranulePos, out bool isResync, out bool isContinuation, out isContinued,
+                pageIndex, out long pageGranulePos, out bool isResync, out bool isContinuation, out bool isContinued,
                 out ushort packetCount, out _))
             {
                 throw new System.IO.InvalidDataException("Could not get found page?!");
@@ -121,60 +114,154 @@ namespace NVorbis.Ogg
                 packetCount--;
             }
 
-            int packetIndex = packetCount;
-            bool isLastInPage = !isContinued;
+            // get the granule positions of all packets in the page
+            long[] gps = new long[packetCount];
             long endGP = pageGranulePos;
-            while (endGP > granulePos && --packetIndex >= firstRealPacket)
+            for (int packetIndex = packetCount - 1; packetIndex >= firstRealPacket; packetIndex--)
             {
-                // it would be nice to pass false instead of isContinued,
-                // but (hypothetically) we don't know if getPacketGranuleCount(...) needs the whole thing...
+                gps[packetIndex] = endGP;
+
+                // it would be nice to pass false instead of isContinued, but (hypothetically) we don't know if getPacketGranuleCount(...) needs the whole thing...
                 // Vorbis doesn't, but someone might decide to try to use us for another purpose so we'll be good here.
-
+                
                 VorbisPacket packet = CreatePacket(
-                    ref pageIndex, ref packetIndex, false, pageGranulePos, packetIndex == 0 && isResync,
+                    ref pageIndex, ref packetIndex, false, pageGranulePos, packetIndex == 0 && isResync, 
                     isContinued, packetCount, 0);
-
+                
                 if (!packet.IsValid)
                 {
                     throw new System.IO.InvalidDataException("Could not find end of continuation!");
                 }
 
-                int count = packetGranuleCountProvider.GetPacketGranuleCount(ref packet, isLastInPage);
+                int count = packetGranuleCountProvider.GetPacketGranuleCount(ref packet);
                 endGP -= count;
-                isLastInPage = false;
             }
 
-            if (packetIndex < firstRealPacket)
+            // if we're contnued, the the continued packet ends on our calcualted endGP
+            if (firstRealPacket == 1)
             {
-                // either it's a continued packet OR we've hit the "long->short over page boundary" bug.
-                // in both cases we'll just return the last packet of the previous page.
-                long prevPageIndex = pageIndex;
-                int prevPacketIndex = -1;
-                if (!NormalizePacketIndex(ref prevPageIndex, ref prevPacketIndex))
-                {
-                    throw new System.IO.InvalidDataException("Failed to normalize packet index?");
-                }
-
-                VorbisPacket packet = CreatePacket(
-                    ref prevPageIndex, ref prevPacketIndex, false, endGP, false, isContinuation, (ushort)(prevPacketIndex + 1), 0);
-
-                if (!packet.IsValid)
-                {
-                    throw new System.IO.InvalidDataException("Could not load previous packet!");
-                }
-
-                int count = packetGranuleCountProvider.GetPacketGranuleCount(ref packet, false);
-                granulePos = endGP - count;
-                return -1;
+                gps[0] = endGP;
+                endGP -= lastPagePacketLength;
             }
 
-            // normal seek; that wasn't so hard, right?
-            granulePos = endGP;
+            return (gps, endGP);
+        }
+
+        private int FindPacket(long pageIndex, long[] gps, long endGP, long lastPageGranulePos, int lastPagePacketLength, ref long granulePos)
+        {
+            // next check for a bugged vorbis encoder...
+            if (endGP != lastPageGranulePos)
+            {
+                long diff = endGP - lastPageGranulePos;
+                if (GetIsVorbisBugDiff(diff))
+                {
+                    if (diff > 0)
+                    {
+                        // the last packet in the last page is a long block that was mis-counted by libvorbis
+                        // if the requested granulePos is <= endGP, it's in that packet
+                        // otherwise, the normal logic should be fine
+                        // NOTE that this bug does not appear to happen on a continued packet, which makes this safe
+                        if (granulePos <= endGP)
+                        {
+                            granulePos = endGP - lastPagePacketLength;
+                            return -1;
+                        }
+                    }
+                    else
+                    {
+                        // our pageGranulePos is wrong, so adjust everything and let the normal logic apply
+                        for (int i = 0; i < gps.Length; i++)
+                        {
+                            gps[i] -= diff;
+                        }
+                    }
+                }
+                // if we're not on the first page, there's a problem...
+                // technically there could still be a problem on the first page, but we're ignoring it
+                else if (pageIndex > _reader.FirstDataPageIndex)
+                {
+                    // unknown error...
+                    throw new System.IO.InvalidDataException($"GranulePos mismatch: Page {pageIndex}, expected {lastPageGranulePos}, calculated {endGP}");
+                }
+            }
+
+            // finally, find the packet with the requested granulePos
+            for (int i = 0; i < gps.Length; i++)
+            {
+                if (gps[i] >= granulePos)
+                {
+                    if (i == 0)
+                    {
+                        granulePos = endGP;
+                    }
+                    else
+                    {
+                        granulePos = gps[i - 1];
+                    }
+                    return i;
+                }
+            }
+
+            throw new System.IO.InvalidDataException("Could not find seek packet?!");
+        }
+
+        private int FindPacket(long pageIndex, uint preRoll, ref long granulePos, IPacketGranuleCountProvider packetGranuleCountProvider)
+        {
+            // pageIndex is _probably_ the correct page (bugs in libogg mean long->short over page boundary isn't always correct).
+            // We check for this by looking for a difference in the previous page's granulePos vs. the calculated value
+
+            // first we look at the page info to see how it is set up
+            var (lastPageGranulePos, lastPagePacketLength, firstRealPacket) = GetPreviousPageInfo(pageIndex, packetGranuleCountProvider);
+
+            // now get the info on the target page
+            var (gps, endGP) = GetTargetPageInfo(pageIndex, firstRealPacket, lastPagePacketLength, packetGranuleCountProvider);
+
+            // finally figure out which packet in our known info we need to use
+            int packetIndex = FindPacket(pageIndex, gps, endGP, lastPageGranulePos, lastPagePacketLength, ref granulePos);
+
+            // then apply the preRoll (but only if we're not seeking into the first packet, which is its own preRoll)
+            if (endGP > 0 || packetIndex > 1)
+            {
+                packetIndex -= (int)preRoll;
+            }
             return packetIndex;
         }
 
-        // this method calc's the appropriate page and packet prior to the one specified,
-        // honoring continuations and handling negative packetIndex values
+        private static bool GetIsVorbisBugDiff(long diff)
+        {
+            // This requires either breaking abstractions OR doing some fancy bit math...
+            // We're gonna use the latter to keep the abstractions clean.
+            // For our bug, the bit pattern is x set bits followed by y cleared bits:
+            //   x = the number of bits between short & long block sizes
+            //   y = the number of bits in the short block size - 2
+            // So in binary it looks like 111000000 for 2048/256 block sizes.
+            // We pre-adjust the "/ 4" out by starting at 0 for y instead of 2
+
+            // we have to use the absolute value for this to work right
+            diff = Math.Abs(diff);
+
+            // find the count for y
+            long temp = diff;
+            int shortBlockBits = 0;
+            while (temp > 0 && (temp & 1) == 0)
+            {
+                ++shortBlockBits;
+                temp >>= 1;
+            }
+
+            // find the count for x (shortcut: start from shortBlockBits since this is really an offset from there)
+            int longBlockBits = shortBlockBits;
+            while ((temp & 1) == 1)
+            {
+                ++longBlockBits;
+                temp >>= 1;
+            }
+
+            // if we've encountered the bug, temp will be 0 and diff will equal longBlock / 4 - shortBLock /4
+            return temp == 0 && diff == (1 << longBlockBits) - (1 << shortBlockBits);
+        }
+
+        // this method calc's the appropriate page and packet prior to the one specified, honoring continuations and handling negative packetIndex values
         // if packet index is larger than the current page allows, we just return it as-is
         private bool NormalizePacketIndex(ref long pageIndex, ref int packetIndex)
         {
