@@ -151,6 +151,8 @@ namespace NVorbis
 
             _currentPosition = 0;
             ResetDecoder();
+            _hasPosition = true;
+
             return true;
         }
 
@@ -632,7 +634,7 @@ namespace NVorbis
         }
 
         private float[][]? DecodeNextPacket(
-            out int packetStartindex, out int packetValidLength, out int packetTotalLength, out bool isEndOfStream,
+            out int packetStartIndex, out int packetValidLength, out int packetTotalLength, out bool isEndOfStream,
             out long samplePosition, out int bitsRead, out int bitsRemaining, out int containerOverheadBits)
         {
             VorbisPacket packet = _packetProvider.GetNextPacket();
@@ -673,7 +675,7 @@ namespace NVorbis
                                 _nextPacketBuf[i] = new float[_block1Size];
                             }
                         }
-                        if (mode.Decode(ref packet, _nextPacketBuf, out packetStartindex, out packetValidLength, out packetTotalLength))
+                        if (mode.Decode(ref packet, _nextPacketBuf, out packetStartIndex, out packetValidLength, out packetTotalLength))
                         {
                             // per the spec, do not decode more samples than the last granulePosition
                             samplePosition = packet.GranulePosition;
@@ -691,7 +693,7 @@ namespace NVorbis
                 }
             }
 
-            packetStartindex = 0;
+            packetStartIndex = 0;
             packetValidLength = 0;
             packetTotalLength = 0;
             samplePosition = -1;
@@ -780,22 +782,12 @@ namespace NVorbis
                     throw new ArgumentOutOfRangeException(nameof(seekOrigin));
             }
 
-            if (samplePosition < 0) 
+            if (samplePosition < 0)
                 throw new ArgumentOutOfRangeException(nameof(samplePosition));
 
-            int rollForward;
-            if (samplePosition == 0)
-            {
-                // short circuit for the looping case...
-                _packetProvider.SeekTo(0, 0, this);
-                rollForward = 0;
-            }
-            else
-            {
-                // seek the stream to the correct position
-                long pos = _packetProvider.SeekTo(samplePosition, 1, this);
-                rollForward = (int)(samplePosition - pos);
-            }
+            // seek the stream to the correct position
+            long pos = _packetProvider.SeekTo(samplePosition, 1, this);
+            int rollForward = (int)(samplePosition - pos);
 
             // clear out old data
             ResetDecoder();
@@ -806,9 +798,10 @@ namespace NVorbis
             {
                 // we'll use this to force ReadSamples to fail to read
                 _eosFound = true;
-                if (_packetProvider.GetGranuleCount() != samplePosition)
+                long maxGranuleCount = _packetProvider.GetGranuleCount(this);
+                if (samplePosition > maxGranuleCount)
                 {
-                    throw new PreRollPacketException();
+                    throw new SeekOutOfRangeException();
                 }
                 _prevPacketStart = _prevPacketStop;
                 _currentPosition = samplePosition;
@@ -899,7 +892,15 @@ namespace NVorbis
         public TimeSpan TotalTime => TimeSpan.FromSeconds((double)TotalSamples / _sampleRate);
 
         /// <inheritdoc />
-        public long TotalSamples => _packetProvider?.GetGranuleCount() ?? throw new ObjectDisposedException(nameof(StreamDecoder));
+        public long TotalSamples
+        {
+            get
+            {
+                if (_packetProvider == null)
+                    throw new ObjectDisposedException(nameof(StreamDecoder));
+                return _packetProvider.GetGranuleCount(this);
+            }
+        }
 
         /// <inheritdoc />
         public TimeSpan TimePosition

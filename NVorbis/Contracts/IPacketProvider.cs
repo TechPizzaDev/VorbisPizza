@@ -36,7 +36,7 @@ namespace NVorbis.Contracts
         /// <summary>
         /// Gets the total number of granule available in the stream.
         /// </summary>
-        long GetGranuleCount();
+        long GetGranuleCount(IPacketGranuleCountProvider packetGranuleCountProvider);
 
         /// <summary>
         /// Gets packet data for the requested location.

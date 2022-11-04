@@ -188,12 +188,19 @@ namespace NVorbis.Ogg
 
         private long FindFirstDataPage()
         {
+            long pageIndex = _pageOffsets.Count - 1;
+            if (pageIndex < 0)
+            {
+                pageIndex = 0;
+            }
+
             while (!_firstDataPageIndex.HasValue)
             {
-                if (!GetPageRaw(_pageOffsets.Count, out _))
+                if (!GetPage(pageIndex, out _, out _, out _, out _, out _, out _))
                 {
-                    return uint.MaxValue;
+                    return -1;
                 }
+                pageIndex++;
             }
             return _firstDataPageIndex.Value;
         }
