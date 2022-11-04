@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
+using System.IO;
 using NVorbis.Contracts;
 using NVorbis.Contracts.Ogg;
 
@@ -33,7 +35,7 @@ namespace NVorbis.Ogg
         public long GetGranuleCount(IPacketGranuleCountProvider packetGranuleCountProvider)
         {
             if (_reader == null)
-                throw new ObjectDisposedException(nameof(PacketProvider));
+                ThrowObjectDisposedException();
 
             _ = GetPageRange(long.MaxValue, packetGranuleCountProvider, out long pageStart, out _);
 
@@ -54,7 +56,7 @@ namespace NVorbis.Ogg
         public long SeekTo(long granulePos, uint preRoll, IPacketGranuleCountProvider packetGranuleCountProvider)
         {
             if (_reader == null)
-                throw new ObjectDisposedException(nameof(PacketProvider));
+                ThrowObjectDisposedException();
 
             if (granulePos < 0)
                 throw new ArgumentOutOfRangeException(nameof(granulePos));
@@ -117,10 +119,10 @@ namespace NVorbis.Ogg
             while (true);
 
             if (!_reader.GetPage(
-                pageIndex, out long pageGranulePos, out bool isResync, out bool isContinuation, out bool isContinued,
+                pageIndex, out _, out bool isResync, out bool isContinuation, out bool isContinued,
                 out ushort packetCount, out _))
             {
-                throw new System.IO.InvalidDataException("Could not get found page?!");
+                ThrowMissingPageException();
             }
 
             int firstRealPacket = isContinuation ? 1 : 0;
@@ -132,14 +134,8 @@ namespace NVorbis.Ogg
 
             for (; packetIndex >= firstRealPacket; packetIndex--)
             {
-                VorbisPacket packet = CreatePacket(
-                    ref pageIndex, ref packetIndex, false, pageGranulePos, packetIndex == 0 && isResync,
-                    isContinued, packetCount, 0);
-
-                if (!packet.IsValid)
-                {
-                    throw new System.IO.InvalidDataException("Could not find end of continuation!");
-                }
+                VorbisPacket packet = CreateValidPacket(
+                    ref pageIndex, ref packetIndex, packetIndex == 0 && isResync, isContinued, packetCount);
 
                 int count = packetGranuleCountProvider.GetPacketGranuleCount(ref packet);
                 currentGranulePos -= count;
@@ -157,13 +153,12 @@ namespace NVorbis.Ogg
                 if (!_reader.GetPage(
                     prevPageIndex, out _, out _, out _, out _, out ushort prevPacketCount, out _))
                 {
-                    throw new System.IO.InvalidDataException("Could not get preceding page?!");
+                    ThrowMissingPrecedingPageException();
                 }
 
                 int lastPacketIndex = prevPacketCount - 1;
-                VorbisPacket lastPacket = CreatePacket(
-                    ref prevPageIndex, ref lastPacketIndex, false, pageGranulePos, packetIndex == 0 && isResync,
-                    isContinued, packetCount, 0);
+                VorbisPacket lastPacket = CreateValidPacket(
+                    ref prevPageIndex, ref lastPacketIndex, packetIndex == 0 && isResync, isContinued, packetCount);
 
                 int count = packetGranuleCountProvider.GetPacketGranuleCount(ref lastPacket);
                 currentGranulePos -= count;
@@ -233,7 +228,7 @@ namespace NVorbis.Ogg
                 if (!_reader.GetPage(
                     prevPageIndex, out _, out _, out _, out bool isContinued, out ushort packetCount, out _))
                 {
-                    throw new System.IO.InvalidDataException("Could not get preceding page?!");
+                    ThrowMissingPrecedingPageException();
                 }
 
                 if (isContinued)
@@ -242,13 +237,8 @@ namespace NVorbis.Ogg
 
                     // This will either be a continued packet OR the last packet of the last page,
                     // in both cases that's precisely the value we need.
-                    VorbisPacket lastPacket = CreatePacket(
-                        ref prevPageIndex, ref lastPacketIndex, false, 0, false, isContinued, packetCount, 0);
-
-                    if (!lastPacket.IsValid)
-                    {
-                        throw new System.IO.InvalidDataException("Could not find end of continuation!");
-                    }
+                    VorbisPacket lastPacket = CreateValidPacket(
+                        ref prevPageIndex, ref lastPacketIndex, false, isContinued, packetCount);
 
                     int count = packetGranuleCountProvider.GetPacketGranuleCount(ref lastPacket);
                     pageLength += count;
@@ -257,9 +247,9 @@ namespace NVorbis.Ogg
                 int firstRealPacket = isContinued ? 1 : 0;
 
                 if (!_reader.GetPage(
-                    pIndex, out long pGranulePos, out bool isResync, out _, out isContinued, out packetCount, out _))
+                    pIndex, out _, out bool isResync, out _, out isContinued, out packetCount, out _))
                 {
-                    throw new System.IO.InvalidDataException("Could not get found page?!");
+                    ThrowMissingPageException();
                 }
 
                 int packetIndex = firstRealPacket;
@@ -276,14 +266,8 @@ namespace NVorbis.Ogg
 
                 for (; packetIndex < pCount; packetIndex++)
                 {
-                    VorbisPacket packet = CreatePacket(
-                        ref pIndex, ref packetIndex, false, 0, packetIndex == 0 && isResync,
-                        isContinued, packetCount, 0);
-
-                    if (!packet.IsValid)
-                    {
-                        throw new System.IO.InvalidDataException("Could not find end of continuation!");
-                    }
+                    VorbisPacket packet = CreateValidPacket(
+                        ref pIndex, ref packetIndex, packetIndex == 0 && isResync, isContinued, packetCount);
 
                     int packetLength = packetGranuleCountProvider.GetPacketGranuleCount(ref packet);
                     pageLength += packetLength;
@@ -293,17 +277,6 @@ namespace NVorbis.Ogg
                 if (pIndex > 0)
                 {
                     pageGranule += _pageEndGranules[(int)(pIndex - 1)];
-                }
-
-                if (_reader.HasAllPages)
-                {
-                    if (pIndex == _reader.PageCount - 1)
-                    {
-                        if (pageGranule < pGranulePos)
-                        {
-                            //pageGranule = pGranulePos;
-                        }
-                    }
                 }
 
                 _pageEndGranules.Add(pageGranule);
@@ -341,7 +314,8 @@ namespace NVorbis.Ogg
                 }
 
                 // can't merge if continuation flags don't match
-                if (wasContinuation && !isContinued) return false;
+                if (wasContinuation && !isContinued)
+                    return false;
 
                 // add the previous packet's packetCount
                 pktIdx += packetCount - (wasContinuation ? 1 : 0);
@@ -355,7 +329,7 @@ namespace NVorbis.Ogg
         private VorbisPacket GetNextPacket(ref long pageIndex, ref int packetIndex)
         {
             if (_reader == null)
-                throw new ObjectDisposedException(nameof(PacketProvider));
+                ThrowObjectDisposedException();
 
             if (_reader.GetPage(
                 pageIndex, out long granulePos, out bool isResync, out _, out bool isContinued,
@@ -388,6 +362,45 @@ namespace NVorbis.Ogg
             {
                 _dataPartPool.Enqueue(array);
             }
+        }
+
+        [DoesNotReturn]
+        private void ThrowObjectDisposedException()
+        {
+            throw new ObjectDisposedException(GetType().FullName);
+        }
+
+        [DoesNotReturn]
+        private static void ThrowMissingPrecedingPageException()
+        {
+            throw new InvalidDataException("Could not get found preceding page.");
+        }
+
+        [DoesNotReturn]
+        private static void ThrowMissingPageException()
+        {
+            throw new InvalidDataException("Could not get found page.");
+        }
+
+        [DoesNotReturn]
+        private static void ThrowInvalidContinuationPacketException()
+        {
+            throw new InvalidDataException("Could not find end of continuation.");
+        }
+
+        private VorbisPacket CreateValidPacket(
+            ref long pageIndex, ref int packetIndex, bool isResync, bool isContinued, ushort packetCount)
+        {
+            VorbisPacket packet = CreatePacket(
+                ref pageIndex, ref packetIndex, false, 0, packetIndex == 0 && isResync,
+                isContinued, packetCount, 0);
+
+            if (!packet.IsValid)
+            {
+                ThrowInvalidContinuationPacketException();
+            }
+
+            return packet;
         }
 
         private VorbisPacket CreatePacket(
