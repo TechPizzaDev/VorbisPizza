@@ -764,6 +764,9 @@ namespace NVorbis
             if (!_packetProvider.CanSeek)
                 throw new InvalidOperationException("Seek is not supported by the underlying packet provider.");
 
+            if (samplePosition < 0)
+                throw new ArgumentOutOfRangeException(nameof(samplePosition));
+
             switch (seekOrigin)
             {
                 case SeekOrigin.Begin:
@@ -781,9 +784,6 @@ namespace NVorbis
                 default:
                     throw new ArgumentOutOfRangeException(nameof(seekOrigin));
             }
-
-            if (samplePosition < 0)
-                throw new ArgumentOutOfRangeException(nameof(samplePosition));
 
             // seek the stream to the correct position
             long pos = _packetProvider.SeekTo(samplePosition, 1, this);

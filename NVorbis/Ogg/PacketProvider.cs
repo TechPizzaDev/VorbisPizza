@@ -56,6 +56,9 @@ namespace NVorbis.Ogg
             if (_reader == null)
                 throw new ObjectDisposedException(nameof(PacketProvider));
 
+            if (granulePos < 0)
+                throw new ArgumentOutOfRangeException(nameof(granulePos));
+
             long approxPageIndex = _reader.FindPage(granulePos);
 
             (long pageIndex, int packetIndex, long actualPos) = GetTargetPageInfo(approxPageIndex, granulePos, packetGranuleCountProvider);
@@ -74,7 +77,7 @@ namespace NVorbis.Ogg
 
             if (!NormalizePacketIndex(ref pageIndex, ref packetIndex))
             {
-                throw new ArgumentOutOfRangeException(nameof(granulePos));
+                throw new SeekOutOfRangeException();
             }
 
             _pageIndex = pageIndex;
