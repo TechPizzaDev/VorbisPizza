@@ -3,54 +3,10 @@ using System.Buffers.Binary;
 
 namespace NVorbis.Ogg
 {
-    internal ref partial struct Crc
+    internal partial struct Crc
     {
-        //static Crc()
-        //{
-        //    const uint CRC32_POLY = 0x04c11db7;
-        //
-        //    uint[] crcTable = new uint[1024];
-        //    Init(crcTable, false, 32, CRC32_POLY);
-        //    s_crcTable = crcTable;
-        //}
-        //
-        //private static int Init(Span<uint> table, bool le, int bits, uint poly)
-        //{
-        //    for (int i = 0; i < 256; i++)
-        //    {
-        //        if (le)
-        //        {
-        //            uint c = (uint)i;
-        //            for (int j = 0; j < 8; j++)
-        //                c = (c >> 1) ^ (poly & (uint)(-(c & 1)));
-        //            table[i] = c;
-        //        }
-        //        else
-        //        {
-        //            uint c = (uint)(i << 24);
-        //            for (int j = 0; j < 8; j++)
-        //                c = (c << 1) ^ ((poly << (32 - bits)) & (uint)(((int)c) >> 31));
-        //            table[i] = BinaryPrimitives.ReverseEndianness(c);
-        //        }
-        //    }
-        //    table[256] = 1;
-        //
-        //    if (table.Length >= 1024)
-        //    {
-        //        for (int i = 0; i < 256; i++)
-        //        {
-        //            for (int j = 0; j < 3; j++)
-        //            {
-        //                table[256 * (j + 1) + i] =
-        //                    (table[256 * j + i] >> 8) ^ table[(int)(table[256 * j + i] & 0xFF)];
-        //            }
-        //        }
-        //    }
-        //    return 0;
-        //}
-
         private uint _crc;
-        private Span<uint> _table;
+        private uint[] _table;
 
         public static Crc Create()
         {
@@ -64,23 +20,39 @@ namespace NVorbis.Ogg
         private static unsafe uint Update(uint* table, uint crc, byte* buffer, nint length)
         {
             byte* end = buffer + length;
-            while (((nint)buffer & 3) != 0 && buffer < end)
+            while (((nint)buffer & 7) != 0 && buffer < end)
             {
                 crc = table[((byte)crc) ^ *buffer++] ^ (crc >> 8);
             }
 
-            while (buffer < end - 3)
-            {
-                uint value = !BitConverter.IsLittleEndian
-                    ? BinaryPrimitives.ReverseEndianness(*(uint*)buffer)
-                    : *(uint*)buffer;
-                buffer += 4;
+            uint* table1 = table + 1 * TableLength;
+            uint* table2 = table + 2 * TableLength;
+            uint* table3 = table + 3 * TableLength;
+            uint* table4 = table + 4 * TableLength;
+            uint* table5 = table + 5 * TableLength;
+            uint* table6 = table + 6 * TableLength;
+            uint* table7 = table + 7 * TableLength;
 
-                crc ^= value;
-                crc = table[3 * 256 + (crc & 0xFF)] ^
-                      table[2 * 256 + ((crc >> 8) & 0xFF)] ^
-                      table[1 * 256 + ((crc >> 16) & 0xFF)] ^
-                      table[0 * 256 + ((crc >> 24))];
+            while (buffer < end - 7)
+            {
+                ulong value = !BitConverter.IsLittleEndian
+                    ? BinaryPrimitives.ReverseEndianness(*(ulong*)buffer)
+                    : *(ulong*)buffer;
+                
+                uint high = (uint)(value >> 32);
+
+                crc ^= (uint)value;
+
+                crc = table[(high >> 24) & 0xFF] ^
+                      table1[(high >> 16) & 0xFF] ^
+                      table2[(high >> 8) & 0xFF] ^
+                      table3[high & 0xFF] ^
+                      table4[((crc >> 24))] ^
+                      table5[((crc >> 16) & 0xFF)] ^
+                      table6[((crc >> 8) & 0xFF)] ^
+                      table7[(crc & 0xFF)];
+
+                buffer += 8;
             }
 
             while (buffer < end)
