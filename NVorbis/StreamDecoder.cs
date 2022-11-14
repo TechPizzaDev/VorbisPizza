@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Numerics;
@@ -15,8 +16,11 @@ namespace NVorbis
     /// </summary>
     public sealed class StreamDecoder : IStreamDecoder, IPacketGranuleCountProvider
     {
+        private const int MaxPooledBuffers = 2;
+
         private IPacketProvider _packetProvider;
         private StreamStats _stats;
+        private Queue<float[][]> _bufferPool;
 
         private byte _channels;
         private int _sampleRate;
@@ -49,6 +53,7 @@ namespace NVorbis
             _packetProvider = packetProvider ?? throw new ArgumentNullException(nameof(packetProvider));
 
             _stats = new StreamStats();
+            _bufferPool = new Queue<float[][]>(MaxPooledBuffers);
 
             _utf8Vendor = Array.Empty<byte>();
             _utf8Comments = Array.Empty<byte[]>();
@@ -328,14 +333,42 @@ namespace NVorbis
 
         private void ResetDecoder()
         {
+            ReturnBuffer(_prevPacketBuf);
             _prevPacketBuf = null;
             _prevPacketStart = 0;
             _prevPacketEnd = 0;
             _prevPacketStop = 0;
+            ReturnBuffer(_nextPacketBuf);
             _nextPacketBuf = null;
             _eosFound = false;
             _hasClipped = false;
             _hasPosition = false;
+        }
+
+        private float[][] GetBuffer()
+        {
+            if (!_bufferPool.TryDequeue(out float[][]? buffer))
+            {
+                buffer = new float[_channels][];
+                for (int i = 0; i < buffer.Length; i++)
+                {
+                    buffer[i] = new float[_block1Size];
+                }
+            }
+            return buffer;
+        }
+
+        private void ReturnBuffer(float[][]? buffer)
+        {
+            if (buffer == null)
+            {
+                return;
+            }
+
+            if (_bufferPool.Count < MaxPooledBuffers)
+            {
+                _bufferPool.Enqueue(buffer);
+            }
         }
 
         #region Decoding
@@ -387,6 +420,8 @@ namespace NVorbis
                     if (_eosFound)
                     {
                         // no more samples, so just return
+                        ReturnBuffer(_prevPacketBuf);
+                        _prevPacketBuf = null;
                         break;
                     }
 
@@ -667,14 +702,7 @@ namespace NVorbis
                     {
                         // if we get here, we should have a good packet; decode it and add it to the buffer
                         ref Mode mode = ref _modes[(int)packet.ReadBits(_modeFieldBits)];
-                        if (_nextPacketBuf == null)
-                        {
-                            _nextPacketBuf = new float[_channels][];
-                            for (int i = 0; i < _channels; i++)
-                            {
-                                _nextPacketBuf[i] = new float[_block1Size];
-                            }
-                        }
+                        _nextPacketBuf ??= GetBuffer();
                         if (mode.Decode(ref packet, _nextPacketBuf, out packetStartIndex, out packetValidLength, out packetTotalLength))
                         {
                             // per the spec, do not decode more samples than the last granulePosition
@@ -863,6 +891,7 @@ namespace NVorbis
 
             _nextPacketBuf = null;
             _prevPacketBuf = null;
+            _bufferPool = null!;
         }
 
         #region Properties
