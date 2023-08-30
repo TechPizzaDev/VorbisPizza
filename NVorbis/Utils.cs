@@ -1,7 +1,6 @@
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics;
-using System.Runtime.Intrinsics.X86;
 
 namespace NVorbis
 {
@@ -69,20 +68,13 @@ namespace NVorbis
             Vector128<float> upper = Vector128.Create(0.99999994f);
             Vector128<float> lower = Vector128.Create(-0.99999994f);
 
-            Vector128<float> gt = Sse.CompareGreaterThan(value, upper);
-            Vector128<float> lt = Sse.CompareLessThan(value, lower);
-            clipped = Sse.Or(clipped, Sse.Or(gt, lt));
+            Vector128<float> gt = Vector128.GreaterThan(value, upper);
+            Vector128<float> lt = Vector128.LessThan(value, lower);
+            clipped = Vector128.BitwiseOr(clipped, Vector128.BitwiseOr(gt, lt));
 
-            if (Sse41.IsSupported)
-            {
-                value = Sse41.BlendVariable(value, upper, gt);
-                value = Sse41.BlendVariable(value, lower, lt);
-            }
-            else
-            {
-                value = Sse.Or(Sse.And(gt, upper), Sse.AndNot(gt, value));
-                value = Sse.Or(Sse.And(lt, lower), Sse.AndNot(lt, value));
-            }
+            value = Vector128.ConditionalSelect(gt, upper, value);
+            value = Vector128.ConditionalSelect(lt, lower, value);
+
             return value;
         }
 

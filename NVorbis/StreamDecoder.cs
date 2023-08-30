@@ -4,8 +4,8 @@ using System.Diagnostics;
 using System.IO;
 using System.Numerics;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
-using System.Runtime.Intrinsics.X86;
 using NVorbis.Contracts;
 using NVorbis.Ogg;
 
@@ -445,16 +445,14 @@ namespace NVorbis
                 {
                     if (interleave)
                     {
-                        fixed (float* target = buffer.Slice(idx * channels, copyLen * channels))
+                        Span<float> target = buffer.Slice(idx * channels, copyLen * channels);
+                        if (ClipSamples)
                         {
-                            if (ClipSamples)
-                            {
-                                ClippingCopyBuffer(target, copyLen);
-                            }
-                            else
-                            {
-                                CopyBuffer(target, copyLen);
-                            }
+                            ClippingCopyBuffer(ref MemoryMarshal.GetReference(target), copyLen);
+                        }
+                        else
+                        {
+                            CopyBuffer(ref MemoryMarshal.GetReference(target), copyLen);
                         }
                     }
                     else
@@ -475,7 +473,7 @@ namespace NVorbis
         }
 
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
-        private unsafe void ClippingCopyBuffer(float* target, int count)
+        private unsafe void ClippingCopyBuffer(ref float target, int count)
         {
             float[][]? prevPacketBuf = _prevPacketBuf;
             Debug.Assert(prevPacketBuf != null);
@@ -483,72 +481,62 @@ namespace NVorbis
             int channels = _channels;
             int j = 0;
 
-            if (Sse.IsSupported)
+            if (Vector128.IsHardwareAccelerated)
             {
                 Vector128<float> clipped = Vector128<float>.Zero;
 
-                if (_channels == 2)
+                if (Vector128Helper.IsSupported && channels == 2)
                 {
-                    fixed (float* prev0Ptr = prevPacketBuf[0])
-                    fixed (float* prev1Ptr = prevPacketBuf[1])
+                    ref float prev0 = ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(prevPacketBuf[0]), _prevPacketStart);
+                    ref float prev1 = ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(prevPacketBuf[1]), _prevPacketStart);
+
+                    for (; j + Vector128<float>.Count <= count; j += Vector128<float>.Count)
                     {
-                        float* prev0 = prev0Ptr + _prevPacketStart;
-                        float* prev1 = prev1Ptr + _prevPacketStart;
+                        Vector128<float> p0 = Vector128Helper.LoadUnsafe(ref prev0, j);
+                        Vector128<float> p1 = Vector128Helper.LoadUnsafe(ref prev1, j);
 
-                        for (; j + Vector128<float>.Count <= count; j += Vector128<float>.Count)
-                        {
-                            Vector128<float> p0 = Unsafe.ReadUnaligned<Vector128<float>>(prev0 + j);
-                            Vector128<float> p1 = Unsafe.ReadUnaligned<Vector128<float>>(prev1 + j);
+                        Vector128<float> t0 = Vector128Helper.ShuffleLower(p0, p1);
+                        Vector128<float> ts0 = Vector128Helper.ShuffleInterleave(t0, t0);
 
-                            Vector128<float> t0 = Sse.Shuffle(p0, p1, 0b01_00_01_00);
-                            Vector128<float> ts0 = Sse.Shuffle(t0, t0, 0b11_01_10_00);
+                        Vector128<float> t1 = Vector128Helper.ShuffleUpper(p0, p1);
+                        Vector128<float> ts1 = Vector128Helper.ShuffleInterleave(t1, t1);
 
-                            Vector128<float> t1 = Sse.Shuffle(p0, p1, 0b11_10_11_10);
-                            Vector128<float> ts1 = Sse.Shuffle(t1, t1, 0b11_01_10_00);
+                        ts0 = Utils.ClipValue(ts0, ref clipped);
+                        ts1 = Utils.ClipValue(ts1, ref clipped);
 
-                            ts0 = Utils.ClipValue(ts0, ref clipped);
-                            ts1 = Utils.ClipValue(ts1, ref clipped);
-
-                            Unsafe.WriteUnaligned(target + j * 2, ts0);
-                            Unsafe.WriteUnaligned(target + j * 2 + Vector128<float>.Count, ts1);
-                        }
+                        ts0.StoreUnsafe(ref target, j * 2);
+                        ts1.StoreUnsafe(ref target, j * 2 + Vector128<float>.Count);
                     }
                 }
-                else if (_channels == 1)
+                else if (channels == 1)
                 {
-                    fixed (float* prev0Ptr = prevPacketBuf[0])
-                    {
-                        float* prev0 = prev0Ptr + _prevPacketStart;
+                    ref float prev0 = ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(prevPacketBuf[0]), _prevPacketStart);
 
-                        for (; j + Vector128<float>.Count <= count; j += Vector128<float>.Count)
-                        {
-                            Vector128<float> p0 = Unsafe.ReadUnaligned<Vector128<float>>(prev0 + j);
-                            p0 = Utils.ClipValue(p0, ref clipped);
-                            Unsafe.WriteUnaligned(target + j, p0);
-                        }
+                    for (; j + Vector128<float>.Count <= count; j += Vector128<float>.Count)
+                    {
+                        Vector128<float> p0 = Vector128Helper.LoadUnsafe(ref prev0, j);
+                        p0 = Utils.ClipValue(p0, ref clipped);
+                        p0.StoreUnsafe(ref target, j);
                     }
                 }
 
-                Vector128<float> mask = Sse.CompareEqual(clipped, Vector128<float>.Zero);
-                _hasClipped |= Sse.MoveMask(mask) != 0xf;
+                Vector128<float> mask = Vector128.Equals(clipped, Vector128<float>.Zero);
+                _hasClipped |= mask.ExtractMostSignificantBits() != 0xf;
             }
 
             for (int ch = 0; ch < channels; ch++)
             {
-                fixed (float* prevPtr = prevPacketBuf[ch])
-                {
-                    float* prev = prevPtr + _prevPacketStart;
-                    float* tar = target + ch;
+                ref float prev = ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(prevPacketBuf[ch]), _prevPacketStart);
+                ref float tar = ref Unsafe.Add(ref target, ch);
 
-                    for (int i = j; i < count; i++)
-                    {
-                        tar[i * channels] = Utils.ClipValue(prev[i], ref _hasClipped);
-                    }
+                for (int i = j; i < count; i++)
+                {
+                    Unsafe.Add(ref tar, i * channels) = Utils.ClipValue(Unsafe.Add(ref prev, i), ref _hasClipped);
                 }
             }
         }
 
-        private unsafe void CopyBuffer(float* target, int count)
+        private unsafe void CopyBuffer(ref float target, int count)
         {
             float[][]? prevPacketBuf = _prevPacketBuf;
             Debug.Assert(prevPacketBuf != null);
@@ -557,15 +545,13 @@ namespace NVorbis
 
             for (int ch = 0; ch < channels; ch++)
             {
-                fixed (float* prevPtr = prevPacketBuf[ch])
-                {
-                    float* prev = prevPtr + _prevPacketStart;
-                    float* tar = target + ch;
+                ref float prevPtr = ref MemoryMarshal.GetArrayDataReference(prevPacketBuf[ch]);
+                ref float prev = ref Unsafe.Add(ref prevPtr, _prevPacketStart);
+                ref float tar = ref Unsafe.Add(ref target, ch);
 
-                    for (int i = 0; i < count; i++)
-                    {
-                        tar[i * channels] = prev[i];
-                    }
+                for (int i = 0; i < count; i++)
+                {
+                    Unsafe.Add(ref tar, i * channels) = Unsafe.Add(ref prev, i);
                 }
             }
         }
@@ -575,36 +561,34 @@ namespace NVorbis
             float[][]? prevPacketBuf = _prevPacketBuf;
             Debug.Assert(prevPacketBuf != null);
 
-            for (int i = 0; i < _channels; i++)
+            for (int ch = 0; ch < _channels; ch++)
             {
-                Span<float> destination = buffer.Slice(i * channelStride, count);
-                Span<float> source = prevPacketBuf[i].AsSpan(_prevPacketStart, count);
+                Span<float> destination = buffer.Slice(ch * channelStride, count);
+                Span<float> source = prevPacketBuf[ch].AsSpan(_prevPacketStart, count);
 
                 if (clip)
                 {
-                    fixed (float* dst = destination)
-                    fixed (float* src = source)
+                    ref float dst = ref MemoryMarshal.GetReference(destination);
+                    ref float src = ref MemoryMarshal.GetReference(source);
+                    int j = 0;
+
+                    if (Vector.IsHardwareAccelerated)
                     {
-                        int j = 0;
+                        Vector<int> clipped = Vector<int>.Zero;
 
-                        if (Vector.IsHardwareAccelerated)
+                        for (; j + Vector<float>.Count <= count; j += Vector<float>.Count)
                         {
-                            Vector<int> clipped = Vector<int>.Zero;
-
-                            for (; j + Vector<float>.Count <= count; j += Vector<float>.Count)
-                            {
-                                Vector<float> p0 = Unsafe.ReadUnaligned<Vector<float>>(src + j);
-                                p0 = Utils.ClipValue(p0, ref clipped);
-                                Unsafe.WriteUnaligned(dst + j, p0);
-                            }
-
-                            _hasClipped |= !Vector.EqualsAll(clipped, Vector<int>.Zero);
+                            Vector<float> p0 = VectorHelper.LoadUnsafe(ref src, j);
+                            Vector<float> c0 = Utils.ClipValue(p0, ref clipped);
+                            c0.StoreUnsafe(ref dst, j);
                         }
 
-                        for (; j < count; j++)
-                        {
-                            dst[j] = Utils.ClipValue(src[j], ref _hasClipped);
-                        }
+                        _hasClipped |= !Vector.EqualsAll(clipped, Vector<int>.Zero);
+                    }
+
+                    for (; j < count; j++)
+                    {
+                        Unsafe.Add(ref dst, j) = Utils.ClipValue(Unsafe.Add(ref src, j), ref _hasClipped);
                     }
                 }
                 else
@@ -728,34 +712,33 @@ namespace NVorbis
             return null;
         }
 
-        private static unsafe void OverlapBuffers(
-            float[][] previous, float[][] next, int prevStart, int prevLen, int nextStart, int channels)
+        private static void OverlapBuffers(
+            float[][] previousBuffers, float[][] nextBuffers, int prevStart, int prevLen, int nextStart, int channels)
         {
-            nint length = prevLen - prevStart;
+            int length = prevLen - prevStart;
             for (int c = 0; c < channels; c++)
             {
-                Span<float> prevSpan = previous[c].AsSpan(prevStart, (int)length);
-                Span<float> nextSpan = next[c].AsSpan(nextStart, (int)length);
+                Span<float> prevSpan = previousBuffers[c].AsSpan(prevStart, length);
+                Span<float> nextSpan = nextBuffers[c].AsSpan(nextStart, length);
 
-                fixed (float* p = prevSpan)
-                fixed (float* n = nextSpan)
+                ref float prev = ref MemoryMarshal.GetReference(prevSpan);
+                ref float next = ref MemoryMarshal.GetReference(nextSpan);
+
+                int i = 0;
+                if (Vector.IsHardwareAccelerated)
                 {
-                    nint i = 0;
-                    if (Vector.IsHardwareAccelerated)
+                    for (; i + Vector<float>.Count <= length; i += Vector<float>.Count)
                     {
-                        for (; i + Vector<float>.Count <= length; i += Vector<float>.Count)
-                        {
-                            Vector<float> ni = Unsafe.ReadUnaligned<Vector<float>>(n + i);
-                            Vector<float> pi = Unsafe.ReadUnaligned<Vector<float>>(p + i);
+                        Vector<float> ni = VectorHelper.LoadUnsafe(ref next, i);
+                        Vector<float> pi = VectorHelper.LoadUnsafe(ref prev, i);
 
-                            Vector<float> result = ni + pi;
-                            Unsafe.WriteUnaligned(n + i, result);
-                        }
+                        Vector<float> result = ni + pi;
+                        result.StoreUnsafe(ref next, i);
                     }
-                    for (; i < length; i++)
-                    {
-                        n[i] += p[i];
-                    }
+                }
+                for (; i < length; i++)
+                {
+                    Unsafe.Add(ref next, i) += Unsafe.Add(ref prev, i);
                 }
             }
         }

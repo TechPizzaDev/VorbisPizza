@@ -1,6 +1,7 @@
 using System;
 using System.Numerics;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 namespace NVorbis
 {
@@ -152,7 +153,7 @@ namespace NVorbis
 
         public unsafe bool Decode(
             ref VorbisPacket packet,
-            float[][] buffer,
+            float[][] buffers,
             out int packetStartIndex,
             out int packetValidLength,
             out int packetTotalLength)
@@ -164,32 +165,34 @@ namespace NVorbis
                 out packetValidLength,
                 out packetTotalLength))
             {
-                _mapping.DecodePacket(ref packet, _blockSize, _channels, buffer);
+                _mapping.DecodePacket(ref packet, _blockSize, _channels, buffers);
 
-                Span<float> window = _windows[windowIndex].AsSpan(0, _blockSize);
+                int length = _blockSize;
+                Span<float> windowSpan = _windows[windowIndex].AsSpan(0, length);
+
                 for (int ch = 0; ch < _channels; ch++)
                 {
-                    Span<float> span = buffer[ch].AsSpan(0, window.Length);
+                    Span<float> bufferSpan = buffers[ch].AsSpan(0, length);
 
-                    fixed (float* spanPtr = span)
-                    fixed (float* windowPtr = window)
+                    ref float buffer = ref MemoryMarshal.GetReference(bufferSpan);
+                    ref float window = ref MemoryMarshal.GetReference(windowSpan);
+                    int i = 0;
+
+                    if (Vector.IsHardwareAccelerated)
                     {
-                        int i = 0;
-                        if (Vector.IsHardwareAccelerated)
+                        for (; i + Vector<float>.Count <= length; i += Vector<float>.Count)
                         {
-                            for (; i + Vector<float>.Count <= window.Length; i += Vector<float>.Count)
-                            {
-                                Vector<float> v_span = Unsafe.ReadUnaligned<Vector<float>>(spanPtr + i);
-                                Vector<float> v_window = Unsafe.ReadUnaligned<Vector<float>>(windowPtr + i);
+                            Vector<float> v_buffer = VectorHelper.LoadUnsafe(ref buffer, i);
+                            Vector<float> v_window = VectorHelper.LoadUnsafe(ref window, i);
 
-                                Vector<float> result = v_span * v_window;
-                                Unsafe.WriteUnaligned(spanPtr + i, result);
-                            }
+                            Vector<float> result = v_buffer * v_window;
+                            result.StoreUnsafe(ref buffer, i);
                         }
-                        for (; i < window.Length; i++)
-                        {
-                            span[i] *= window[i];
-                        }
+                    }
+
+                    for (; i < length; i++)
+                    {
+                        Unsafe.Add(ref buffer, i) *= Unsafe.Add(ref window, i);
                     }
                 }
                 return true;
