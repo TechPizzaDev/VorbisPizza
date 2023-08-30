@@ -1,5 +1,6 @@
 using System;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using NVorbis.Contracts;
 
 namespace NVorbis
@@ -8,7 +9,7 @@ namespace NVorbis
     /// Linear interpolated values on dB amplitude and linear frequency scale.
     /// Draws a curve between each point to define the low-resolution spectral data.
     /// </summary>
-    internal unsafe sealed class Floor1 : IFloor
+    internal sealed class Floor1 : IFloor
     {
         private sealed class Data : FloorData
         {
@@ -212,41 +213,46 @@ namespace NVorbis
         }
 
         [SkipLocalsInit]
-        public void Apply(FloorData floorData, int blockSize, float[] residue)
+        public unsafe void Apply(FloorData floorData, int blockSize, float[] residue)
         {
-            bool* stepFlags = stackalloc bool[64];
-
             int n = blockSize / 2;
             Data data = (Data)floorData;
 
             if (data.PostCount > 0)
             {
+                bool* stepFlags = stackalloc bool[64];
+
                 UnwrapPosts(stepFlags, data);
 
-                fixed (float* dbTable = inverse_dB_table)
-                fixed (float* res = residue)
+                ref float dbTable = ref MemoryMarshal.GetArrayDataReference(inverse_dB_table);
+                ref float res = ref MemoryMarshal.GetArrayDataReference(residue);
+
+                int lx = 0;
+                int ly = data.Posts[0] * _multiplier;
+                for (int i = 1; i < data.PostCount; i++)
                 {
-                    int lx = 0;
-                    int ly = data.Posts[0] * _multiplier;
-                    for (int i = 1; i < data.PostCount; i++)
-                    {
-                        int idx = _sortIdx[i];
+                    int idx = _sortIdx[i];
 
-                        if (stepFlags[idx])
+                    if (stepFlags[idx])
+                    {
+                        int hx = _xList[idx];
+                        int hy = data.Posts[idx] * _multiplier;
+                        if (lx < n)
                         {
-                            int hx = _xList[idx];
-                            int hy = data.Posts[idx] * _multiplier;
-                            if (lx < n) RenderLineMulti(lx, ly, Math.Min(hx, n), hy, dbTable, res);
-                            lx = hx;
-                            ly = hy;
+                            RenderLineMulti(lx, ly, Math.Min(hx, n), hy, ref dbTable, ref res);
                         }
-                        if (lx >= n) break;
+                        lx = hx;
+                        ly = hy;
                     }
-
-                    if (lx < n)
+                    if (lx >= n)
                     {
-                        RenderLineMulti(lx, ly, n, ly, dbTable, res);
+                        break;
                     }
+                }
+
+                if (lx < n)
+                {
+                    RenderLineMulti(lx, ly, n, ly, ref dbTable, ref res);
                 }
             }
             else
@@ -255,75 +261,82 @@ namespace NVorbis
             }
         }
 
-        private void UnwrapPosts(bool* stepFlags, Data data)
+        private unsafe void UnwrapPosts(bool* stepFlags, Data data)
         {
-            fixed (int* xList = _xList)
-            fixed (int* finalY = data.Posts)
-            fixed (int* lNeigh = _lNeigh)
-            fixed (int* hNeigh = _hNeigh)
+            ref int xList = ref MemoryMarshal.GetArrayDataReference(_xList);
+            ref int finalY = ref MemoryMarshal.GetArrayDataReference(data.Posts);
+            ref int lNeigh = ref MemoryMarshal.GetArrayDataReference(_lNeigh);
+            ref int hNeigh = ref MemoryMarshal.GetArrayDataReference(_hNeigh);
+
+            stepFlags[0] = true;
+            stepFlags[1] = true;
+
+            Unsafe.Add(ref finalY, 0) = data.Posts[0];
+            Unsafe.Add(ref finalY, 1) = data.Posts[1];
+
+            for (int i = 2; i < data.PostCount; i++)
             {
-                stepFlags[0] = true;
-                stepFlags[1] = true;
+                int lowOfs = Unsafe.Add(ref lNeigh, i);
+                int highOfs = Unsafe.Add(ref hNeigh, i);
 
-                finalY[0] = data.Posts[0];
-                finalY[1] = data.Posts[1];
+                int predicted = RenderPoint(
+                    Unsafe.Add(ref xList, lowOfs),
+                    Unsafe.Add(ref finalY, lowOfs),
+                    Unsafe.Add(ref xList, highOfs),
+                    Unsafe.Add(ref finalY, highOfs),
+                    Unsafe.Add(ref xList, i));
 
-                for (int i = 2; i < data.PostCount; i++)
+                int val = Unsafe.Add(ref finalY, i);
+                int highroom = _range - predicted;
+                int lowroom = predicted;
+                int room;
+                if (highroom < lowroom)
                 {
-                    int lowOfs = lNeigh[i];
-                    int highOfs = hNeigh[i];
+                    room = highroom * 2;
+                }
+                else
+                {
+                    room = lowroom * 2;
+                }
 
-                    int predicted = RenderPoint(xList[lowOfs], finalY[lowOfs], xList[highOfs], finalY[highOfs], xList[i]);
+                int result;
+                if (val != 0)
+                {
+                    stepFlags[lowOfs] = true;
+                    stepFlags[highOfs] = true;
+                    stepFlags[i] = true;
 
-                    int val = finalY[i];
-                    int highroom = _range - predicted;
-                    int lowroom = predicted;
-                    int room;
-                    if (highroom < lowroom)
+                    if (val >= room)
                     {
-                        room = highroom * 2;
-                    }
-                    else
-                    {
-                        room = lowroom * 2;
-                    }
-                    if (val != 0)
-                    {
-                        stepFlags[lowOfs] = true;
-                        stepFlags[highOfs] = true;
-                        stepFlags[i] = true;
-
-                        if (val >= room)
+                        if (highroom > lowroom)
                         {
-                            if (highroom > lowroom)
-                            {
-                                finalY[i] = val - lowroom + predicted;
-                            }
-                            else
-                            {
-                                finalY[i] = predicted - val + highroom - 1;
-                            }
+                            result = val - lowroom + predicted;
                         }
                         else
                         {
-                            if ((val % 2) == 1)
-                            {
-                                // odd
-                                finalY[i] = predicted - ((val + 1) / 2);
-                            }
-                            else
-                            {
-                                // even
-                                finalY[i] = predicted + (val / 2);
-                            }
+                            result = predicted - val + highroom - 1;
                         }
                     }
                     else
                     {
-                        stepFlags[i] = false;
-                        finalY[i] = predicted;
+                        if ((val % 2) == 1)
+                        {
+                            // odd
+                            result = predicted - ((val + 1) / 2);
+                        }
+                        else
+                        {
+                            // even
+                            result = predicted + (val / 2);
+                        }
                     }
                 }
+                else
+                {
+                    stepFlags[i] = false;
+                    result = predicted;
+                }
+                Unsafe.Add(ref finalY, i) = result;
             }
         }
 
@@ -344,7 +357,7 @@ namespace NVorbis
             }
         }
 
-        private static void RenderLineMulti(int x0, int y0, int x1, int y1, float* dbTable, float* v)
+        private static void RenderLineMulti(int x0, int y0, int x1, int y1, ref float dbTable, ref float v)
         {
             int dy = y1 - y0;
             int adx = x1 - x0;
@@ -355,7 +368,7 @@ namespace NVorbis
             int y = y0;
             int err = -adx;
 
-            v[x] *= dbTable[y];
+            Unsafe.Add(ref v, x) *= Unsafe.Add(ref dbTable, y);
             ady -= Abs(b) * adx;
 
             while (++x < x1)
@@ -367,7 +380,7 @@ namespace NVorbis
                     err -= adx;
                     y += sy;
                 }
-                v[x] *= dbTable[y];
+                Unsafe.Add(ref v, x) *= Unsafe.Add(ref dbTable, y);
             }
         }
 

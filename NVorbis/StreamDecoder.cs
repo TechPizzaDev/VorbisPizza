@@ -385,7 +385,7 @@ namespace NVorbis
             return Read(buffer, samplesToRead, channelStride, interleave: false);
         }
 
-        private unsafe int Read(Span<float> buffer, int samplesToRead, int channelStride, bool interleave)
+        private int Read(Span<float> buffer, int samplesToRead, int channelStride, bool interleave)
         {
             // if the caller didn't ask for any data, bail early
             if (buffer.Length == 0)
@@ -473,7 +473,7 @@ namespace NVorbis
         }
 
         [MethodImpl(MethodImplOptions.AggressiveOptimization)]
-        private unsafe void ClippingCopyBuffer(ref float target, int count)
+        private void ClippingCopyBuffer(ref float target, int count)
         {
             float[][]? prevPacketBuf = _prevPacketBuf;
             Debug.Assert(prevPacketBuf != null);
@@ -536,7 +536,7 @@ namespace NVorbis
             }
         }
 
-        private unsafe void CopyBuffer(ref float target, int count)
+        private void CopyBuffer(ref float target, int count)
         {
             float[][]? prevPacketBuf = _prevPacketBuf;
             Debug.Assert(prevPacketBuf != null);
@@ -556,7 +556,7 @@ namespace NVorbis
             }
         }
 
-        private unsafe void CopyBufferContiguous(Span<float> buffer, int count, int channelStride, bool clip)
+        private void CopyBufferContiguous(Span<float> buffer, int count, int channelStride, bool clip)
         {
             float[][]? prevPacketBuf = _prevPacketBuf;
             Debug.Assert(prevPacketBuf != null);

@@ -1,5 +1,6 @@
 using System;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using NVorbis.Contracts;
 
 namespace NVorbis
@@ -97,7 +98,7 @@ namespace NVorbis
         }
 
         [SkipLocalsInit]
-        public unsafe void DecodePacket(ref VorbisPacket packet, int blockSize, int channels, float[][] buffer)
+        public void DecodePacket(ref VorbisPacket packet, int blockSize, int channels, float[][] buffer)
         {
             Span<bool> noExecuteChannel = stackalloc bool[256];
             int halfBlockSize = blockSize >> 1;
@@ -153,51 +154,52 @@ namespace NVorbis
                 Span<float> magnitudeSpan = buffer[_couplingMangitude[i]].AsSpan(0, halfBlockSize);
                 Span<float> angleSpan = buffer[_couplingAngle[i]].AsSpan(0, halfBlockSize);
 
-                fixed (float* magnitude = magnitudeSpan)
-                fixed (float* angle = angleSpan)
+                ref float magnitude = ref MemoryMarshal.GetReference(magnitudeSpan);
+                ref float angle = ref MemoryMarshal.GetReference(angleSpan);
+
+                // we only have to do the first half; MDCT ignores the last half
+                for (int j = 0; j < halfBlockSize; j++)
                 {
-                    // we only have to do the first half; MDCT ignores the last half
-                    for (int j = 0; j < halfBlockSize; j++)
+                    float oldM = Unsafe.Add(ref magnitude, j);
+                    float oldA = Unsafe.Add(ref angle, j);
+
+                    float newM = oldM;
+                    float newA = oldA;
+
+                    if (oldM > 0)
                     {
-                        float oldM = magnitude[j];
-                        float oldA = angle[j];
-
-                        float newM = oldM;
-                        float newA = oldA;
-
-                        if (oldM > 0)
+                        if (oldA > 0)
                         {
-                            if (oldA > 0)
-                            {
-                                newA = oldM - oldA;
-                            }
-                            else
-                            {
-                                newM = oldM + oldA;
-                                newA = oldM;
-                            }
+                            newA = oldM - oldA;
                         }
                         else
                         {
-                            if (oldA > 0)
-                            {
-                                newA = oldM + oldA;
-                            }
-                            else
-                            {
-                                newM = oldM - oldA;
-                                newA = oldM;
-                            }
+                            newM = oldM + oldA;
+                            newA = oldM;
                         }
-
-                        magnitude[j] = newM;
-                        angle[j] = newA;
                     }
+                    else
+                    {
+                        if (oldA > 0)
+                        {
+                            newA = oldM + oldA;
+                        }
+                        else
+                        {
+                            newM = oldM - oldA;
+                            newA = oldM;
+                        }
+                    }
+
+                    Unsafe.Add(ref magnitude, j) = newM;
+                    Unsafe.Add(ref angle, j) = newA;
                 }
             }
 
             if (halfBlockSize > _buf2.Length)
+            {
                 Array.Resize(ref _buf2, halfBlockSize);
+            }
 
             // apply floor / dot product / MDCT (only run if we have sound energy in that channel)
             for (int c = 0; c < _channelFloor.Length; c++)
