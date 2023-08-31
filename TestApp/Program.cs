@@ -41,19 +41,21 @@ namespace TestApp
 
             byte[] bytes = File.ReadAllBytes(sourceFile);
 
-            for (int j = 0; j < 2; j++)
+            int iterationCount = 2;
+
+            Console.WriteLine("  Comparing seek vs forward decode");
+            for (int j = 0; j < iterationCount; j++)
             {
                 Console.WriteLine($" Iteration {j + 1}");
 
                 Decode(bytes, (vorbRead1, vorbRead2) =>
                 {
-                    if (j != 0)
+                    if (j % 2 != 0)
                     {
                         vorbRead1.ClipSamples = false;
                         vorbRead2.ClipSamples = false;
                     }
 
-                    Console.WriteLine("  Comparing seek vs forward decode");
                     do
                     {
                         int cnt1 = vorbRead1.ReadSamples(sampleBuf1);
@@ -78,12 +80,18 @@ namespace TestApp
                     }
                     while (true);
                 });
-                FullGC();
+            }
+            FullGC();
+
+            Console.WriteLine($"  Writing interleaved {destinationFile}");
+            for (int j = 0; j < iterationCount; j++)
+            {
+                Console.WriteLine($" Iteration {j + 1}");
 
                 Decode(bytes, (vorbRead1, vorbRead2) =>
                 {
                     string? fileName = destinationFile;
-                    if (j != 0)
+                    if (j % 2 != 0)
                     {
                         vorbRead1.ClipSamples = false;
                         vorbRead2.ClipSamples = false;
@@ -92,7 +100,6 @@ namespace TestApp
                             fileName = AppendToFileName(fileName, "-noclip");
                     }
 
-                    Console.WriteLine($"  Writing interleaved {fileName}");
                     int channels = vorbRead1.Channels;
                     using (WaveWriter writer = new(CreateWriteStream(fileName), false, vorbRead1.SampleRate, channels))
                     {
@@ -103,7 +110,13 @@ namespace TestApp
                         }
                     }
                 });
-                FullGC();
+            }
+            FullGC();
+
+            Console.WriteLine($"  Writing non-interleaved {destinationFile}");
+            for (int j = 0; j < iterationCount; j++)
+            {
+                Console.WriteLine($" Iteration {j + 1}");
 
                 Decode(bytes, (vorbRead1, vorbRead2) =>
                 {
@@ -114,7 +127,7 @@ namespace TestApp
                     }
 
                     string? fileName = destinationFile;
-                    if (j != 0)
+                    if (j % 2 != 0)
                     {
                         vorbRead1.ClipSamples = false;
                         vorbRead2.ClipSamples = false;
@@ -122,7 +135,6 @@ namespace TestApp
                         if (fileName != null)
                             fileName = AppendToFileName(fileName, "-noclip");
                     }
-                    Console.WriteLine($"  Writing non-interleaved {fileName}");
 
                     string? leftFile = fileName != null ? AppendToFileName(fileName, "-left") : null;
                     string? rightFile = fileName != null ? AppendToFileName(fileName, "-right") : null;
@@ -140,8 +152,8 @@ namespace TestApp
                         }
                     }
                 });
-                FullGC();
             }
+            FullGC();
         }
 
         public static void Decode(byte[] bytes, Action<VorbisReader, VorbisReader> action)
