@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using NVorbis.Contracts;
 using NVorbis.Ogg;
 
@@ -162,32 +163,25 @@ namespace NVorbis
             return value;
         }
 
-        [SkipLocalsInit]
-        private unsafe ulong RefillBits(ref int count)
+        private ulong RefillBits(ref int count)
         {
-            byte* buffer = stackalloc byte[8];
+            ulong buffer = 0;
             uint toRead = (71 - (uint)_bitCount) / 8;
-            Span<byte> span = new(buffer, (int)toRead);
-            int bytesRead = ReadBytes(span);
+            int bytesRead = ReadBytes(MemoryMarshal.CreateSpan(ref Unsafe.As<ulong, byte>(ref buffer), (int)toRead));
 
-            int i = 0;
-            for (; i + sizeof(uint) <= bytesRead; i += sizeof(uint))
-            {
-                _bitBucket |= (ulong)*(uint*)(buffer + i) << _bitCount;
-                _bitCount += 32;
-            }
-
-            for (; i < bytesRead; i++)
-            {
-                _bitBucket |= (ulong)buffer[i] << _bitCount;
-                _bitCount += 8;
-            }
+            _bitBucket |= buffer << _bitCount;
+            _bitCount += bytesRead * 8;
 
             if (bytesRead > 0 && _bitCount > 64)
-                _overflowBits = (byte)(buffer[bytesRead - 1] >> (72 - _bitCount));
+            {
+                ulong lastByte = buffer >> ((bytesRead - 1) * 8);
+                _overflowBits = (byte)(lastByte >> (72 - _bitCount));
+            }
 
             if (count > _bitCount)
+            {
                 count = _bitCount;
+            }
 
             ulong value = _bitBucket;
             ulong mask = ~(ulong.MaxValue << count);
@@ -207,7 +201,9 @@ namespace NVorbis
 
             bitsRead = count;
             if (_bitCount < count)
+            {
                 return RefillBits(ref bitsRead);
+            }
 
             ulong value = _bitBucket;
             ulong mask = ~(ulong.MaxValue << count);
@@ -228,7 +224,9 @@ namespace NVorbis
                 _bitBucket >>= count;
 
                 if (_bitCount > 64)
+                {
                     SkipOverflow(count);
+                }
 
                 _bitCount -= count;
                 _readBits += count;
@@ -255,12 +253,13 @@ namespace NVorbis
 
         private int SkipExtraBits(int count)
         {
-            Span<byte> tmp = stackalloc byte[1];
             if (count <= 0)
             {
                 return 0;
             }
 
+            byte buffer = 0;
+            Span<byte> span = new(ref buffer);
             int startReadBits = _readBits;
 
             count -= _bitCount;
@@ -268,9 +267,9 @@ namespace NVorbis
             _bitCount = 0;
             _bitBucket = 0;
 
-            while (count > 8)
+            while (count >= 8)
             {
-                if (ReadBytes(tmp) != tmp.Length)
+                if (ReadBytes(span) != span.Length)
                 {
                     count = 0;
                     IsShort = true;
@@ -282,14 +281,14 @@ namespace NVorbis
 
             if (count > 0)
             {
-                int r = ReadBytes(tmp);
-                if (r != tmp.Length)
+                int r = ReadBytes(span);
+                if (r != span.Length)
                 {
                     IsShort = true;
                 }
                 else
                 {
-                    _bitBucket = (ulong)(tmp[0] >> count);
+                    _bitBucket = (ulong)(buffer >> count);
                     _bitCount = 8 - count;
                     _readBits += count;
                 }
