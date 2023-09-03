@@ -4,6 +4,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Runtime.Intrinsics;
 
 namespace NVorbis
 {
@@ -195,10 +196,10 @@ namespace NVorbis
                 int l = 2;
                 for (; l < (ld - 3) >> 1; ++l)
                 {
-                    int k0 = n >> (l + 2), k0_2 = k0 >> 1;
+                    int k0 = n >> (l + 2);
+                    int k0_2 = k0 >> 1;
                     int lim = 1 << (l + 1);
-                    int i;
-                    for (i = 0; i < lim; ++i)
+                    for (int i = 0; i < lim; ++i)
                     {
                         step3_inner_r_loop(n >> (l + 4), u, n2 - 1 - k0 * i, -k0_2, A, 1 << (l + 3));
                     }
@@ -206,12 +207,13 @@ namespace NVorbis
 
                 for (; l < ld - 6; ++l)
                 {
-                    int k0 = n >> (l + 2), k1 = 1 << (l + 3), k0_2 = k0 >> 1;
+                    int k0 = n >> (l + 2);
+                    int k1 = 1 << (l + 3);
+                    int k0_2 = k0 >> 1;
                     int rlim = n >> (l + 6), r;
                     int lim = 1 << (l + 1);
-                    int i_off;
                     float* A0 = A;
-                    i_off = n2 - 1;
+                    int i_off = n2 - 1;
                     for (r = rlim; r > 0; --r)
                     {
                         step3_inner_s_loop(lim, u, i_off, -k0_2, A0, k1, k0);
@@ -431,52 +433,129 @@ namespace NVorbis
 
             private static void step3_inner_r_loop(int lim, float* e, int d0, int k_off, float* A, int k1)
             {
-                int i;
-                float k00_20, k01_21;
-
                 float* e0 = e + d0;
                 float* e2 = e0 + k_off;
 
-                for (i = lim >> 2; i > 0; --i)
+                int i = lim >> 2;
+                bool nonOverlapped = (e0 - e2) >= i * 8;
+                Debug.Assert(nonOverlapped, "Overlapped addresses.");
+
+                if (nonOverlapped && Vector256Helper.IsAcceleratedGather)
                 {
-                    k00_20 = e0[-0] - e2[-0];
-                    k01_21 = e0[-1] - e2[-1];
-                    e0[-0] += e2[-0];
-                    e0[-1] += e2[-1];
-                    e2[-0] = k00_20 * A[0] - k01_21 * A[1];
-                    e2[-1] = k01_21 * A[0] + k00_20 * A[1];
+                    Vector256<int> v_index =
+                        Vector256.Create(0, 1, 0, 1, 0, 1, 0, 1) +
+                        Vector256.Create(k1) * Vector256.Create(0, 0, 1, 1, 2, 2, 3, 3);
 
-                    A += k1;
+                    for (; i > 0; --i)
+                    {
+                        var v_e0 = Vector256.Load(e0 - 7);
+                        var v_e2 = Vector256.Load(e2 - 7);
 
-                    k00_20 = e0[-2] - e2[-2];
-                    k01_21 = e0[-3] - e2[-3];
-                    e0[-2] += e2[-2];
-                    e0[-3] += e2[-3];
-                    e2[-2] = k00_20 * A[0] - k01_21 * A[1];
-                    e2[-3] = k01_21 * A[0] + k00_20 * A[1];
+                        var v_res0 = v_e0 + v_e2;
+                        v_res0.Store(e0 - 7);
 
-                    A += k1;
+                        var v_k0 = v_e0 - v_e2;
 
-                    k00_20 = e0[-4] - e2[-4];
-                    k01_21 = e0[-5] - e2[-5];
-                    e0[-4] += e2[-4];
-                    e0[-5] += e2[-5];
-                    e2[-4] = k00_20 * A[0] - k01_21 * A[1];
-                    e2[-5] = k01_21 * A[0] + k00_20 * A[1];
+                        var v_a = Vector256Helper.Gather(A, v_index, 4);
+                        A += k1 * 4;
 
-                    A += k1;
+                        var v_a0 = Vector256.Shuffle(v_a, Vector256.Create(6, 6, 4, 4, 2, 2, 0, 0));
+                        var v_a1 = Vector256.Shuffle(v_a, Vector256.Create(7, 7, 5, 5, 3, 3, 1, 1));
+                        var v_k1 = Vector256.Shuffle(v_k0, Vector256.Create(1, 0, 3, 2, 5, 4, 7, 6));
 
-                    k00_20 = e0[-6] - e2[-6];
-                    k01_21 = e0[-7] - e2[-7];
-                    e0[-6] += e2[-6];
-                    e0[-7] += e2[-7];
-                    e2[-6] = k00_20 * A[0] - k01_21 * A[1];
-                    e2[-7] = k01_21 * A[0] + k00_20 * A[1];
+                        var v_res1 = v_k0 * v_a0 + v_k1 * v_a1 * Vector256.Create(1, -1, 1, -1, 1, -1, 1, -1f);
+                        v_res1.Store(e2 - 7);
 
-                    e0 -= 8;
-                    e2 -= 8;
+                        e0 -= 8;
+                        e2 -= 8;
+                    }
+                }
+                else if (nonOverlapped && Vector128Helper.IsAcceleratedGather)
+                {
+                    Vector128<int> v_index =
+                        Vector128.Create(0, 1, 0, 1) +
+                        Vector128.Create(k1) * Vector128.Create(0, 0, 1, 1);
 
-                    A += k1;
+                    for (; i > 0; --i)
+                    {
+                        var l_e0 = Vector128.Load(e0 - 7);
+                        var h_e0 = Vector128.Load(e0 - 3);
+                        var l_e2 = Vector128.Load(e2 - 7);
+                        var h_e2 = Vector128.Load(e2 - 3);
+
+                        var l_res0 = l_e0 + l_e2;
+                        var h_res0 = h_e0 + h_e2;
+                        l_res0.Store(e0 - 7);
+                        h_res0.Store(e0 - 3);
+
+                        var l_k0 = l_e0 - l_e2;
+                        var h_k0 = h_e0 - h_e2;
+
+                        var l_a = Vector128Helper.Gather(A, v_index, 4);
+                        A += k1 * 2;
+
+                        var h_a = Vector128Helper.Gather(A, v_index, 4);
+                        A += k1 * 2;
+
+                        var l_a0 = Vector128.Shuffle(h_a, Vector128.Create(2, 2, 0, 0));
+                        var h_a0 = Vector128.Shuffle(l_a, Vector128.Create(2, 2, 0, 0));
+                        var l_a1 = Vector128.Shuffle(h_a, Vector128.Create(3, 3, 1, 1));
+                        var h_a1 = Vector128.Shuffle(l_a, Vector128.Create(3, 3, 1, 1));
+                        var l_k1 = Vector128.Shuffle(l_k0, Vector128.Create(1, 0, 3, 2));
+                        var h_k1 = Vector128.Shuffle(h_k0, Vector128.Create(1, 0, 3, 2));
+
+                        var l_res1 = l_k0 * l_a0 + l_k1 * l_a1 * Vector128.Create(1, -1, 1, -1f);
+                        var h_res1 = h_k0 * h_a0 + h_k1 * h_a1 * Vector128.Create(1, -1, 1, -1f);
+                        l_res1.Store(e2 - 7);
+                        h_res1.Store(e2 - 3);
+
+                        e0 -= 8;
+                        e2 -= 8;
+                    }
+                }
+                else
+                {
+                    for (; i > 0; --i)
+                    {
+                        float k00_20 = e0[-0] - e2[-0];
+                        float k01_21 = e0[-1] - e2[-1];
+                        e0[-0] += e2[-0];
+                        e0[-1] += e2[-1];
+                        e2[-0] = k00_20 * A[0] - k01_21 * A[1];
+                        e2[-1] = k01_21 * A[0] + k00_20 * A[1];
+
+                        A += k1;
+
+                        k00_20 = e0[-2] - e2[-2];
+                        k01_21 = e0[-3] - e2[-3];
+                        e0[-2] += e2[-2];
+                        e0[-3] += e2[-3];
+                        e2[-2] = k00_20 * A[0] - k01_21 * A[1];
+                        e2[-3] = k01_21 * A[0] + k00_20 * A[1];
+
+                        A += k1;
+
+                        k00_20 = e0[-4] - e2[-4];
+                        k01_21 = e0[-5] - e2[-5];
+                        e0[-4] += e2[-4];
+                        e0[-5] += e2[-5];
+                        e2[-4] = k00_20 * A[0] - k01_21 * A[1];
+                        e2[-5] = k01_21 * A[0] + k00_20 * A[1];
+
+                        A += k1;
+
+                        k00_20 = e0[-6] - e2[-6];
+                        k01_21 = e0[-7] - e2[-7];
+                        e0[-6] += e2[-6];
+                        e0[-7] += e2[-7];
+                        e2[-6] = k00_20 * A[0] - k01_21 * A[1];
+                        e2[-7] = k01_21 * A[0] + k00_20 * A[1];
+
+                        e0 -= 8;
+                        e2 -= 8;
+
+                        A += k1;
+                    }
                 }
             }
 
