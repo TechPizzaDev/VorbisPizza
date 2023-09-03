@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.IO;
 using System.Runtime;
 using NVorbis;
@@ -11,30 +12,32 @@ namespace TestApp
         {
             string sourceDir = args.Length > 0 ? args[0] : "../../../../TestFiles";
             string targetDir = args.Length > 1 ? args[1] : "";
+            bool writeToFile = args.Length > 2 ? bool.Parse(args[2]) : true;
+
+            FileMode? writeMode = writeToFile ? FileMode.Create : null;
 
             string[] files = Directory.GetFiles(sourceDir);
             foreach (string file in files)
             {
                 Console.WriteLine($"Decoding {file}...");
 
-                string? dstFile = null;
-                if (targetDir != "NULL")
+                string dirName = Path.Join(targetDir, Path.GetFileNameWithoutExtension(file));
+                if (writeToFile)
                 {
-                    string dirName = Path.Join(targetDir, Path.GetFileNameWithoutExtension(file));
                     Directory.CreateDirectory(dirName);
                     Console.WriteLine($"Created directory {dirName}");
-
-                    string fileName = Path.ChangeExtension(Path.GetFileName(file), "wav");
-                    dstFile = Path.Join(dirName, fileName);
                 }
 
-                DecodeFile(file, dstFile);
+                string fileName = Path.ChangeExtension(Path.GetFileName(file), "wav");
+                string dstFile = Path.Join(dirName, fileName);
+                
+                DecodeFile(file, dstFile, writeMode);
 
                 Console.WriteLine($"Finished decoding {file}\n");
             }
         }
 
-        static void DecodeFile(string sourceFile, string? destinationFile)
+        static void DecodeFile(string sourceFile, string destinationFile, FileMode? writeMode)
         {
             float[] sampleBuf1 = new float[48000];
             float[] sampleBuf2 = new float[48000];
@@ -90,18 +93,17 @@ namespace TestApp
 
                 Decode(bytes, (vorbRead1, vorbRead2) =>
                 {
-                    string? fileName = destinationFile;
+                    string fileName = destinationFile;
                     if (j % 2 != 0)
                     {
                         vorbRead1.ClipSamples = false;
                         vorbRead2.ClipSamples = false;
 
-                        if (fileName != null)
                             fileName = AppendToFileName(fileName, "-noclip");
                     }
 
                     int channels = vorbRead1.Channels;
-                    using (WaveWriter writer = new(CreateWriteStream(fileName), false, vorbRead1.SampleRate, channels))
+                    using (WaveWriter writer = new(CreateStream(fileName, writeMode), false, vorbRead1.SampleRate, channels))
                     {
                         int sampleCount;
                         while ((sampleCount = vorbRead1.ReadSamples(sampleBuf1)) > 0)
@@ -126,21 +128,20 @@ namespace TestApp
                         return;
                     }
 
-                    string? fileName = destinationFile;
+                    string fileName = destinationFile;
                     if (j % 2 != 0)
                     {
                         vorbRead1.ClipSamples = false;
                         vorbRead2.ClipSamples = false;
 
-                        if (fileName != null)
                             fileName = AppendToFileName(fileName, "-noclip");
                     }
 
-                    string? leftFile = fileName != null ? AppendToFileName(fileName, "-left") : null;
-                    string? rightFile = fileName != null ? AppendToFileName(fileName, "-right") : null;
+                    string leftFile = AppendToFileName(fileName, "-left");
+                    string rightFile = AppendToFileName(fileName, "-right");
 
-                    using (WaveWriter leftWriter = new(CreateWriteStream(leftFile), false, vorbRead1.SampleRate, 1))
-                    using (WaveWriter rightWriter = new(CreateWriteStream(rightFile), false, vorbRead1.SampleRate, 1))
+                    using (WaveWriter leftWriter = new(CreateStream(leftFile, writeMode), false, vorbRead1.SampleRate, 1))
+                    using (WaveWriter rightWriter = new(CreateStream(rightFile, writeMode), false, vorbRead1.SampleRate, 1))
                     {
                         int stride = sampleBuf1.Length / 2;
 
@@ -186,13 +187,13 @@ namespace TestApp
             return $"{Path.Join(dirName, fileName)}{appendValue}{ext}";
         }
 
-        public static Stream CreateWriteStream(string? fileName)
+        public static Stream CreateStream(string fileName, FileMode? mode)
         {
-            if (fileName == null)
+            if (mode == null)
             {
                 return Stream.Null;
             }
-            return new FileStream(fileName, FileMode.Create);
+            return new FileStream(fileName, mode.Value);
         }
     }
 }
