@@ -30,7 +30,7 @@ namespace TestApp
 
                 string fileName = Path.ChangeExtension(Path.GetFileName(file), "wav");
                 string dstFile = Path.Join(dirName, fileName);
-                
+
                 DecodeFile(file, dstFile, writeMode);
 
                 Console.WriteLine($"Finished decoding {file}\n");
@@ -45,6 +45,52 @@ namespace TestApp
             byte[] bytes = File.ReadAllBytes(sourceFile);
 
             int iterationCount = 2;
+
+            using MemoryStream outputStream = new();
+            Console.WriteLine($"  Compare {destinationFile}");
+            for (int j = 0; j < iterationCount; j++)
+            {
+                Console.WriteLine($" Iteration {j + 1}");
+
+                Decode(bytes, (vorbRead1, vorbRead2) =>
+                {
+                    string fileName = destinationFile;
+                    if (j % 2 != 0)
+                    {
+                        vorbRead1.ClipSamples = false;
+                        vorbRead2.ClipSamples = false;
+
+                        fileName = AppendToFileName(fileName, "-noclip");
+                    }
+
+                    if (!File.Exists(fileName))
+                    {
+                        Console.WriteLine($"  Skipped comparing, other file does not exist");
+                        return;
+                    }
+
+                    outputStream.SetLength(0);
+                    outputStream.Position = 0;
+                    int channels = vorbRead1.Channels;
+                    using (WaveWriter writer = new(outputStream, true, vorbRead1.SampleRate, channels))
+                    {
+                        int sampleCount;
+                        while ((sampleCount = vorbRead1.ReadSamples(sampleBuf1)) > 0)
+                        {
+                            writer.WriteSamples(sampleBuf1.AsSpan(0, sampleCount * channels));
+                        }
+                    }
+                    outputStream.Position = 0;
+
+                    using Stream truthStream = CreateStream(fileName, FileMode.Open);
+                    if (!AreStreamsEqual(truthStream, outputStream))
+                    {
+                        Console.WriteLine("  Failed comparison!");
+                        throw new Exception();
+                    }
+                });
+            }
+            FullGC();
 
             Console.WriteLine("  Comparing seek vs forward decode");
             for (int j = 0; j < iterationCount; j++)
@@ -99,7 +145,7 @@ namespace TestApp
                         vorbRead1.ClipSamples = false;
                         vorbRead2.ClipSamples = false;
 
-                            fileName = AppendToFileName(fileName, "-noclip");
+                        fileName = AppendToFileName(fileName, "-noclip");
                     }
 
                     int channels = vorbRead1.Channels;
@@ -134,7 +180,7 @@ namespace TestApp
                         vorbRead1.ClipSamples = false;
                         vorbRead2.ClipSamples = false;
 
-                            fileName = AppendToFileName(fileName, "-noclip");
+                        fileName = AppendToFileName(fileName, "-noclip");
                     }
 
                     string leftFile = AppendToFileName(fileName, "-left");
@@ -194,6 +240,44 @@ namespace TestApp
                 return Stream.Null;
             }
             return new FileStream(fileName, mode.Value);
+        }
+
+        public static bool AreStreamsEqual(Stream stream1, Stream stream2)
+        {
+            if (stream2.Length != stream1.Length)
+            {
+                return false;
+            }
+
+            const int bufferSize = 1024 * 16;
+            byte[] buffer1 = ArrayPool<byte>.Shared.Rent(bufferSize);
+            byte[] buffer2 = ArrayPool<byte>.Shared.Rent(bufferSize);
+            do
+            {
+                int read1 = stream1.ReadAtLeast(buffer1, buffer1.Length, false);
+                int read2 = stream2.ReadAtLeast(buffer2, buffer2.Length, false);
+                if (read1 != read2)
+                {
+                    return false;
+                }
+
+                if (read1 == 0 || read2 == 0)
+                {
+                    break;
+                }
+
+                if (!buffer1.AsSpan(0, read1).SequenceEqual(buffer2.AsSpan(0, read2)))
+                {
+                    ArrayPool<byte>.Shared.Return(buffer1);
+                    ArrayPool<byte>.Shared.Return(buffer2);
+                    return false;
+                }
+            }
+            while (true);
+
+            ArrayPool<byte>.Shared.Return(buffer1);
+            ArrayPool<byte>.Shared.Return(buffer2);
+            return true;
         }
     }
 }
