@@ -8,7 +8,11 @@ namespace NVorbis
 {
     internal static class Vector128Helper
     {
-        public static bool IsSupported => Sse.IsSupported;
+        // TODO: AdvSimd
+
+        public static bool IsSupported => Vector128.IsHardwareAccelerated && Sse.IsSupported;
+
+        public static bool IsAcceleratedGather => IsSupported && Avx2.IsSupported;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector128<T> LoadUnsafe<T>(ref T source, int elementOffset)
@@ -24,6 +28,7 @@ namespace NVorbis
             Vector128.StoreUnsafe(source, ref destination, (nuint)elementOffset);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector128<float> ShuffleLower(Vector128<float> left, Vector128<float> right)
         {
             if (Sse.IsSupported)
@@ -35,6 +40,7 @@ namespace NVorbis
             return default;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector128<float> ShuffleUpper(Vector128<float> left, Vector128<float> right)
         {
             if (Sse.IsSupported)
@@ -46,11 +52,24 @@ namespace NVorbis
             return default;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector128<float> ShuffleInterleave(Vector128<float> left, Vector128<float> right)
         {
             if (Sse.IsSupported)
             {
                 return Sse.Shuffle(left, right, 0b11_01_10_00);
+            }
+
+            ThrowUnreachableException();
+            return default;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static unsafe Vector128<float> Gather(float* baseAddress, Vector128<int> index, byte scale)
+        {
+            if (Avx2.IsSupported)
+            {
+                return Avx2.GatherVector128(baseAddress, index, scale);
             }
 
             ThrowUnreachableException();
