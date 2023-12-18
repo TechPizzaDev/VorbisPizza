@@ -70,6 +70,7 @@ namespace NVorbis
         private static float[] CalcWindow(int prevBlockSize, int blockSize, int nextBlockSize)
         {
             float[] array = new float[blockSize];
+            Span<float> span = array;
 
             int left = prevBlockSize / 2;
             int wnd = blockSize;
@@ -78,23 +79,22 @@ namespace NVorbis
             int leftbegin = wnd / 4 - left / 2;
             int rightbegin = wnd - wnd / 4 - right / 2;
 
-            for (int i = 0; i < left; i++)
+            Span<float> leftSpan = span.Slice(leftbegin, left);
+            for (int i = 0; i < leftSpan.Length; i++)
             {
                 double x = Math.Sin((i + .5) / left * Math.PI / 2);
                 x *= x;
-                array[leftbegin + i] = (float)Math.Sin(x * Math.PI / 2);
+                leftSpan[i] = (float)Math.Sin(x * Math.PI / 2);
             }
 
-            for (int i = leftbegin + left; i < rightbegin; i++)
-            {
-                array[i] = 1.0f;
-            }
+            span[(leftbegin + left)..rightbegin].Fill(1.0f);
 
-            for (int i = 0; i < right; i++)
+            Span<float> rightSpan = span.Slice(rightbegin, right);
+            for (int i = 0; i < rightSpan.Length; i++)
             {
                 double x = Math.Sin((right - i - .5) / right * Math.PI / 2);
                 x *= x;
-                array[rightbegin + i] = (float)Math.Sin(x * Math.PI / 2);
+                rightSpan[i] = (float)Math.Sin(x * Math.PI / 2);
             }
 
             return array;
