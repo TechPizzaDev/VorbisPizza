@@ -11,39 +11,6 @@ namespace NVorbis
 {
     internal sealed class Codebook
     {
-        private struct FastRange : IReadOnlyList<int>
-        {
-            private int _start;
-            private int _count;
-
-            public FastRange(int start, int count)
-            {
-                _start = start;
-                _count = count;
-            }
-
-            public int this[int index]
-            {
-                get
-                {
-                    Debug.Assert((uint)index < (uint)_count);
-                    return _start + index;
-                }
-            }
-
-            public int Count => _count;
-
-            public IEnumerator<int> GetEnumerator()
-            {
-                throw new NotSupportedException();
-            }
-
-            IEnumerator IEnumerable.GetEnumerator()
-            {
-                return GetEnumerator();
-            }
-        }
-
         private int[] _lengths;
         private float[] _lookupTable;
         private HuffmanListNode[] _overflowList;
@@ -167,9 +134,7 @@ namespace NVorbis
             Debug.Assert(codewords != null);
 
             int[] lengthList = codewordLengths ?? _lengths;
-            Huffman huffman = values != null
-                ? Huffman.GenerateTable(values, lengthList, codewords)
-                : Huffman.GenerateTable(new FastRange(0, codewords.Length), lengthList, codewords);
+            Huffman huffman = Huffman.GenerateTable(values, lengthList, codewords);
 
             return huffman;
         }

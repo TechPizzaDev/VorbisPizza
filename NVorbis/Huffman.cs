@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using NVorbis.Contracts;
 
 namespace NVorbis
@@ -19,8 +18,7 @@ namespace NVorbis
         public HuffmanListNode[] PrefixTree { get; private set; }
         public HuffmanListNode[] OverflowList { get; private set; }
 
-        public static Huffman GenerateTable<TList>(TList values, int[] lengthList, int[] codeList)
-            where TList : IReadOnlyList<int>
+        public static Huffman GenerateTable(int[]? values, int[] lengthList, int[] codeList)
         {
             HuffmanListNode[] list = new HuffmanListNode[lengthList.Length];
 
@@ -29,7 +27,7 @@ namespace NVorbis
             {
                 list[i] = new HuffmanListNode
                 {
-                    Value = values[i],
+                    Value = values != null ? values[i] : i,
                     Length = lengthList[i] <= 0 ? 99999 : lengthList[i],
                     Bits = codeList[i],
                     Mask = (1 << lengthList[i]) - 1,
@@ -57,7 +55,7 @@ namespace NVorbis
                     int maxOverflowLength = list.Length - i;
                     if (overflowList.Length < maxOverflowLength)
                         overflowList = new HuffmanListNode[maxOverflowLength];
-                    
+
                     overflowIndex = 0;
 
                     for (; i < list.Length && list[i].Length < 99999; i++)
