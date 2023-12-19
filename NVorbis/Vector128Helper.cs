@@ -13,7 +13,7 @@ namespace NVorbis
         public static bool IsSupported => Vector128.IsHardwareAccelerated && Sse.IsSupported;
 
         public static bool IsAcceleratedGather => IsSupported && Avx2.IsSupported;
-
+        
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector128<T> LoadUnsafe<T>(ref T source, int elementOffset)
             where T : struct
@@ -65,7 +65,10 @@ namespace NVorbis
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static unsafe Vector128<float> Gather(float* baseAddress, Vector128<int> index, byte scale)
+        public static unsafe Vector128<float> Gather(
+            float* baseAddress,
+            Vector128<int> index,
+            [ConstantExpected(Min = 1, Max = 8)] byte scale)
         {
             if (Avx2.IsSupported)
             {

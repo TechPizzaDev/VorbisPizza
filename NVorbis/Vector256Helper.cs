@@ -15,7 +15,10 @@ namespace NVorbis
         public static bool IsAcceleratedGather => IsSupported;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static unsafe Vector256<float> Gather(float* baseAddress, Vector256<int> index, byte scale)
+        public static unsafe Vector256<float> Gather(
+            float* baseAddress, 
+            Vector256<int> index,
+            [ConstantExpected(Min = 1, Max = 8)] byte scale)
         {
             if (Avx2.IsSupported)
             {
