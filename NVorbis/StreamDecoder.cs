@@ -495,11 +495,8 @@ namespace NVorbis
                         Vector128<float> p0 = Vector128Helper.LoadUnsafe(ref prev0, j);
                         Vector128<float> p1 = Vector128Helper.LoadUnsafe(ref prev1, j);
 
-                        Vector128<float> t0 = Vector128Helper.ShuffleLower(p0, p1);
-                        Vector128<float> ts0 = Vector128Helper.ShuffleInterleave(t0, t0);
-
-                        Vector128<float> t1 = Vector128Helper.ShuffleUpper(p0, p1);
-                        Vector128<float> ts1 = Vector128Helper.ShuffleInterleave(t1, t1);
+                        Vector128<float> ts0 = Vector128Helper.UnpackLow(p0, p1);
+                        Vector128<float> ts1 = Vector128Helper.UnpackHigh(p0, p1);
 
                         ts0 = Utils.ClipValue(ts0, ref clipped);
                         ts1 = Utils.ClipValue(ts1, ref clipped);
@@ -574,7 +571,7 @@ namespace NVorbis
 
                     if (Vector.IsHardwareAccelerated)
                     {
-                        Vector<int> clipped = Vector<int>.Zero;
+                        Vector<float> clipped = Vector<float>.Zero;
 
                         for (; j + Vector<float>.Count <= count; j += Vector<float>.Count)
                         {
@@ -583,7 +580,7 @@ namespace NVorbis
                             c0.StoreUnsafe(ref dst, j);
                         }
 
-                        _hasClipped |= !Vector.EqualsAll(clipped, Vector<int>.Zero);
+                        _hasClipped |= !Vector.EqualsAll(clipped, Vector<float>.Zero);
                     }
 
                     for (; j < count; j++)

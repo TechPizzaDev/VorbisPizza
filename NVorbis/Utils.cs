@@ -31,6 +31,7 @@ namespace NVorbis
             return ((n >> 16) | (n << 16)) >> (32 - bits);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static float ClipValue(float value, ref bool clipped)
         {
             if (value > .99999994f)
@@ -47,13 +48,13 @@ namespace NVorbis
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal static Vector<float> ClipValue(Vector<float> value, ref Vector<int> clipped)
+        internal static Vector<float> ClipValue(Vector<float> value, ref Vector<float> clipped)
         {
             Vector<float> upper = new(0.99999994f);
             Vector<float> lower = new(-0.99999994f);
 
-            Vector<int> gt = Vector.GreaterThan(value, upper);
-            Vector<int> lt = Vector.LessThan(value, lower);
+            Vector<float> gt = Vector.GreaterThan<float>(value, upper);
+            Vector<float> lt = Vector.LessThan<float>(value, lower);
             clipped = Vector.BitwiseOr(clipped, Vector.BitwiseOr(gt, lt));
 
             value = Vector.ConditionalSelect(gt, upper, value);
