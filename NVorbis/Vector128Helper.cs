@@ -1,5 +1,4 @@
-﻿using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
+﻿using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.Arm;
@@ -9,8 +8,6 @@ namespace NVorbis
 {
     internal static class Vector128Helper
     {
-        public static bool IsAcceleratedGather => Avx2.IsSupported;
-
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector128<float> UnpackLow(Vector128<float> left, Vector128<float> right)
         {
@@ -75,15 +72,23 @@ namespace NVorbis
             {
                 return Avx2.GatherVector128(baseAddress, index, scale);
             }
+            else
+            {
+                return SoftwareFallback(baseAddress, index, scale);
+            }
 
-            ThrowUnreachableException();
-            return default;
-        }
-
-        [DoesNotReturn]
-        private static void ThrowUnreachableException()
-        {
-            throw new UnreachableException();
+            static Vector128<float> SoftwareFallback(
+                float* baseAddress,
+                Vector128<int> index,
+                byte scale)
+            {
+                Unsafe.SkipInit(out Vector128<float> result);
+                result = result.WithElement(0, baseAddress[(long) index.GetElement(0) * scale]);
+                result = result.WithElement(1, baseAddress[(long) index.GetElement(1) * scale]);
+                result = result.WithElement(2, baseAddress[(long) index.GetElement(2) * scale]);
+                result = result.WithElement(3, baseAddress[(long) index.GetElement(3) * scale]);
+                return result;
+            }
         }
     }
 }

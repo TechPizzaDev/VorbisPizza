@@ -440,7 +440,7 @@ namespace NVorbis
                 bool nonOverlapped = (e0 - e2) >= i * 8;
                 Debug.Assert(nonOverlapped, "Overlapped addresses.");
 
-                if (nonOverlapped && Vector256Helper.IsAcceleratedGather)
+                if (nonOverlapped && Vector256.IsHardwareAccelerated)
                 {
                     Vector256<int> v_index =
                         Vector256.Create(0, 1, 0, 1, 0, 1, 0, 1) +
@@ -470,7 +470,7 @@ namespace NVorbis
                         e2 -= 8;
                     }
                 }
-                else if (nonOverlapped && Vector128Helper.IsAcceleratedGather)
+                else if (nonOverlapped && Vector128.IsHardwareAccelerated)
                 {
                     Vector128<int> v_index =
                         Vector128.Create(0, 1, 0, 1) +
