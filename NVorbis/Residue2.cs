@@ -25,13 +25,13 @@ namespace NVorbis
         protected override bool WriteVectors(
             Codebook codebook, ref VorbisPacket packet, float[][] residue, int channel, int offset, int partitionSize)
         {
-            uint dimensions = (uint)codebook.Dimensions;
-            uint ch = 0;
-            uint channels = (uint)_channels;
-            uint o = (uint)offset / channels;
+            uint dimensions = (uint) codebook.Dimensions;
+            uint channels = (uint) _channels;
+            uint o = (uint) offset / channels;
 
-            ref float res0 = ref MemoryMarshal.GetArrayDataReference(residue[0]);
-            ref float res1 = ref MemoryMarshal.GetArrayDataReference(residue.Length > 1 ? residue[1] : Array.Empty<float>());
+            ReadOnlySpan<float[]> residues = residue.AsSpan(0, (int) channels);
+            ref float res0 = ref MemoryMarshal.GetArrayDataReference(residues[0]);
+            ref float res1 = ref channels == 2 ? ref MemoryMarshal.GetArrayDataReference(residue[1]) : ref Unsafe.NullRef<float>();
             ref float lookupTable = ref MemoryMarshal.GetReference(codebook.GetLookupTable());
 
             for (uint c = 0; c < partitionSize; c += dimensions)
@@ -42,7 +42,8 @@ namespace NVorbis
                     return true;
                 }
 
-                ref float lookup = ref Unsafe.Add(ref lookupTable, (uint)entry * dimensions);
+                ref float lookup = ref Unsafe.Add(ref lookupTable, (uint) entry * dimensions);
+                
                 if (dimensions != 1 && channels == 2)
                 {
                     for (uint d = 0; d < dimensions; d += 2, o++)
@@ -53,20 +54,18 @@ namespace NVorbis
                 }
                 else if (channels == 1)
                 {
-                    for (uint d = 0; d < dimensions; d++, o++)
+                    for (uint d = 0; d < dimensions; d += 1, o++)
                     {
                         Unsafe.Add(ref res0, o) += Unsafe.Add(ref lookup, d);
                     }
                 }
                 else
                 {
-                    for (uint d = 0; d < dimensions; d++)
+                    for (uint d = 0; d < dimensions; d += channels, o++)
                     {
-                        residue[ch][o] += Unsafe.Add(ref lookup, d);
-                        if (++ch == channels)
+                        for (int ch = 0; ch < residues.Length; ch++)
                         {
-                            ch = 0;
-                            o++;
+                            residues[ch][o] += Unsafe.Add(ref lookup, d + (uint) ch);
                         }
                     }
                 }
