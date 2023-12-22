@@ -6,6 +6,9 @@ namespace NVorbis
 {
     internal static class Utils
     {
+        private const float LowerClip = -0.99999994f;
+        private const float UpperClip = 0.99999994f;
+
         internal static int ilog(int x)
         {
             int cnt = 0;
@@ -34,15 +37,15 @@ namespace NVorbis
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static float ClipValue(float value, ref bool clipped)
         {
-            if (value > .99999994f)
+            if (value > UpperClip)
             {
                 clipped = true;
-                return 0.99999994f;
+                return UpperClip;
             }
-            if (value < -.99999994f)
+            if (value < LowerClip)
             {
                 clipped = true;
-                return -0.99999994f;
+                return LowerClip;
             }
             return value;
         }
@@ -50,8 +53,8 @@ namespace NVorbis
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static Vector<float> ClipValue(Vector<float> value, ref Vector<float> clipped)
         {
-            Vector<float> upper = new(0.99999994f);
-            Vector<float> lower = new(-0.99999994f);
+            Vector<float> upper = new(UpperClip);
+            Vector<float> lower = new(LowerClip);
 
             Vector<float> gt = Vector.GreaterThan<float>(value, upper);
             Vector<float> lt = Vector.LessThan<float>(value, lower);
@@ -66,8 +69,8 @@ namespace NVorbis
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static Vector128<float> ClipValue(Vector128<float> value, ref Vector128<float> clipped)
         {
-            Vector128<float> upper = Vector128.Create(0.99999994f);
-            Vector128<float> lower = Vector128.Create(-0.99999994f);
+            Vector128<float> upper = Vector128.Create(UpperClip);
+            Vector128<float> lower = Vector128.Create(LowerClip);
 
             Vector128<float> gt = Vector128.GreaterThan(value, upper);
             Vector128<float> lt = Vector128.LessThan(value, lower);
@@ -82,9 +85,9 @@ namespace NVorbis
         internal static float ConvertFromVorbisFloat32(uint bits)
         {
             // do as much as possible with bit tricks in integer math
-            int sign = ((int)bits >> 31);   // sign-extend to the full 32-bits
-            int exponent = (int)((bits & 0x7fe00000) >> 21) - 788;  // grab the exponent, remove the bias.
-            float mantissa = ((int)(bits & 0x1fffff) ^ sign) + (sign & 1);  // grab the mantissa and apply the sign bit.
+            int sign = (int) bits >> 31;   // sign-extend to the full 32-bits
+            int exponent = (int) ((bits & 0x7fe00000) >> 21) - 788;  // grab the exponent, remove the bias.
+            float mantissa = ((int) (bits & 0x1fffff) ^ sign) + (sign & 1);  // grab the mantissa and apply the sign bit.
 
             // NB: We could use bit tricks to calc the exponent, but it can't be more than 63 in either direction.
             //     This creates an issue, since the exponent field allows for a *lot* more than that.
