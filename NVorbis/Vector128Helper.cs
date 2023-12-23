@@ -1,85 +1,94 @@
-﻿using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
+﻿using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.Arm;
 using System.Runtime.Intrinsics.X86;
 
 namespace NVorbis
 {
     internal static class Vector128Helper
     {
-        // TODO: AdvSimd
-
-        public static bool IsSupported => Vector128.IsHardwareAccelerated && Sse.IsSupported;
-
-        public static bool IsAcceleratedGather => IsSupported && Avx2.IsSupported;
-
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Vector128<T> LoadUnsafe<T>(ref T source, int elementOffset)
-            where T : struct
-        {
-            return Vector128.LoadUnsafe(ref source, (nuint)elementOffset);
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void StoreUnsafe<T>(this Vector128<T> source, ref T destination, int elementOffset)
-            where T : struct
-        {
-            Vector128.StoreUnsafe(source, ref destination, (nuint)elementOffset);
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Vector128<float> ShuffleLower(Vector128<float> left, Vector128<float> right)
+        public static Vector128<float> UnpackLow(Vector128<float> left, Vector128<float> right)
         {
             if (Sse.IsSupported)
             {
-                return Sse.Shuffle(left, right, 0b01_00_01_00);
+                return Sse.UnpackLow(left, right);
+            }
+            else if (AdvSimd.Arm64.IsSupported)
+            {
+                return AdvSimd.Arm64.ZipLow(left, right);
+            }
+            else
+            {
+                return SoftwareFallback(left, right);
             }
 
-            ThrowUnreachableException();
-            return default;
+            static Vector128<float> SoftwareFallback(Vector128<float> left, Vector128<float> right)
+            {
+                Unsafe.SkipInit(out Vector128<float> result);
+                result = result.WithElement(0, left.GetElement(0));
+                result = result.WithElement(1, right.GetElement(0));
+                result = result.WithElement(2, left.GetElement(1));
+                result = result.WithElement(3, right.GetElement(1));
+                return result;
+            }
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Vector128<float> ShuffleUpper(Vector128<float> left, Vector128<float> right)
+        public static Vector128<float> UnpackHigh(Vector128<float> left, Vector128<float> right)
         {
             if (Sse.IsSupported)
             {
-                return Sse.Shuffle(left, right, 0b11_10_11_10);
+                return Sse.UnpackHigh(left, right);
             }
-
-            ThrowUnreachableException();
-            return default;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Vector128<float> ShuffleInterleave(Vector128<float> left, Vector128<float> right)
-        {
-            if (Sse.IsSupported)
+            else if (AdvSimd.Arm64.IsSupported)
             {
-                return Sse.Shuffle(left, right, 0b11_01_10_00);
+                return AdvSimd.Arm64.ZipHigh(left, right);
+            }
+            else
+            {
+                return SoftwareFallback(left, right);
             }
 
-            ThrowUnreachableException();
-            return default;
+            static Vector128<float> SoftwareFallback(Vector128<float> left, Vector128<float> right)
+            {
+                Unsafe.SkipInit(out Vector128<float> result);
+                result = result.WithElement(0, left.GetElement(2));
+                result = result.WithElement(1, right.GetElement(2));
+                result = result.WithElement(2, left.GetElement(3));
+                result = result.WithElement(3, right.GetElement(3));
+                return result;
+            }
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static unsafe Vector128<float> Gather(float* baseAddress, Vector128<int> index, byte scale)
+        public static unsafe Vector128<float> Gather(
+            float* baseAddress,
+            Vector128<int> index,
+            [ConstantExpected(Min = 1, Max = 8)] byte scale)
         {
             if (Avx2.IsSupported)
             {
                 return Avx2.GatherVector128(baseAddress, index, scale);
             }
+            else
+            {
+                return SoftwareFallback(baseAddress, index, scale);
+            }
 
-            ThrowUnreachableException();
-            return default;
-        }
-
-        [DoesNotReturn]
-        private static void ThrowUnreachableException()
-        {
-            throw new UnreachableException();
+            static Vector128<float> SoftwareFallback(
+                float* baseAddress,
+                Vector128<int> index,
+                byte scale)
+            {
+                Unsafe.SkipInit(out Vector128<float> result);
+                result = result.WithElement(0, baseAddress[(long) index.GetElement(0) * scale]);
+                result = result.WithElement(1, baseAddress[(long) index.GetElement(1) * scale]);
+                result = result.WithElement(2, baseAddress[(long) index.GetElement(2) * scale]);
+                result = result.WithElement(3, baseAddress[(long) index.GetElement(3) * scale]);
+                return result;
+            }
         }
     }
 }

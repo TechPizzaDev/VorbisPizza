@@ -450,16 +450,17 @@ namespace NVorbis
                         Span<float> target = buffer.Slice(idx * channels, copyLen * channels);
                         if (ClipSamples)
                         {
-                            ClippingCopyBuffer(ref MemoryMarshal.GetReference(target), copyLen);
+                            StoreInterleaved<ClipEnable>(target, copyLen);
                         }
                         else
                         {
-                            CopyBuffer(ref MemoryMarshal.GetReference(target), copyLen);
+                            StoreInterleaved<ClipDisable>(target, copyLen);
                         }
                     }
                     else
                     {
-                        CopyBufferContiguous(buffer.Slice(idx), copyLen, channelStride, ClipSamples);
+                        Span<float> target = buffer.Slice(idx, channelStride + copyLen);
+                        StoreContiguous(target, copyLen, channelStride, ClipSamples);
                     }
 
                     idx += copyLen;
@@ -474,91 +475,101 @@ namespace NVorbis
             return idx;
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveOptimization)]
-        private void ClippingCopyBuffer(ref float target, int count)
+        private interface IClipValue
+        {
+            static abstract bool IsClip { get; }
+        }
+
+        private struct ClipEnable : IClipValue
+        {
+            public static bool IsClip => true;
+        }
+
+        private struct ClipDisable : IClipValue
+        {
+            public static bool IsClip => false;
+        }
+
+        private void StoreInterleaved<T>(Span<float> target, int count)
+            where T : IClipValue
         {
             float[][]? prevPacketBuf = _prevPacketBuf;
             Debug.Assert(prevPacketBuf != null);
 
             int channels = _channels;
             int j = 0;
+            ref float dst = ref MemoryMarshal.GetReference(target.Slice(0, count * channels));
 
             if (Vector128.IsHardwareAccelerated)
             {
-                Vector128<float> clipped = Vector128<float>.Zero;
+                Vector128<float> clipped0 = Vector128<float>.Zero;
+                Vector128<float> clipped1 = Vector128<float>.Zero;
 
-                if (Vector128Helper.IsSupported && channels == 2)
+                if (channels == 2)
                 {
-                    ref float prev0 = ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(prevPacketBuf[0]), _prevPacketStart);
-                    ref float prev1 = ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(prevPacketBuf[1]), _prevPacketStart);
+                    ref float prev0 = ref MemoryMarshal.GetReference(prevPacketBuf[0].AsSpan(_prevPacketStart, count));
+                    ref float prev1 = ref MemoryMarshal.GetReference(prevPacketBuf[1].AsSpan(_prevPacketStart, count));
 
                     for (; j + Vector128<float>.Count <= count; j += Vector128<float>.Count)
                     {
-                        Vector128<float> p0 = Vector128Helper.LoadUnsafe(ref prev0, j);
-                        Vector128<float> p1 = Vector128Helper.LoadUnsafe(ref prev1, j);
+                        Vector128<float> p0 = Vector128.LoadUnsafe(ref prev0, (nuint) j);
+                        Vector128<float> p1 = Vector128.LoadUnsafe(ref prev1, (nuint) j);
+                        
+                        // Interleave channels
+                        Vector128<float> ts0 = Vector128Helper.UnpackLow(p0, p1);  // [ 0, 0, 1, 1 ]
+                        Vector128<float> ts1 = Vector128Helper.UnpackHigh(p0, p1); // [ 2, 2, 3, 3 ]
 
-                        Vector128<float> t0 = Vector128Helper.ShuffleLower(p0, p1);
-                        Vector128<float> ts0 = Vector128Helper.ShuffleInterleave(t0, t0);
+                        if (T.IsClip)
+                        {
+                            ts0 = Utils.ClipValue(ts0, ref clipped0);
+                            ts1 = Utils.ClipValue(ts1, ref clipped1);
+                        }
 
-                        Vector128<float> t1 = Vector128Helper.ShuffleUpper(p0, p1);
-                        Vector128<float> ts1 = Vector128Helper.ShuffleInterleave(t1, t1);
-
-                        ts0 = Utils.ClipValue(ts0, ref clipped);
-                        ts1 = Utils.ClipValue(ts1, ref clipped);
-
-                        ts0.StoreUnsafe(ref target, j * 2);
-                        ts1.StoreUnsafe(ref target, j * 2 + Vector128<float>.Count);
+                        ts0.StoreUnsafe(ref dst, (nuint) j * 2);
+                        ts1.StoreUnsafe(ref dst, (nuint) j * 2 + (nuint) Vector128<float>.Count);
                     }
                 }
                 else if (channels == 1)
                 {
-                    ref float prev0 = ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(prevPacketBuf[0]), _prevPacketStart);
+                    ref float prev0 = ref MemoryMarshal.GetReference(prevPacketBuf[0].AsSpan(_prevPacketStart, count));
 
                     for (; j + Vector128<float>.Count <= count; j += Vector128<float>.Count)
                     {
-                        Vector128<float> p0 = Vector128Helper.LoadUnsafe(ref prev0, j);
-                        p0 = Utils.ClipValue(p0, ref clipped);
-                        p0.StoreUnsafe(ref target, j);
+                        Vector128<float> p0 = Vector128.LoadUnsafe(ref prev0, (nuint) j);
+                        if (T.IsClip)
+                        {
+                            p0 = Utils.ClipValue(p0, ref clipped0);
+                        }
+                        p0.StoreUnsafe(ref dst, (nuint) j);
                     }
                 }
 
-                Vector128<float> mask = Vector128.Equals(clipped, Vector128<float>.Zero);
-                _hasClipped |= mask.ExtractMostSignificantBits() != 0xf;
+                _hasClipped |= !Vector128.EqualsAll(clipped0, Vector128<float>.Zero);
+                _hasClipped |= !Vector128.EqualsAll(clipped1, Vector128<float>.Zero);
             }
 
             for (int ch = 0; ch < channels; ch++)
             {
-                ref float prev = ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(prevPacketBuf[ch]), _prevPacketStart);
-                ref float tar = ref Unsafe.Add(ref target, ch);
+                ref float prev = ref MemoryMarshal.GetReference(prevPacketBuf[ch].AsSpan(_prevPacketStart, count));
+                ref float tar = ref Unsafe.Add(ref dst, ch);
+                
+                bool clipped = false;
 
-                for (int i = j; i < count; i++)
+                for (; j < count; j++)
                 {
-                    Unsafe.Add(ref tar, i * channels) = Utils.ClipValue(Unsafe.Add(ref prev, i), ref _hasClipped);
+                    float p = Unsafe.Add(ref prev, j);
+                    if (T.IsClip)
+                    {
+                        p = Utils.ClipValue(p, ref clipped);
+                    }
+                    Unsafe.Add(ref tar, j * channels) = p;
                 }
+
+                _hasClipped |= clipped;
             }
         }
 
-        private void CopyBuffer(ref float target, int count)
-        {
-            float[][]? prevPacketBuf = _prevPacketBuf;
-            Debug.Assert(prevPacketBuf != null);
-
-            int channels = _channels;
-
-            for (int ch = 0; ch < channels; ch++)
-            {
-                ref float prevPtr = ref MemoryMarshal.GetArrayDataReference(prevPacketBuf[ch]);
-                ref float prev = ref Unsafe.Add(ref prevPtr, _prevPacketStart);
-                ref float tar = ref Unsafe.Add(ref target, ch);
-
-                for (int i = 0; i < count; i++)
-                {
-                    Unsafe.Add(ref tar, i * channels) = Unsafe.Add(ref prev, i);
-                }
-            }
-        }
-
-        private void CopyBufferContiguous(Span<float> buffer, int count, int channelStride, bool clip)
+        private void StoreContiguous(Span<float> buffer, int count, int channelStride, bool clip)
         {
             float[][]? prevPacketBuf = _prevPacketBuf;
             Debug.Assert(prevPacketBuf != null);
@@ -576,7 +587,7 @@ namespace NVorbis
 
                     if (Vector.IsHardwareAccelerated)
                     {
-                        Vector<int> clipped = Vector<int>.Zero;
+                        Vector<float> clipped = Vector<float>.Zero;
 
                         for (; j + Vector<float>.Count <= count; j += Vector<float>.Count)
                         {
@@ -585,12 +596,18 @@ namespace NVorbis
                             c0.StoreUnsafe(ref dst, j);
                         }
 
-                        _hasClipped |= !Vector.EqualsAll(clipped, Vector<int>.Zero);
+                        _hasClipped |= !Vector.EqualsAll(clipped, Vector<float>.Zero);
                     }
 
-                    for (; j < count; j++)
                     {
-                        Unsafe.Add(ref dst, j) = Utils.ClipValue(Unsafe.Add(ref src, j), ref _hasClipped);
+                        bool clipped = false;
+
+                        for (; j < count; j++)
+                        {
+                            Unsafe.Add(ref dst, j) = Utils.ClipValue(Unsafe.Add(ref src, j), ref clipped);
+                        }
+
+                        _hasClipped |= clipped;
                     }
                 }
                 else
