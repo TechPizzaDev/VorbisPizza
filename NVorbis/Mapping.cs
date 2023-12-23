@@ -151,49 +151,10 @@ namespace NVorbis
                     continue;
                 }
 
+                // we only have to do the first half; MDCT ignores the last half
                 Span<float> magnitudeSpan = buffer[_couplingMangitude[i]].AsSpan(0, halfBlockSize);
                 Span<float> angleSpan = buffer[_couplingAngle[i]].AsSpan(0, halfBlockSize);
-
-                ref float magnitude = ref MemoryMarshal.GetReference(magnitudeSpan);
-                ref float angle = ref MemoryMarshal.GetReference(angleSpan);
-
-                // we only have to do the first half; MDCT ignores the last half
-                for (int j = 0; j < halfBlockSize; j++)
-                {
-                    float oldM = Unsafe.Add(ref magnitude, j);
-                    float oldA = Unsafe.Add(ref angle, j);
-
-                    float newM = oldM;
-                    float newA = oldA;
-
-                    if (oldM > 0)
-                    {
-                        if (oldA > 0)
-                        {
-                            newA = oldM - oldA;
-                        }
-                        else
-                        {
-                            newM = oldM + oldA;
-                            newA = oldM;
-                        }
-                    }
-                    else
-                    {
-                        if (oldA > 0)
-                        {
-                            newA = oldM + oldA;
-                        }
-                        else
-                        {
-                            newM = oldM - oldA;
-                            newA = oldM;
-                        }
-                    }
-
-                    Unsafe.Add(ref magnitude, j) = newM;
-                    Unsafe.Add(ref angle, j) = newA;
-                }
+                ApplyCoupling(magnitudeSpan, angleSpan);
             }
 
             if (halfBlockSize > _buf2.Length)
@@ -214,6 +175,51 @@ namespace NVorbis
                     // since we aren't doing the IMDCT, we have to explicitly clear the back half of the block
                     Array.Clear(buffer[c], halfBlockSize, halfBlockSize);
                 }
+            }
+        }
+
+        private static void ApplyCoupling(Span<float> magnitudeSpan, Span<float> angleSpan)
+        {
+            int length = Math.Min(magnitudeSpan.Length, angleSpan.Length);
+
+            ref float magnitude = ref MemoryMarshal.GetReference(magnitudeSpan);
+            ref float angle = ref MemoryMarshal.GetReference(angleSpan);
+
+            for (int j = 0; j < length; j++)
+            {
+                float oldM = Unsafe.Add(ref magnitude, j);
+                float oldA = Unsafe.Add(ref angle, j);
+
+                float newM = oldM;
+                float newA = oldA;
+
+                if (oldM > 0)
+                {
+                    if (oldA > 0)
+                    {
+                        newA = oldM - oldA;
+                    }
+                    else
+                    {
+                        newM = oldM + oldA;
+                        newA = oldM;
+                    }
+                }
+                else
+                {
+                    if (oldA > 0)
+                    {
+                        newA = oldM + oldA;
+                    }
+                    else
+                    {
+                        newM = oldM - oldA;
+                        newA = oldM;
+                    }
+                }
+
+                Unsafe.Add(ref magnitude, j) = newM;
+                Unsafe.Add(ref angle, j) = newA;
             }
         }
     }
