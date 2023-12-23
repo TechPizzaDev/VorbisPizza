@@ -249,7 +249,12 @@ namespace NVorbis.Ogg
                 if (!_reader.GetPage(
                     pIndex, out _, out bool isResync, out _, out isContinued, out packetCount, out _))
                 {
-                    ThrowMissingPageException();
+                    // GetPage can change whether a reader HasAllPages,
+                    // so avoid throwing for streams that do not have an end-of-stream flag.
+                    if (!_reader.HasAllPages)
+                    {
+                        ThrowMissingPageException();
+                    }
                 }
 
                 int packetIndex = firstRealPacket;
