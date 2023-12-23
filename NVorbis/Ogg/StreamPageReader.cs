@@ -96,8 +96,7 @@ namespace NVorbis.Ogg
             _lastSeqNbr = header.SequenceNumber;
 
             pageData.IncrementRef();
-            _lastPage?.DecrementRef();
-            _lastPage = pageData;
+            SetLastPage(pageData);
 
             _lastPageGranulePos = granulePosition;
             _lastPageIsContinuation = (header.PageFlags & PageFlags.ContinuesPacket) != 0;
@@ -134,8 +133,8 @@ namespace NVorbis.Ogg
                     if (pageIndex == _lastPageIndex)
                     {
                         Debug.Assert(_lastPage == null);
-                        _lastPage = page;
-                        _lastPage.IncrementRef();
+                        page.IncrementRef();
+                        SetLastPage(page);
                     }
                     return page;
                 }
@@ -427,8 +426,7 @@ namespace NVorbis.Ogg
         {
             header.GetPacketCount(out packetCount, out _, out isContinued);
 
-            _lastPage?.DecrementRef();
-            _lastPage = pageData;
+            SetLastPage(pageData);
 
             _lastPageGranulePos = granulePos = header.GranulePosition;
             _lastPageIsContinuation = isContinuation = (header.PageFlags & PageFlags.ContinuesPacket) != 0;
@@ -441,6 +439,7 @@ namespace NVorbis.Ogg
         public void SetEndOfStream()
         {
             HasAllPages = true;
+            SetLastPage(null);
         }
 
         public long PageCount => _pageOffsets.Count;
@@ -451,14 +450,21 @@ namespace NVorbis.Ogg
 
         public long FirstDataPageIndex => FindFirstDataPage();
 
+        private void SetLastPage(PageData? pageData)
+        {
+            Debug.Assert(pageData == null || pageData._refCount > 0);
+
+            _lastPage?.DecrementRef();
+            _lastPage = pageData;
+        }
+
         private void Dispose(bool disposing)
         {
             if (!_isDisposed)
             {
                 if (disposing)
                 {
-                    _lastPage?.DecrementRef();
-                    _lastPage = null;
+                    SetLastPage(null);
                 }
                 _isDisposed = true;
             }
