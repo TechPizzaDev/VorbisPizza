@@ -255,6 +255,7 @@ namespace NVorbis.Ogg
                     {
                         ThrowMissingPageException();
                     }
+                    break;
                 }
 
                 int packetIndex = firstRealPacket;
