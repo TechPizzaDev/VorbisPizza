@@ -441,6 +441,8 @@ namespace NVorbis
 
                 // we read out the valid samples from the previous packet
                 int copyLen = Math.Min(tgt - idx, _prevPacketEnd - _prevPacketStart);
+                Debug.Assert(copyLen >= 0);
+
                 if (copyLen > 0)
                 {
                     if (interleave)
@@ -619,7 +621,7 @@ namespace NVorbis
                 int diff = (int)(samplePosition - actualEnd);
                 if (diff < 0)
                 {
-                    validLen += diff;
+                    validLen = Math.Max(validLen + diff, 0);
                 }
             }
 
