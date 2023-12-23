@@ -264,15 +264,19 @@ namespace NVorbis
         private unsafe void UnwrapPosts(bool* stepFlags, Data data)
         {
             ref int xList = ref MemoryMarshal.GetArrayDataReference(_xList);
-            ref int finalY = ref MemoryMarshal.GetArrayDataReference(data.Posts);
+            ref int posts = ref MemoryMarshal.GetArrayDataReference(data.Posts);
             ref int lNeigh = ref MemoryMarshal.GetArrayDataReference(_lNeigh);
             ref int hNeigh = ref MemoryMarshal.GetArrayDataReference(_hNeigh);
 
             stepFlags[0] = true;
             stepFlags[1] = true;
 
-            Unsafe.Add(ref finalY, 0) = data.Posts[0];
-            Unsafe.Add(ref finalY, 1) = data.Posts[1];
+            int* finalY = stackalloc int[64];
+            Span<int> finalYSpan = new(finalY, 64);
+            finalYSpan.Clear();
+
+            finalY[0] = Unsafe.Add(ref posts, 0);
+            finalY[1] = Unsafe.Add(ref posts, 1);
 
             for (int i = 2; i < data.PostCount; i++)
             {
@@ -281,12 +285,12 @@ namespace NVorbis
 
                 int predicted = RenderPoint(
                     Unsafe.Add(ref xList, lowOfs),
-                    Unsafe.Add(ref finalY, lowOfs),
+                    finalY[lowOfs],
                     Unsafe.Add(ref xList, highOfs),
-                    Unsafe.Add(ref finalY, highOfs),
+                    finalY[highOfs],
                     Unsafe.Add(ref xList, i));
 
-                int val = Unsafe.Add(ref finalY, i);
+                int val = Unsafe.Add(ref posts, i);
                 int highroom = _range - predicted;
                 int lowroom = predicted;
                 int room;
@@ -336,8 +340,9 @@ namespace NVorbis
                     stepFlags[i] = false;
                     result = predicted;
                 }
-                Unsafe.Add(ref finalY, i) = result;
             }
+
+            finalYSpan.CopyTo(data.Posts);
         }
 
         private static int RenderPoint(int x0, int y0, int x1, int y1, int X)
