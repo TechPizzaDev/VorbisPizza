@@ -79,7 +79,7 @@ namespace NVorbis
             }
         }
 
-        private static Exception GetInvalidStreamException(ref VorbisPacket packet)
+        private static ArgumentException GetInvalidStreamException(ref VorbisPacket packet)
         {
             try
             {
