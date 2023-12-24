@@ -365,6 +365,12 @@ namespace NVorbis
                 return;
             }
 
+            Debug.Assert(buffer.Length == _channels);
+            for (int i = 0; i < buffer.Length; i++)
+            {
+                Debug.Assert(buffer[i].Length == _block1Size);
+            }
+
             if (_bufferPool.Count < MaxPooledBuffers)
             {
                 _bufferPool.Enqueue(buffer);
