@@ -2,7 +2,7 @@
 namespace NVorbis
 {
     // each channel gets its own pass, with the dimensions interleaved
-    internal class Residue1 : Residue0
+    internal sealed class Residue1 : Residue0
     {
         public Residue1(ref VorbisPacket packet, int channels, Codebook[] codebooks) : base(ref packet, channels, codebooks)
         {

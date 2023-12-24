@@ -1,11 +1,12 @@
 using System;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace NVorbis
 {
     // all channels in one pass, interleaved
-    internal class Residue2 : Residue0
+    internal sealed class Residue2 : Residue0
     {
         private int _channels;
 
@@ -27,11 +28,31 @@ namespace NVorbis
         {
             uint dimensions = (uint) codebook.Dimensions;
             uint channels = (uint) _channels;
+            ReadOnlySpan<float[]> residues = residue.AsSpan(0, _channels);
+            Debug.Assert(residues.Length == _channels);
+
+            if (dimensions != 1 && channels == 2)
+            {
+                return WriteVectors<WriteVectorStereo>(codebook, ref packet, residues, offset, partitionSize);
+            }
+            else if (channels == 1)
+            {
+                return WriteVectors<WriteVectorMono>(codebook, ref packet, residues, offset, partitionSize);
+            }
+            else
+            {
+                return WriteVectors<WriteVectorFallback>(codebook, ref packet, residues, offset, partitionSize);
+            }
+        }
+
+        private bool WriteVectors<TState>(
+            Codebook codebook, ref VorbisPacket packet, ReadOnlySpan<float[]> residues, int offset, int partitionSize)
+            where TState : IWriteVectorState
+        {
+            uint dimensions = (uint) codebook.Dimensions;
+            uint channels = (uint) _channels;
             uint o = (uint) offset / channels;
 
-            ReadOnlySpan<float[]> residues = residue.AsSpan(0, (int) channels);
-            ref float res0 = ref MemoryMarshal.GetArrayDataReference(residues[0]);
-            ref float res1 = ref channels == 2 ? ref MemoryMarshal.GetArrayDataReference(residue[1]) : ref Unsafe.NullRef<float>();
             ref float lookupTable = ref MemoryMarshal.GetReference(codebook.GetLookupTable());
 
             for (uint c = 0; c < partitionSize; c += dimensions)
@@ -43,34 +64,56 @@ namespace NVorbis
                 }
 
                 ref float lookup = ref Unsafe.Add(ref lookupTable, (uint) entry * dimensions);
-                
-                if (dimensions != 1 && channels == 2)
+                TState.Invoke(residues, ref lookup, dimensions, ref o);
+            }
+            return false;
+        }
+
+        private struct WriteVectorStereo : IWriteVectorState
+        {
+            public static void Invoke(ReadOnlySpan<float[]> residues, ref float lookup, uint dimensions, ref uint o)
+            {
+                ref float res0 = ref MemoryMarshal.GetArrayDataReference(residues[0]);
+                ref float res1 = ref MemoryMarshal.GetArrayDataReference(residues[1]);
+
+                for (uint d = 0; d < dimensions; d += 2, o++)
                 {
-                    for (uint d = 0; d < dimensions; d += 2, o++)
-                    {
-                        Unsafe.Add(ref res0, o) += Unsafe.Add(ref lookup, d + 0);
-                        Unsafe.Add(ref res1, o) += Unsafe.Add(ref lookup, d + 1);
-                    }
+                    Unsafe.Add(ref res0, o) += Unsafe.Add(ref lookup, d + 0);
+                    Unsafe.Add(ref res1, o) += Unsafe.Add(ref lookup, d + 1);
                 }
-                else if (channels == 1)
+            }
+        }
+
+        private struct WriteVectorMono : IWriteVectorState
+        {
+            public static void Invoke(ReadOnlySpan<float[]> residues, ref float lookup, uint dimensions, ref uint o)
+            {
+                ref float res0 = ref MemoryMarshal.GetArrayDataReference(residues[0]);
+
+                for (uint d = 0; d < dimensions; d += 1, o++)
                 {
-                    for (uint d = 0; d < dimensions; d += 1, o++)
-                    {
-                        Unsafe.Add(ref res0, o) += Unsafe.Add(ref lookup, d);
-                    }
+                    Unsafe.Add(ref res0, o) += Unsafe.Add(ref lookup, d);
                 }
-                else
+            }
+        }
+
+        private struct WriteVectorFallback : IWriteVectorState
+        {
+            public static void Invoke(ReadOnlySpan<float[]> residues, ref float lookup, uint dimensions, ref uint o)
+            {
+                for (uint d = 0; d < dimensions; d += (uint) residues.Length, o++)
                 {
-                    for (uint d = 0; d < dimensions; d += channels, o++)
+                    for (int ch = 0; ch < residues.Length; ch++)
                     {
-                        for (int ch = 0; ch < residues.Length; ch++)
-                        {
-                            residues[ch][o] += Unsafe.Add(ref lookup, d + (uint) ch);
-                        }
+                        residues[ch][o] += Unsafe.Add(ref lookup, d + (uint) ch);
                     }
                 }
             }
-            return false;
+        }
+
+        private interface IWriteVectorState
+        {
+            static abstract void Invoke(ReadOnlySpan<float[]> residues, ref float lookup, uint dimensions, ref uint o);
         }
     }
 }
