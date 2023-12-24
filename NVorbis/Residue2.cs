@@ -77,19 +77,23 @@ namespace NVorbis
                 ref float res1 = ref MemoryMarshal.GetArrayDataReference(residues[1]);
 
                 uint d = 0;
-                for (; d + 8 <= dimensions; d += 8, o += 4)
+
+                if (Vector128.IsHardwareAccelerated)
                 {
-                    Vector128<float> lookup0 = Vector128.LoadUnsafe(ref lookup, d + 0);
-                    Vector128<float> lookup1 = Vector128.LoadUnsafe(ref lookup, d + 4);
+                    for (; d + 8 <= dimensions; d += 8, o += 4)
+                    {
+                        Vector128<float> lookup0 = Vector128.LoadUnsafe(ref lookup, d + 0);
+                        Vector128<float> lookup1 = Vector128.LoadUnsafe(ref lookup, d + 4);
 
-                    Vector128<float> vres0 = Vector128.LoadUnsafe(ref res0, o);
-                    Vector128<float> vres1 = Vector128.LoadUnsafe(ref res1, o);
+                        Vector128<float> vres0 = Vector128.LoadUnsafe(ref res0, o);
+                        Vector128<float> vres1 = Vector128.LoadUnsafe(ref res1, o);
 
-                    Vector128<float> sum0 = vres0 + Vector128Helper.UnpackLow(lookup0, lookup1);
-                    Vector128<float> sum1 = vres1 + Vector128Helper.UnpackHigh(lookup0, lookup1);
+                        Vector128<float> sum0 = vres0 + Vector128Helper.UnpackLow(lookup0, lookup1);
+                        Vector128<float> sum1 = vres1 + Vector128Helper.UnpackHigh(lookup0, lookup1);
 
-                    sum0.StoreUnsafe(ref res0, o);
-                    sum1.StoreUnsafe(ref res1, o);
+                        sum0.StoreUnsafe(ref res0, o);
+                        sum1.StoreUnsafe(ref res1, o);
+                    }
                 }
 
                 for (; d < dimensions; d += 2, o++)
