@@ -271,9 +271,9 @@ namespace NVorbis
             stepFlags[0] = true;
             stepFlags[1] = true;
 
-            int* finalY = stackalloc int[64];
-            Span<int> finalYSpan = new(finalY, 64);
-            finalYSpan.Clear();
+            Span<int> finalY = stackalloc int[64];
+            ref int rFinalY = ref MemoryMarshal.GetReference(finalY);
+            finalY.Clear();
 
             finalY[0] = Unsafe.Add(ref posts, 0);
             finalY[1] = Unsafe.Add(ref posts, 1);
@@ -285,9 +285,9 @@ namespace NVorbis
 
                 int predicted = RenderPoint(
                     Unsafe.Add(ref xList, lowOfs),
-                    finalY[lowOfs],
+                    Unsafe.Add(ref rFinalY, lowOfs),
                     Unsafe.Add(ref xList, highOfs),
-                    finalY[highOfs],
+                    Unsafe.Add(ref rFinalY, highOfs),
                     Unsafe.Add(ref xList, i));
 
                 int val = Unsafe.Add(ref posts, i);
@@ -340,9 +340,10 @@ namespace NVorbis
                     stepFlags[i] = false;
                     result = predicted;
                 }
+                finalY[i] = result;
             }
 
-            finalYSpan.CopyTo(data.Posts);
+            finalY.CopyTo(data.Posts);
         }
 
         private static int RenderPoint(int x0, int y0, int x1, int y1, int X)
