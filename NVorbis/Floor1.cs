@@ -33,8 +33,8 @@ namespace NVorbis
         private Codebook[][] _subclassBooks;
         private int[][] _subclassBookIndex;
 
-        private static readonly int[] _rangeLookup = { 256, 128, 86, 64 };
-        private static readonly int[] _yBitsLookup = { 8, 7, 7, 6 };
+        private static ReadOnlySpan<byte> RangeLookup => new byte[] { 128, 64, 43, 32 };
+        private static ReadOnlySpan<byte> YBitsLookup => new byte[] { 8, 7, 7, 6 };
 
         public Floor1(ref VorbisPacket packet, Codebook[] codebooks)
         {
@@ -77,12 +77,12 @@ namespace NVorbis
                 }
             }
 
-            _multiplier = (int)packet.ReadBits(2);
+            int multiplier = (int)packet.ReadBits(2);
+            
+            _range = RangeLookup[multiplier] * 2;
+            _yBits = YBitsLookup[multiplier];
 
-            _range = _rangeLookup[_multiplier];
-            _yBits = _yBitsLookup[_multiplier];
-
-            ++_multiplier;
+            _multiplier = multiplier + 1;
 
             int rangeBits = (int)packet.ReadBits(4);
             int xListSize = 2;
