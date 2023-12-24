@@ -561,14 +561,14 @@ namespace NVorbis
                 
                 bool clipped = false;
 
-                for (; j < count; j++)
+                for (int i = j; i < count; i++)
                 {
-                    float p = Unsafe.Add(ref prev, j);
+                    float p = Unsafe.Add(ref prev, i);
                     if (T.IsClip)
                     {
                         p = Utils.ClipValue(p, ref clipped);
                     }
-                    Unsafe.Add(ref tar, j * channels) = p;
+                    Unsafe.Add(ref tar, i * channels) = p;
                 }
 
                 _hasClipped |= clipped;
