@@ -1,6 +1,8 @@
 using System;
+using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Runtime.Intrinsics;
 using NVorbis.Contracts;
 
 namespace NVorbis
@@ -185,13 +187,41 @@ namespace NVorbis
             ref float magnitude = ref MemoryMarshal.GetReference(magnitudeSpan);
             ref float angle = ref MemoryMarshal.GetReference(angleSpan);
 
-            for (int j = 0; j < length; j++)
+            int j = 0;
+            if (Vector.IsHardwareAccelerated)
+            {
+                for (; j + Vector<float>.Count <= length; j += Vector<float>.Count)
+                {
+                    Vector<float> oldM = VectorHelper.LoadUnsafe(ref magnitude, j);
+                    Vector<float> oldA = VectorHelper.LoadUnsafe(ref angle, j);
+
+                    Vector<float> posM = Vector.GreaterThan<float>(oldM, Vector<float>.Zero);
+                    Vector<float> posA = Vector.GreaterThan<float>(oldA, Vector<float>.Zero);
+
+                    /*             newM; newA;
+                         m &  a ==    0    -1
+                         m & !a ==    1     0
+                        !m &  a ==    0     1
+                        !m & !a ==   -1     0
+                    */
+
+                    Vector<float> signMask = new Vector<uint>(1u << 31).As<uint, float>() & posM;
+                    Vector<float> signedA = oldA ^ signMask;
+                    Vector<float> newM = oldM - Vector.AndNot(signedA, posA);
+                    Vector<float> newA = oldM + (signedA & posA);
+
+                    newM.StoreUnsafe(ref magnitude, j);
+                    newA.StoreUnsafe(ref angle, j);
+                }
+            }
+
+            for (; j < length; j++)
             {
                 float oldM = Unsafe.Add(ref magnitude, j);
                 float oldA = Unsafe.Add(ref angle, j);
 
                 float newM = oldM;
-                float newA = oldA;
+                float newA = oldM;
 
                 if (oldM > 0)
                 {
@@ -202,7 +232,6 @@ namespace NVorbis
                     else
                     {
                         newM = oldM + oldA;
-                        newA = oldM;
                     }
                 }
                 else
@@ -214,7 +243,6 @@ namespace NVorbis
                     else
                     {
                         newM = oldM - oldA;
-                        newA = oldM;
                     }
                 }
 
