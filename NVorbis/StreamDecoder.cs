@@ -593,7 +593,7 @@ namespace NVorbis
                         {
                             Vector<float> p0 = VectorHelper.LoadUnsafe(ref src, j);
                             Vector<float> c0 = Utils.ClipValue(p0, ref clipped);
-                            c0.StoreUnsafe(ref dst, j);
+                            c0.StoreUnsafe(ref dst, (nuint) j);
                         }
 
                         _hasClipped |= !Vector.EqualsAll(clipped, Vector<float>.Zero);
@@ -752,7 +752,7 @@ namespace NVorbis
                         Vector<float> pi = VectorHelper.LoadUnsafe(ref prev, i);
 
                         Vector<float> result = ni + pi;
-                        result.StoreUnsafe(ref next, i);
+                        result.StoreUnsafe(ref next, (nuint) i);
                     }
                 }
                 for (; i < length; i++)

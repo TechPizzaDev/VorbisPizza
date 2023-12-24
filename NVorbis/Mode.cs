@@ -186,7 +186,7 @@ namespace NVorbis
                             Vector<float> v_window = VectorHelper.LoadUnsafe(ref window, i);
 
                             Vector<float> result = v_buffer * v_window;
-                            result.StoreUnsafe(ref buffer, i);
+                            result.StoreUnsafe(ref buffer, (nuint) i);
                         }
                     }
 

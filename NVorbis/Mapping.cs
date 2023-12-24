@@ -210,8 +210,8 @@ namespace NVorbis
                     Vector<float> newM = oldM - Vector.AndNot(signedA, posA);
                     Vector<float> newA = oldM + (signedA & posA);
 
-                    newM.StoreUnsafe(ref magnitude, j);
-                    newA.StoreUnsafe(ref angle, j);
+                    newM.StoreUnsafe(ref magnitude, (nuint) j);
+                    newA.StoreUnsafe(ref angle, (nuint) j);
                 }
             }
 
