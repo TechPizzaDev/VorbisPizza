@@ -9,21 +9,27 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+  
       - name: Setup .NET
-        uses: actions/setup-dotnet@v3
+        uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 7.0.x
+          dotnet-version: 8.0.x
+
       - name: Build with dotnet
         run: dotnet build --configuration Release
+
       - name: Test with dotnet
         run: dotnet test
+
   deploy:
     needs: build
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+  
       - name: Pack nuget Package
         run: dotnet pack --configuration Release
+
       - name: Push package to nuget
         run: dotnet nuget push **/*.nupkg --api-key ${{ secrets.NUGET_DEPLOY_KEY }} --source https://api.nuget.org/v3/index.json
