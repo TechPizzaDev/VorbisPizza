@@ -16,19 +16,18 @@ namespace NVorbis
         }
 
         public override void Decode(
-            ref VorbisPacket packet, ReadOnlySpan<bool> doNotDecodeChannel, int blockSize, float[][] buffer)
+            ref VorbisPacket packet, ReadOnlySpan<bool> doNotDecodeChannel, int blockSize, ReadOnlySpan<float[]> buffers)
         {
             // since we're doing all channels in a single pass, the block size has to be multiplied.
             // otherwise this is just a pass-through call
-            base.Decode(ref packet, doNotDecodeChannel, blockSize * _channels, buffer);
+            base.Decode(ref packet, doNotDecodeChannel, blockSize * _channels, buffers);
         }
 
         protected override bool WriteVectors(
-            Codebook codebook, ref VorbisPacket packet, float[][] residue, int channel, int offset, int partitionSize)
+            Codebook codebook, ref VorbisPacket packet, ReadOnlySpan<float[]> residues, int channel, int offset, int partitionSize)
         {
             uint dimensions = (uint) codebook.Dimensions;
             uint channels = (uint) _channels;
-            ReadOnlySpan<float[]> residues = residue.AsSpan(0, _channels);
             Debug.Assert(residues.Length == _channels);
 
             if (dimensions != 1 && channels == 2)

@@ -282,7 +282,7 @@ namespace NVorbis
             _modes = new Mode[packet.ReadBits(6) + 1];
             for (int i = 0; i < _modes.Length; i++)
             {
-                _modes[i] = new Mode(ref packet, _channels, _block0Size, _block1Size, mappings);
+                _modes[i] = new Mode(ref packet, _block0Size, _block1Size, mappings);
             }
 
             // verify the closing bit
