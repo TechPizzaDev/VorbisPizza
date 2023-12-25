@@ -61,7 +61,7 @@ namespace NVorbis
                 _bitrev = new ushort[_n8];
                 for (int i = 0; i < _n8; ++i)
                 {
-                    _bitrev[i] = (ushort)(Utils.BitReverse((uint)i, _ld - 3) << 2);
+                    _bitrev[i] = (ushort) (Utils.BitReverse((uint) i, _ld - 3) << 2);
                 }
             }
 
@@ -101,6 +101,7 @@ namespace NVorbis
                 // this propagates through linearly to the end, where the numbers
                 // are 1/2 too small, and need to be compensated for.
 
+                void Step0()
                 {
                     float* d = &buf2[n2 - 2];   // buf2
                     float* AA = A;              // A
@@ -126,6 +127,7 @@ namespace NVorbis
                         e -= 4;
                     }
                 }
+                Step0();
 
                 // now we use symbolic names for these, so that we can
                 // possibly swap their meaning as we change which operations
@@ -136,8 +138,8 @@ namespace NVorbis
                 // step 2    (paper output is w, now u)
                 // this could be in place, but the data ends up in the wrong
                 // place... _somebody_'s got to swap it, so this is nominated
+                void Step2()
                 {
-
                     float* AA = &A[n2 - 8];   // A
 
                     float* e0 = &v[n4];       // v
@@ -172,98 +174,108 @@ namespace NVorbis
                         e1 += 4;
                     }
                 }
+                Step2();
 
-                // step 3
-                int ld = _ld;
-
-                // optimized step 3:
-
-                // the original step3 loop can be nested r inside s or s inside r;
-                // it's written originally as s inside r, but this is dumb when r
-                // iterates many times, and s few. So I have two copies of it and
-                // switch between them halfway.
-
-                // this is iteration 0 of step 3
-                step3_iter0_loop(n >> 4, u, n2 - 1 - n4 * 0, -(n >> 3), A);
-                step3_iter0_loop(n >> 4, u, n2 - 1 - n4 * 1, -(n >> 3), A);
-
-                // this is iteration 1 of step 3
-                step3_inner_r_loop(n >> 5, u, n2 - 1 - n8 * 0, -(n >> 4), A, 16);
-                step3_inner_r_loop(n >> 5, u, n2 - 1 - n8 * 1, -(n >> 4), A, 16);
-                step3_inner_r_loop(n >> 5, u, n2 - 1 - n8 * 2, -(n >> 4), A, 16);
-                step3_inner_r_loop(n >> 5, u, n2 - 1 - n8 * 3, -(n >> 4), A, 16);
-
-                int l = 2;
-                for (; l < (ld - 3) >> 1; ++l)
+                void Step3()
                 {
-                    int k0 = n >> (l + 2);
-                    int k0_2 = k0 >> 1;
-                    int lim = 1 << (l + 1);
-                    for (int i = 0; i < lim; ++i)
-                    {
-                        step3_inner_r_loop(n >> (l + 4), u, n2 - 1 - k0 * i, -k0_2, A, 1 << (l + 3));
-                    }
-                }
+                    // step 3
+                    int ld = _ld;
 
-                for (; l < ld - 6; ++l)
-                {
-                    int k0 = n >> (l + 2);
-                    int k1 = 1 << (l + 3);
-                    int k0_2 = k0 >> 1;
-                    int rlim = n >> (l + 6), r;
-                    int lim = 1 << (l + 1);
-                    float* A0 = A;
-                    int i_off = n2 - 1;
-                    for (r = rlim; r > 0; --r)
-                    {
-                        step3_inner_s_loop(lim, u, i_off, -k0_2, A0, k1, k0);
-                        A0 += k1 * 4;
-                        i_off -= 8;
-                    }
-                }
+                    // optimized step 3:
 
-                // iterations with count:
-                //   ld-6,-5,-4 all interleaved together
-                //       the big win comes from getting rid of needless flops
-                //         due to the constants on pass 5 & 4 being all 1 and 0;
-                //       combining them to be simultaneous to improve cache made little difference
-                step3_inner_s_loop_ld654(n >> 5, u, n2 - 1, A, n);
+                    // the original step3 loop can be nested r inside s or s inside r;
+                    // it's written originally as s inside r, but this is dumb when r
+                    // iterates many times, and s few. So I have two copies of it and
+                    // switch between them halfway.
+
+                    // this is iteration 0 of step 3
+                    step3_iter0_loop(n >> 4, u, n2 - 1 - n4 * 0, -(n >> 3), A);
+                    step3_iter0_loop(n >> 4, u, n2 - 1 - n4 * 1, -(n >> 3), A);
+
+                    // this is iteration 1 of step 3
+                    step3_inner_r_loop(n >> 5, u, n2 - 1 - n8 * 0, -(n >> 4), A, 16);
+                    step3_inner_r_loop(n >> 5, u, n2 - 1 - n8 * 1, -(n >> 4), A, 16);
+                    step3_inner_r_loop(n >> 5, u, n2 - 1 - n8 * 2, -(n >> 4), A, 16);
+                    step3_inner_r_loop(n >> 5, u, n2 - 1 - n8 * 3, -(n >> 4), A, 16);
+
+                    int l = 2;
+                    for (; l < (ld - 3) >> 1; ++l)
+                    {
+                        int k0 = n >> (l + 2);
+                        int k0_2 = k0 >> 1;
+                        int lim = 1 << (l + 1);
+                        for (int i = 0; i < lim; ++i)
+                        {
+                            step3_inner_r_loop(n >> (l + 4), u, n2 - 1 - k0 * i, -k0_2, A, 1 << (l + 3));
+                        }
+                    }
+
+                    for (; l < ld - 6; ++l)
+                    {
+                        int k0 = n >> (l + 2);
+                        int k1 = 1 << (l + 3);
+                        int k0_2 = k0 >> 1;
+                        int rlim = n >> (l + 6), r;
+                        int lim = 1 << (l + 1);
+                        float* A0 = A;
+                        int i_off = n2 - 1;
+                        for (r = rlim; r > 0; --r)
+                        {
+                            step3_inner_s_loop(lim, u, i_off, -k0_2, A0, k1, k0);
+                            A0 += k1 * 4;
+                            i_off -= 8;
+                        }
+                    }
+
+                    // iterations with count:
+                    //   ld-6,-5,-4 all interleaved together
+                    //       the big win comes from getting rid of needless flops
+                    //         due to the constants on pass 5 & 4 being all 1 and 0;
+                    //       combining them to be simultaneous to improve cache made little difference
+                    step3_inner_s_loop_ld654(n >> 5, u, n2 - 1, A, n);
+                }
+                Step3();
 
                 // output is u
 
                 // step 4, 5, and 6
                 // cannot be in-place because of step 5
-                fixed (ushort* bit_reverse = _bitrev)
+                void Step4_5_6()
                 {
-                    ushort* bitrev = bit_reverse;
-                    // weirdly, I'd have thought reading sequentially and writing
-                    // erratically would have been better than vice-versa, but in
-                    // fact that's not what my testing showed. (That is, with
-                    // j = bitreverse(i), do you read i and write j, or read j and write i.)
-
-                    float* d0 = &v[n4 - 4];
-                    float* d1 = &v[n2 - 4];
-                    while (d0 >= v)
+                    fixed (ushort* bit_reverse = _bitrev)
                     {
-                        int k4;
+                        ushort* bitrev = bit_reverse;
+                        // weirdly, I'd have thought reading sequentially and writing
+                        // erratically would have been better than vice-versa, but in
+                        // fact that's not what my testing showed. (That is, with
+                        // j = bitreverse(i), do you read i and write j, or read j and write i.)
 
-                        k4 = bitrev[0];
-                        d1[3] = u[k4 + 0];
-                        d1[2] = u[k4 + 1];
-                        d0[3] = u[k4 + 2];
-                        d0[2] = u[k4 + 3];
+                        float* d0 = &v[n4 - 4];
+                        float* d1 = &v[n2 - 4];
+                        while (d0 >= v)
+                        {
+                            int k4;
 
-                        k4 = bitrev[1];
-                        d1[1] = u[k4 + 0];
-                        d1[0] = u[k4 + 1];
-                        d0[1] = u[k4 + 2];
-                        d0[0] = u[k4 + 3];
+                            k4 = bitrev[0];
+                            d1[3] = u[k4 + 0];
+                            d1[2] = u[k4 + 1];
+                            d0[3] = u[k4 + 2];
+                            d0[2] = u[k4 + 3];
 
-                        d0 -= 4;
-                        d1 -= 4;
-                        bitrev += 2;
+                            k4 = bitrev[1];
+                            d1[1] = u[k4 + 0];
+                            d1[0] = u[k4 + 1];
+                            d0[1] = u[k4 + 2];
+                            d0[0] = u[k4 + 3];
+
+                            d0 -= 4;
+                            d1 -= 4;
+                            bitrev += 2;
+                        }
                     }
                 }
+                Step4_5_6();
+
                 // (paper output is u, now v)
 
 
@@ -272,50 +284,54 @@ namespace NVorbis
 
                 // step 7   (paper output is v, now v)
                 // this is now in place
-                fixed (float* cc = _c)
+                void Step7()
                 {
-                    float* C = cc;
-
-                    float* d = v;
-                    float* e = v + n2 - 4;
-
-                    while (d < e)
+                    fixed (float* cc = _c)
                     {
-                        float a02, a11, b0, b1, b2, b3;
+                        float* C = cc;
 
-                        a02 = d[0] - e[2];
-                        a11 = d[1] + e[3];
+                        float* d = v;
+                        float* e = v + n2 - 4;
 
-                        b0 = C[1] * a02 + C[0] * a11;
-                        b1 = C[1] * a11 - C[0] * a02;
+                        while (d < e)
+                        {
+                            float a02, a11, b0, b1, b2, b3;
 
-                        b2 = d[0] + e[2];
-                        b3 = d[1] - e[3];
+                            a02 = d[0] - e[2];
+                            a11 = d[1] + e[3];
 
-                        d[0] = b2 + b0;
-                        d[1] = b3 + b1;
-                        e[2] = b2 - b0;
-                        e[3] = b1 - b3;
+                            b0 = C[1] * a02 + C[0] * a11;
+                            b1 = C[1] * a11 - C[0] * a02;
 
-                        a02 = d[2] - e[0];
-                        a11 = d[3] + e[1];
+                            b2 = d[0] + e[2];
+                            b3 = d[1] - e[3];
 
-                        b0 = C[3] * a02 + C[2] * a11;
-                        b1 = C[3] * a11 - C[2] * a02;
+                            d[0] = b2 + b0;
+                            d[1] = b3 + b1;
+                            e[2] = b2 - b0;
+                            e[3] = b1 - b3;
 
-                        b2 = d[2] + e[0];
-                        b3 = d[3] - e[1];
+                            a02 = d[2] - e[0];
+                            a11 = d[3] + e[1];
 
-                        d[2] = b2 + b0;
-                        d[3] = b3 + b1;
-                        e[0] = b2 - b0;
-                        e[1] = b1 - b3;
+                            b0 = C[3] * a02 + C[2] * a11;
+                            b1 = C[3] * a11 - C[2] * a02;
 
-                        C += 4;
-                        d += 4;
-                        e -= 4;
+                            b2 = d[2] + e[0];
+                            b3 = d[3] - e[1];
+
+                            d[2] = b2 + b0;
+                            d[3] = b3 + b1;
+                            e[0] = b2 - b0;
+                            e[1] = b1 - b3;
+
+                            C += 4;
+                            d += 4;
+                            e -= 4;
+                        }
                     }
                 }
+                Step7();
 
                 // data must be in buf2
 
@@ -326,58 +342,62 @@ namespace NVorbis
                 // to make another pass later
 
                 // this cannot POSSIBLY be in place, so we refer to the buffers directly
-                fixed (float* bb = _b)
+                void Step8()
                 {
-                    float* B = bb + n2 - 8;
-                    float* e = buf2 + n2 - 8;
-                    float* d0 = &buffer[0];
-                    float* d1 = &buffer[n2 - 4];
-                    float* d2 = &buffer[n2];
-                    float* d3 = &buffer[n - 4];
-                    while (e >= v)
+                    fixed (float* bb = _b)
                     {
-                        float p0, p1, p2, p3;
+                        float* B = bb + n2 - 8;
+                        float* e = buf2 + n2 - 8;
+                        float* d0 = &buffer[0];
+                        float* d1 = &buffer[n2 - 4];
+                        float* d2 = &buffer[n2];
+                        float* d3 = &buffer[n - 4];
+                        while (e >= v)
+                        {
+                            float p0, p1, p2, p3;
 
-                        p3 = e[6] * B[7] - e[7] * B[6];
-                        p2 = -e[6] * B[6] - e[7] * B[7];
+                            p3 = e[6] * B[7] - e[7] * B[6];
+                            p2 = -e[6] * B[6] - e[7] * B[7];
 
-                        d0[0] = p3;
-                        d1[3] = -p3;
-                        d2[0] = p2;
-                        d3[3] = p2;
+                            d0[0] = p3;
+                            d1[3] = -p3;
+                            d2[0] = p2;
+                            d3[3] = p2;
 
-                        p1 = e[4] * B[5] - e[5] * B[4];
-                        p0 = -e[4] * B[4] - e[5] * B[5];
+                            p1 = e[4] * B[5] - e[5] * B[4];
+                            p0 = -e[4] * B[4] - e[5] * B[5];
 
-                        d0[1] = p1;
-                        d1[2] = -p1;
-                        d2[1] = p0;
-                        d3[2] = p0;
+                            d0[1] = p1;
+                            d1[2] = -p1;
+                            d2[1] = p0;
+                            d3[2] = p0;
 
-                        p3 = e[2] * B[3] - e[3] * B[2];
-                        p2 = -e[2] * B[2] - e[3] * B[3];
+                            p3 = e[2] * B[3] - e[3] * B[2];
+                            p2 = -e[2] * B[2] - e[3] * B[3];
 
-                        d0[2] = p3;
-                        d1[1] = -p3;
-                        d2[2] = p2;
-                        d3[1] = p2;
+                            d0[2] = p3;
+                            d1[1] = -p3;
+                            d2[2] = p2;
+                            d3[1] = p2;
 
-                        p1 = e[0] * B[1] - e[1] * B[0];
-                        p0 = -e[0] * B[0] - e[1] * B[1];
+                            p1 = e[0] * B[1] - e[1] * B[0];
+                            p0 = -e[0] * B[0] - e[1] * B[1];
 
-                        d0[3] = p1;
-                        d1[0] = -p1;
-                        d2[3] = p0;
-                        d3[0] = p0;
+                            d0[3] = p1;
+                            d1[0] = -p1;
+                            d2[3] = p0;
+                            d3[0] = p0;
 
-                        B -= 8;
-                        e -= 8;
-                        d0 += 4;
-                        d2 += 4;
-                        d1 -= 4;
-                        d3 -= 4;
+                            B -= 8;
+                            e -= 8;
+                            d0 += 4;
+                            d2 += 4;
+                            d1 -= 4;
+                            d3 -= 4;
+                        }
                     }
                 }
+                Step8();
             }
 
             // the following were split out into separate functions while optimizing;
