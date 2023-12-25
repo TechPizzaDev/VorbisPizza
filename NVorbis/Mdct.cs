@@ -69,19 +69,13 @@ namespace NVorbis
             {
                 fixed (float* bufferPtr = buffer)
                 fixed (float* buf2Ptr = buf2)
-                fixed (float* aa = _a)
                 {
-                    CalcReverse(bufferPtr, buf2Ptr, aa);
+                    CalcReverse(bufferPtr, buf2Ptr);
                 }
             }
 
-            private void CalcReverse(float* buffer, float* buf2, float* A)
+            private void CalcReverse(float* buffer, float* buf2)
             {
-                int n = _n;
-                int n2 = n >> 1;
-                int n4 = n2 >> 1;
-                int n8 = n4 >> 1;
-
                 // IMDCT algorithm from "The use of multirate filter banks for coding of high quality digital audio"
                 // See notes about bugs in that paper in less-optimal implementation 'inverse_mdct_old' after this function.
 
@@ -101,8 +95,10 @@ namespace NVorbis
                 // this propagates through linearly to the end, where the numbers
                 // are 1/2 too small, and need to be compensated for.
 
-                void Step0()
+                void Step0(float* A)
                 {
+                    int n2 = _n >> 1;
+
                     float* d = &buf2[n2 - 2];   // buf2
                     float* AA = A;              // A
                     float* e = &buffer[0];      // buffer
@@ -127,7 +123,10 @@ namespace NVorbis
                         e -= 4;
                     }
                 }
-                Step0();
+                fixed (float* aa = _a)
+                {
+                    Step0(aa);
+                }
 
                 // now we use symbolic names for these, so that we can
                 // possibly swap their meaning as we change which operations
@@ -138,8 +137,11 @@ namespace NVorbis
                 // step 2    (paper output is w, now u)
                 // this could be in place, but the data ends up in the wrong
                 // place... _somebody_'s got to swap it, so this is nominated
-                void Step2()
+                void Step2(float* A)
                 {
+                    int n2 = _n >> 1;
+                    int n4 = _n >> 2;
+
                     float* AA = &A[n2 - 8];   // A
 
                     float* e0 = &v[n4];       // v
@@ -174,10 +176,18 @@ namespace NVorbis
                         e1 += 4;
                     }
                 }
-                Step2();
-
-                void Step3()
+                fixed (float* aa = _a)
                 {
+                    Step2(aa);
+                }
+
+                void Step3(float* A)
+                {
+                    int n = _n;
+                    int n2 = n >> 1;
+                    int n4 = n >> 2;
+                    int n8 = n >> 3;
+
                     // step 3
                     int ld = _ld;
 
@@ -234,47 +244,52 @@ namespace NVorbis
                     //       combining them to be simultaneous to improve cache made little difference
                     step3_inner_s_loop_ld654(n >> 5, u, n2 - 1, A, n);
                 }
-                Step3();
+                fixed (float* aa = _a)
+                {
+                    Step3(aa);
+                }
 
                 // output is u
 
                 // step 4, 5, and 6
                 // cannot be in-place because of step 5
-                void Step4_5_6()
+                void Step4_5_6(ushort* bitrev)
                 {
-                    fixed (ushort* bit_reverse = _bitrev)
+                    int n2 = _n >> 1;
+                    int n4 = _n >> 2;
+
+                    // weirdly, I'd have thought reading sequentially and writing
+                    // erratically would have been better than vice-versa, but in
+                    // fact that's not what my testing showed. (That is, with
+                    // j = bitreverse(i), do you read i and write j, or read j and write i.)
+
+                    float* d0 = &v[n4 - 4];
+                    float* d1 = &v[n2 - 4];
+                    while (d0 >= v)
                     {
-                        ushort* bitrev = bit_reverse;
-                        // weirdly, I'd have thought reading sequentially and writing
-                        // erratically would have been better than vice-versa, but in
-                        // fact that's not what my testing showed. (That is, with
-                        // j = bitreverse(i), do you read i and write j, or read j and write i.)
+                        int k4;
 
-                        float* d0 = &v[n4 - 4];
-                        float* d1 = &v[n2 - 4];
-                        while (d0 >= v)
-                        {
-                            int k4;
+                        k4 = bitrev[0];
+                        d1[3] = u[k4 + 0];
+                        d1[2] = u[k4 + 1];
+                        d0[3] = u[k4 + 2];
+                        d0[2] = u[k4 + 3];
 
-                            k4 = bitrev[0];
-                            d1[3] = u[k4 + 0];
-                            d1[2] = u[k4 + 1];
-                            d0[3] = u[k4 + 2];
-                            d0[2] = u[k4 + 3];
+                        k4 = bitrev[1];
+                        d1[1] = u[k4 + 0];
+                        d1[0] = u[k4 + 1];
+                        d0[1] = u[k4 + 2];
+                        d0[0] = u[k4 + 3];
 
-                            k4 = bitrev[1];
-                            d1[1] = u[k4 + 0];
-                            d1[0] = u[k4 + 1];
-                            d0[1] = u[k4 + 2];
-                            d0[0] = u[k4 + 3];
-
-                            d0 -= 4;
-                            d1 -= 4;
-                            bitrev += 2;
-                        }
+                        d0 -= 4;
+                        d1 -= 4;
+                        bitrev += 2;
                     }
                 }
-                Step4_5_6();
+                fixed (ushort* bit_reverse = _bitrev)
+                {
+                    Step4_5_6(bit_reverse);
+                }
 
                 // (paper output is u, now v)
 
@@ -284,54 +299,54 @@ namespace NVorbis
 
                 // step 7   (paper output is v, now v)
                 // this is now in place
-                void Step7()
+                void Step7(float* C)
                 {
-                    fixed (float* cc = _c)
+                    int n2 = _n >> 1;
+
+                    float* d = v;
+                    float* e = v + n2 - 4;
+
+                    while (d < e)
                     {
-                        float* C = cc;
+                        float a02, a11, b0, b1, b2, b3;
 
-                        float* d = v;
-                        float* e = v + n2 - 4;
+                        a02 = d[0] - e[2];
+                        a11 = d[1] + e[3];
 
-                        while (d < e)
-                        {
-                            float a02, a11, b0, b1, b2, b3;
+                        b0 = C[1] * a02 + C[0] * a11;
+                        b1 = C[1] * a11 - C[0] * a02;
 
-                            a02 = d[0] - e[2];
-                            a11 = d[1] + e[3];
+                        b2 = d[0] + e[2];
+                        b3 = d[1] - e[3];
 
-                            b0 = C[1] * a02 + C[0] * a11;
-                            b1 = C[1] * a11 - C[0] * a02;
+                        d[0] = b2 + b0;
+                        d[1] = b3 + b1;
+                        e[2] = b2 - b0;
+                        e[3] = b1 - b3;
 
-                            b2 = d[0] + e[2];
-                            b3 = d[1] - e[3];
+                        a02 = d[2] - e[0];
+                        a11 = d[3] + e[1];
 
-                            d[0] = b2 + b0;
-                            d[1] = b3 + b1;
-                            e[2] = b2 - b0;
-                            e[3] = b1 - b3;
+                        b0 = C[3] * a02 + C[2] * a11;
+                        b1 = C[3] * a11 - C[2] * a02;
 
-                            a02 = d[2] - e[0];
-                            a11 = d[3] + e[1];
+                        b2 = d[2] + e[0];
+                        b3 = d[3] - e[1];
 
-                            b0 = C[3] * a02 + C[2] * a11;
-                            b1 = C[3] * a11 - C[2] * a02;
+                        d[2] = b2 + b0;
+                        d[3] = b3 + b1;
+                        e[0] = b2 - b0;
+                        e[1] = b1 - b3;
 
-                            b2 = d[2] + e[0];
-                            b3 = d[3] - e[1];
-
-                            d[2] = b2 + b0;
-                            d[3] = b3 + b1;
-                            e[0] = b2 - b0;
-                            e[1] = b1 - b3;
-
-                            C += 4;
-                            d += 4;
-                            e -= 4;
-                        }
+                        C += 4;
+                        d += 4;
+                        e -= 4;
                     }
                 }
-                Step7();
+                fixed (float* cc = _c)
+                {
+                    Step7(cc);
+                }
 
                 // data must be in buf2
 
@@ -342,62 +357,65 @@ namespace NVorbis
                 // to make another pass later
 
                 // this cannot POSSIBLY be in place, so we refer to the buffers directly
-                void Step8()
+                void Step8(float* bb)
                 {
-                    fixed (float* bb = _b)
+                    int n = _n;
+                    int n2 = n >> 1;
+
+                    float* B = bb + n2 - 8;
+                    float* e = buf2 + n2 - 8;
+                    float* d0 = &buffer[0];
+                    float* d1 = &buffer[n2 - 4];
+                    float* d2 = &buffer[n2];
+                    float* d3 = &buffer[n - 4];
+                    while (e >= v)
                     {
-                        float* B = bb + n2 - 8;
-                        float* e = buf2 + n2 - 8;
-                        float* d0 = &buffer[0];
-                        float* d1 = &buffer[n2 - 4];
-                        float* d2 = &buffer[n2];
-                        float* d3 = &buffer[n - 4];
-                        while (e >= v)
-                        {
-                            float p0, p1, p2, p3;
+                        float p0, p1, p2, p3;
 
-                            p3 = e[6] * B[7] - e[7] * B[6];
-                            p2 = -e[6] * B[6] - e[7] * B[7];
+                        p3 = e[6] * B[7] - e[7] * B[6];
+                        p2 = -e[6] * B[6] - e[7] * B[7];
 
-                            d0[0] = p3;
-                            d1[3] = -p3;
-                            d2[0] = p2;
-                            d3[3] = p2;
+                        d0[0] = p3;
+                        d1[3] = -p3;
+                        d2[0] = p2;
+                        d3[3] = p2;
 
-                            p1 = e[4] * B[5] - e[5] * B[4];
-                            p0 = -e[4] * B[4] - e[5] * B[5];
+                        p1 = e[4] * B[5] - e[5] * B[4];
+                        p0 = -e[4] * B[4] - e[5] * B[5];
 
-                            d0[1] = p1;
-                            d1[2] = -p1;
-                            d2[1] = p0;
-                            d3[2] = p0;
+                        d0[1] = p1;
+                        d1[2] = -p1;
+                        d2[1] = p0;
+                        d3[2] = p0;
 
-                            p3 = e[2] * B[3] - e[3] * B[2];
-                            p2 = -e[2] * B[2] - e[3] * B[3];
+                        p3 = e[2] * B[3] - e[3] * B[2];
+                        p2 = -e[2] * B[2] - e[3] * B[3];
 
-                            d0[2] = p3;
-                            d1[1] = -p3;
-                            d2[2] = p2;
-                            d3[1] = p2;
+                        d0[2] = p3;
+                        d1[1] = -p3;
+                        d2[2] = p2;
+                        d3[1] = p2;
 
-                            p1 = e[0] * B[1] - e[1] * B[0];
-                            p0 = -e[0] * B[0] - e[1] * B[1];
+                        p1 = e[0] * B[1] - e[1] * B[0];
+                        p0 = -e[0] * B[0] - e[1] * B[1];
 
-                            d0[3] = p1;
-                            d1[0] = -p1;
-                            d2[3] = p0;
-                            d3[0] = p0;
+                        d0[3] = p1;
+                        d1[0] = -p1;
+                        d2[3] = p0;
+                        d3[0] = p0;
 
-                            B -= 8;
-                            e -= 8;
-                            d0 += 4;
-                            d2 += 4;
-                            d1 -= 4;
-                            d3 -= 4;
-                        }
+                        B -= 8;
+                        e -= 8;
+                        d0 += 4;
+                        d2 += 4;
+                        d1 -= 4;
+                        d3 -= 4;
                     }
                 }
-                Step8();
+                fixed (float* bb = _b)
+                {
+                    Step8(bb);
+                }
             }
 
             // the following were split out into separate functions while optimizing;
