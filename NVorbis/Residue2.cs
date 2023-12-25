@@ -47,13 +47,14 @@ namespace NVorbis
 
         private bool WriteVectors<TState>(
             Codebook codebook, ref VorbisPacket packet, ReadOnlySpan<float[]> residues, int offset, int partitionSize)
-            where TState : IWriteVectorState
+            where TState : struct, IWriteVectorState
         {
             uint dimensions = (uint) codebook.Dimensions;
             uint channels = (uint) _channels;
             uint o = (uint) offset / channels;
 
             ref float lookupTable = ref MemoryMarshal.GetReference(codebook.GetLookupTable());
+            TState state = new();
 
             for (uint c = 0; c < partitionSize; c += dimensions)
             {
@@ -64,14 +65,14 @@ namespace NVorbis
                 }
 
                 ref float lookup = ref Unsafe.Add(ref lookupTable, (uint) entry * dimensions);
-                TState.Invoke(residues, ref lookup, dimensions, ref o);
+                state.Invoke(residues, ref lookup, dimensions, ref o);
             }
             return false;
         }
 
-        private struct WriteVectorStereo : IWriteVectorState
+        private readonly struct WriteVectorStereo : IWriteVectorState
         {
-            public static void Invoke(ReadOnlySpan<float[]> residues, ref float lookup, uint dimensions, ref uint o)
+            public void Invoke(ReadOnlySpan<float[]> residues, ref float lookup, uint dimensions, ref uint o)
             {
                 ref float res0 = ref MemoryMarshal.GetArrayDataReference(residues[0]);
                 ref float res1 = ref MemoryMarshal.GetArrayDataReference(residues[1]);
@@ -104,9 +105,9 @@ namespace NVorbis
             }
         }
 
-        private struct WriteVectorMono : IWriteVectorState
+        private readonly struct WriteVectorMono : IWriteVectorState
         {
-            public static void Invoke(ReadOnlySpan<float[]> residues, ref float lookup, uint dimensions, ref uint o)
+            public void Invoke(ReadOnlySpan<float[]> residues, ref float lookup, uint dimensions, ref uint o)
             {
                 ref float res0 = ref MemoryMarshal.GetArrayDataReference(residues[0]);
 
@@ -119,13 +120,17 @@ namespace NVorbis
 
         private struct WriteVectorFallback : IWriteVectorState
         {
-            public static void Invoke(ReadOnlySpan<float[]> residues, ref float lookup, uint dimensions, ref uint o)
+            private int _ch;
+
+            public void Invoke(ReadOnlySpan<float[]> residues, ref float lookup, uint dimensions, ref uint o)
             {
-                for (uint d = 0; d < dimensions; d += (uint) residues.Length, o++)
+                for (uint d = 0; d < dimensions; d++)
                 {
-                    for (int ch = 0; ch < residues.Length; ch++)
+                    residues[_ch][o] += Unsafe.Add(ref lookup, d);
+                    if (++_ch == residues.Length)
                     {
-                        residues[ch][o] += Unsafe.Add(ref lookup, d + (uint) ch);
+                        _ch = 0;
+                        o++;
                     }
                 }
             }
@@ -133,7 +138,7 @@ namespace NVorbis
 
         private interface IWriteVectorState
         {
-            static abstract void Invoke(ReadOnlySpan<float[]> residues, ref float lookup, uint dimensions, ref uint o);
+            void Invoke(ReadOnlySpan<float[]> residues, ref float lookup, uint dimensions, ref uint o);
         }
     }
 }
