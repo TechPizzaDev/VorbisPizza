@@ -21,14 +21,8 @@ jobs:
 
       - name: Test with dotnet
         run: dotnet test
-
-  deploy:
-    needs: build
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-  
-      - name: Pack nuget Package
+        
+      - name: Pack nuget package
         run: dotnet pack --configuration Release
 
       - name: Push package to nuget
