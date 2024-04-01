@@ -6,13 +6,13 @@
         <Copyright>Copyright © TechPizza 2022</Copyright>
         <Company>TechPizza</Company>
         <AssemblyName>VorbisPizza</AssemblyName>
-        <AssemblyVersion>1.3.0</AssemblyVersion>
-        <FileVersion>1.3.0.0</FileVersion>
+        <AssemblyVersion>1.4.0</AssemblyVersion>
+        <FileVersion>1.4.0.0</FileVersion>
         <Authors>Andrew Ward;TechPizza</Authors>
-        <Version>1.3.0</Version>
+        <Version>1.4.0</Version>
         <PackageId>VorbisPizza</PackageId>
         <PackageProjectUrl>https://github.com/TechPizzaDev/VorbisPizza</PackageProjectUrl>
-        <PackageReleaseNotes>-Fixed seeking by not relying on position markers</PackageReleaseNotes>
+        <PackageReleaseNotes>-Fixed bugs and improved performance</PackageReleaseNotes>
         <PackageTags>Ogg;Vorbis;Xiph;Audio;Sound</PackageTags>
         <NeutralLanguage>en</NeutralLanguage>
         <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
