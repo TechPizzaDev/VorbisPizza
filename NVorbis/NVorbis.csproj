@@ -3,16 +3,14 @@
         <TargetFrameworks>net7.0;net8.0</TargetFrameworks>
         <RootNamespace>NVorbis</RootNamespace>
         <Description>A fully managed implementation of a Xiph.org Foundation Ogg Vorbis decoder.</Description>
-        <Copyright>Copyright © TechPizza 2022</Copyright>
+        <Copyright>Copyright © TechPizza 2024</Copyright>
         <Company>TechPizza</Company>
         <AssemblyName>VorbisPizza</AssemblyName>
-        <AssemblyVersion>1.4.0</AssemblyVersion>
-        <FileVersion>1.4.0.0</FileVersion>
         <Authors>Andrew Ward;TechPizza</Authors>
-        <Version>1.4.0</Version>
+        <Version>1.4.1</Version>
         <PackageId>VorbisPizza</PackageId>
         <PackageProjectUrl>https://github.com/TechPizzaDev/VorbisPizza</PackageProjectUrl>
-        <PackageReleaseNotes>-Fixed bugs and improved performance</PackageReleaseNotes>
+        <PackageReleaseNotes>-Fortified ref-counting for PageData</PackageReleaseNotes>
         <PackageTags>Ogg;Vorbis;Xiph;Audio;Sound</PackageTags>
         <NeutralLanguage>en</NeutralLanguage>
         <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
