@@ -7,10 +7,10 @@
         <Company>TechPizza</Company>
         <AssemblyName>VorbisPizza</AssemblyName>
         <Authors>Andrew Ward;TechPizza</Authors>
-        <Version>1.4.1</Version>
+        <Version>1.4.2</Version>
         <PackageId>VorbisPizza</PackageId>
         <PackageProjectUrl>https://github.com/TechPizzaDev/VorbisPizza</PackageProjectUrl>
-        <PackageReleaseNotes>-Fortified ref-counting for PageData</PackageReleaseNotes>
+        <PackageReleaseNotes>-Respect EoS (or lack thereof)</PackageReleaseNotes>
         <PackageTags>Ogg;Vorbis;Xiph;Audio;Sound</PackageTags>
         <NeutralLanguage>en</NeutralLanguage>
         <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
