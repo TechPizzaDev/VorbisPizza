@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
-        <TargetFrameworks>net7.0;net8.0</TargetFrameworks>
+        <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
         <RootNamespace>NVorbis</RootNamespace>
         <Description>A fully managed implementation of a Xiph.org Foundation Ogg Vorbis decoder.</Description>
         <Copyright>Copyright © TechPizza 2024</Copyright>
