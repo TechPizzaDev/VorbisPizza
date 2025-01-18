@@ -89,22 +89,16 @@ namespace NVorbis
         /// </summary>
         public void Dispose()
         {
-            if (_decoders != null)
+            foreach (IStreamDecoder decoder in _decoders)
             {
-                foreach (IStreamDecoder decoder in _decoders)
-                {
-                    decoder.Dispose();
-                }
-                _decoders.Clear();
+                decoder.Dispose();
             }
+            _decoders.Clear();
 
-            if (_containerReader != null)
+            _containerReader.NewStreamCallback = null;
+            if (!_leaveOpen)
             {
-                _containerReader.NewStreamCallback = null;
-                if (!_leaveOpen)
-                {
-                    _containerReader.Dispose();
-                }
+                _containerReader.Dispose();
             }
         }
 
@@ -138,10 +132,10 @@ namespace NVorbis
         public ITagData Tags => _streamDecoder.Tags;
 
         /// <inheritdoc/>
-        public long ContainerOverheadBits => _containerReader?.ContainerBits ?? 0;
+        public long ContainerOverheadBits => _containerReader.ContainerBits;
 
         /// <inheritdoc/>
-        public long ContainerWasteBits => _containerReader?.WasteBits ?? 0;
+        public long ContainerWasteBits => _containerReader.WasteBits;
 
         /// <inheritdoc/>
         public int StreamIndex => _decoders.IndexOf(_streamDecoder);
@@ -193,18 +187,23 @@ namespace NVorbis
         /// <returns><see langword="true"/> if a new stream was found, otherwise <see langword="false"/>.</returns>
         public bool FindNextStream()
         {
-            if (_containerReader == null) return false;
             return _containerReader.FindNextStream();
         }
-        
+
         /// <inheritdoc/>
         public bool SwitchStreams(int index)
         {
-            if (index < 0 || index >= _decoders.Count) throw new ArgumentOutOfRangeException(nameof(index));
+            if ((uint)index > (uint)_decoders.Count)
+            {
+                throw new ArgumentOutOfRangeException(nameof(index));
+            }
 
             IStreamDecoder newDecoder = _decoders[index];
             IStreamDecoder oldDecoder = _streamDecoder;
-            if (newDecoder == oldDecoder) return false;
+            if (newDecoder == oldDecoder)
+            {
+                return false;
+            }
 
             // carry-through the clipping setting
             newDecoder.ClipSamples = oldDecoder.ClipSamples;
@@ -231,11 +230,11 @@ namespace NVorbis
         {
             // don't allow non-aligned reads (always on a full sample boundary!)
             int count = buffer.Length - buffer.Length % _streamDecoder.Channels;
-            if (count != 0)
+            if (count == 0)
             {
-                return _streamDecoder.Read(buffer.Slice(0, count));
+                return 0;
             }
-            return 0;
+            return _streamDecoder.Read(buffer.Slice(0, count));
         }
 
         /// <inheritdoc/>
@@ -243,11 +242,11 @@ namespace NVorbis
         {
             // don't allow non-aligned reads (always on a full sample boundary!)
             int count = buffer.Length - buffer.Length % _streamDecoder.Channels;
-            if (count != 0)
+            if (count == 0)
             {
-                return _streamDecoder.Read(buffer.Slice(0, count), samplesToRead, channelStride);
+                return 0;
             }
-            return 0;
+            return _streamDecoder.Read(buffer.Slice(0, count), samplesToRead, channelStride);
         }
 
         #endregion

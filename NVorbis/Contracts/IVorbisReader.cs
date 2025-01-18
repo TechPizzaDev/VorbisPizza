@@ -20,6 +20,11 @@ namespace NVorbis.Contracts
         event NewStreamEventHandler NewStream;
 
         /// <summary>
+        /// Gets whether the underlying stream can seek.
+        /// </summary>
+        bool CanSeek { get; }
+
+        /// <summary>
         /// Gets the number of bits read that are related to framing and transport alone.
         /// </summary>
         long ContainerOverheadBits { get; }
