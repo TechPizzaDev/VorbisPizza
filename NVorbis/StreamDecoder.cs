@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Numerics;
 using System.Runtime.CompilerServices;
@@ -18,7 +19,7 @@ namespace NVorbis
     {
         private const int MaxPooledBuffers = 2;
 
-        private IPacketProvider _packetProvider;
+        private IPacketProvider? _packetProvider;
         private StreamStats _stats;
         private Queue<float[][]> _bufferPool;
 
@@ -66,6 +67,8 @@ namespace NVorbis
         /// <inheritdoc />
         public void Initialize()
         {
+            ThrowIfDisposed();
+
             VorbisPacket packet = _packetProvider.GetNextPacket();
             if (!packet.IsValid)
                 throw new InvalidDataException("First packet is not valid.");
@@ -118,6 +121,7 @@ namespace NVorbis
 
         private bool ProcessHeaderPackets(ref VorbisPacket headerPacket)
         {
+            Debug.Assert(_packetProvider != null);
             try
             {
                 if (!LoadStreamHeader(ref headerPacket))
@@ -161,9 +165,20 @@ namespace NVorbis
             return true;
         }
 
-        private static ReadOnlySpan<byte> PacketSignatureStream => new byte[] { 0x01, 0x76, 0x6f, 0x72, 0x62, 0x69, 0x73, 0x00, 0x00, 0x00, 0x00 };
-        private static ReadOnlySpan<byte> PacketSignatureComments => new byte[] { 0x03, 0x76, 0x6f, 0x72, 0x62, 0x69, 0x73 };
-        private static ReadOnlySpan<byte> PacketSignatureBooks => new byte[] { 0x05, 0x76, 0x6f, 0x72, 0x62, 0x69, 0x73 };
+        private static ReadOnlySpan<byte> PacketSignatureStream =>
+        [
+            0x01, 0x76, 0x6f, 0x72, 0x62, 0x69, 0x73, 0x00, 0x00, 0x00, 0x00,
+        ];
+
+        private static ReadOnlySpan<byte> PacketSignatureComments =>
+        [
+            0x03, 0x76, 0x6f, 0x72, 0x62, 0x69, 0x73,
+        ];
+
+        private static ReadOnlySpan<byte> PacketSignatureBooks =>
+        [
+            0x05, 0x76, 0x6f, 0x72, 0x62, 0x69, 0x73,
+        ];
 
         private static bool ValidateHeader(ref VorbisPacket packet, ReadOnlySpan<byte> expected)
         {
@@ -399,11 +414,7 @@ namespace NVorbis
 
         private int Read(Span<float> buffer, int samplesToRead, int channelStride, bool interleave)
         {
-            // if the caller didn't ask for any data, bail early
-            if (buffer.Length == 0)
-            {
-                return 0;
-            }
+            ThrowIfDisposed();
 
             int channels = _channels;
             if (buffer.Length % channels != 0)
@@ -413,10 +424,6 @@ namespace NVorbis
             if (buffer.Length < samplesToRead * channels)
             {
                 throw new ArgumentException("The buffer is too small for the requested amount.");
-            }
-            if (_packetProvider == null)
-            {
-                throw new ObjectDisposedException(nameof(StreamDecoder));
             }
 
             // save off value to track when we're done with the request
@@ -530,7 +537,7 @@ namespace NVorbis
                         Vector128<float> p1 = Vector128.LoadUnsafe(ref prev1, (nuint)j);
 
                         // Interleave channels
-                        Vector128<float> ts0 = Vector128Helper.UnpackLow(p0, p1);  // [ 0, 0, 1, 1 ]
+                        Vector128<float> ts0 = Vector128Helper.UnpackLow(p0, p1); // [ 0, 0, 1, 1 ]
                         Vector128<float> ts1 = Vector128Helper.UnpackHigh(p0, p1); // [ 2, 2, 3, 3 ]
 
                         if (T.IsClip)
@@ -685,10 +692,11 @@ namespace NVorbis
             return true;
         }
 
-        private float[][]? DecodeNextPacket(
-            out int packetStartIndex, out int packetValidLength, out int packetTotalLength, out EndOfStreamFlags isEndOfStream,
+        private float[][]? DecodeNextPacket(out int packetStartIndex, out int packetValidLength, out int packetTotalLength, out EndOfStreamFlags isEndOfStream,
             out long samplePosition, out int bitsRead, out int bitsRemaining, out int containerOverheadBits)
         {
+            Debug.Assert(_packetProvider != null);
+
             VorbisPacket packet = _packetProvider.GetNextPacket();
             if (!packet.IsValid)
             {
@@ -745,8 +753,7 @@ namespace NVorbis
             return null;
         }
 
-        private static void OverlapBuffers(
-            float[][] previousBuffers, float[][] nextBuffers, int prevStart, int prevLen, int nextStart, int channels)
+        private static void OverlapBuffers(float[][] previousBuffers, float[][] nextBuffers, int prevStart, int prevLen, int nextStart, int channels)
         {
             int length = prevLen - prevStart;
             for (int c = 0; c < channels; c++)
@@ -802,8 +809,7 @@ namespace NVorbis
         /// <exception cref="SeekOutOfRangeException">The requested seek position extends beyond the stream.</exception>
         public void SeekTo(long samplePosition, SeekOrigin seekOrigin = SeekOrigin.Begin)
         {
-            if (_packetProvider == null)
-                throw new ObjectDisposedException(nameof(StreamDecoder));
+            ThrowIfDisposed();
 
             if (!_packetProvider.CanSeek)
                 throw new InvalidOperationException("Seek is not supported by the underlying packet provider.");
@@ -902,7 +908,7 @@ namespace NVorbis
         /// </summary>
         public void Dispose()
         {
-            (_packetProvider as IDisposable)?.Dispose();
+            _packetProvider?.Dispose();
             _packetProvider = null!;
 
             _nextPacketBuf = null;
@@ -951,8 +957,7 @@ namespace NVorbis
         {
             get
             {
-                if (_packetProvider == null)
-                    throw new ObjectDisposedException(nameof(StreamDecoder));
+                ThrowIfDisposed();
                 return _packetProvider.GetGranuleCount(this);
             }
         }
