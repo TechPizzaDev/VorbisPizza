@@ -6,17 +6,12 @@ namespace NVorbis.Contracts
     /// <summary>
     /// Describes an interface for a packet stream reader.
     /// </summary>
-    public interface IPacketProvider : IDisposable
+    public interface IPacketProvider : IStreamSerialProvider, IDisposable
     {
         /// <summary>
         /// Gets whether the provider supports seeking.
         /// </summary>
         bool CanSeek { get; }
-
-        /// <summary>
-        /// Gets the serial number of this provider's data stream.
-        /// </summary>
-        int StreamSerial { get; }
 
         /// <summary>
         /// Gets the next packet in the stream and advances to the next packet position.

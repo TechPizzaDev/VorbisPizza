@@ -377,6 +377,12 @@ namespace NVorbis
             }
         }
 
+        [MemberNotNull(nameof(_packetProvider))]
+        private void ThrowIfDisposed()
+        {
+            ObjectDisposedException.ThrowIf(_packetProvider == null, this);
+        }
+
         #region Decoding
 
         /// <inheritdoc/>
@@ -905,6 +911,16 @@ namespace NVorbis
         }
 
         #region Properties
+
+        /// <inheritdoc />
+        public int StreamSerial
+        {
+            get
+            {
+                ThrowIfDisposed();
+                return _packetProvider.StreamSerial;
+            }
+        }
 
         /// <inheritdoc />
         public int Channels => _channels;

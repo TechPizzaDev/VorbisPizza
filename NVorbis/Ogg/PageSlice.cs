@@ -8,7 +8,7 @@ namespace NVorbis.Ogg
     /// </summary>
     public readonly struct PageSlice
     {
-        internal PageData Page { get; }
+        internal PageData? Page { get; }
 
         /// <summary>
         /// Gets the data offset within the page.

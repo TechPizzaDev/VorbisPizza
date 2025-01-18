@@ -6,7 +6,7 @@ namespace NVorbis.Contracts
     /// <summary>
     /// Describes a stream decoder instance for Vorbis data.
     /// </summary>
-    public interface IStreamDecoder : IDisposable
+    public interface IStreamDecoder : IStreamSerialProvider, IDisposable
     {
         /// <summary>
         /// Gets the number of channels in the stream.
