@@ -68,7 +68,7 @@ namespace NVorbis
         {
             VorbisPacket packet = _packetProvider.GetNextPacket();
             if (!packet.IsValid)
-                throw new InvalidDataException();
+                throw new InvalidDataException("First packet is not valid.");
 
             if (!ProcessHeaderPackets(ref packet))
             {
@@ -79,7 +79,7 @@ namespace NVorbis
             }
         }
 
-        private static ArgumentException GetInvalidStreamException(ref VorbisPacket packet)
+        private static InvalidDataException GetInvalidStreamException(ref VorbisPacket packet)
         {
             try
             {
@@ -87,26 +87,26 @@ namespace NVorbis
                 ulong header = packet.ReadBits(64);
                 if (header == 0x646165487375704ful)
                 {
-                    return new ArgumentException("Found OPUS bitstream.");
+                    return new InvalidDataException("Found OPUS bitstream.");
                 }
                 else if ((header & 0xFF) == 0x7F)
                 {
-                    return new ArgumentException("Found FLAC bitstream.");
+                    return new InvalidDataException("Found FLAC bitstream.");
                 }
                 else if (header == 0x2020207865657053ul)
                 {
-                    return new ArgumentException("Found Speex bitstream.");
+                    return new InvalidDataException("Found Speex bitstream.");
                 }
                 else if (header == 0x0064616568736966ul)
                 {
                     // ugh...  we need to add support for this in the container reader
-                    return new ArgumentException("Found Skeleton metadata bitstream.");
+                    return new InvalidDataException("Found Skeleton metadata bitstream.");
                 }
                 else if ((header & 0xFFFFFFFFFFFF00ul) == 0x61726f65687400ul)
                 {
-                    return new ArgumentException("Found Theora bitsream.");
+                    return new InvalidDataException("Found Theora bitsream.");
                 }
-                return new ArgumentException("Could not find Vorbis data to decode.");
+                return new InvalidDataException("Could not find Vorbis data to decode.");
             }
             finally
             {
@@ -415,10 +415,9 @@ namespace NVorbis
 
             // save off value to track when we're done with the request
             int idx = 0;
-            int tgt = samplesToRead;
 
             // try to fill the buffer; drain the last buffer if EOS, resync, bad packet, or parameter change
-            while (idx < tgt)
+            while (idx < samplesToRead)
             {
                 // if we don't have any more valid data in the current packet, read in the next packet
                 if (_prevPacketStart == _prevPacketEnd)
@@ -449,7 +448,7 @@ namespace NVorbis
                 }
 
                 // we read out the valid samples from the previous packet
-                int copyLen = Math.Min(tgt - idx, _prevPacketEnd - _prevPacketStart);
+                int copyLen = Math.Min(samplesToRead - idx, _prevPacketEnd - _prevPacketStart);
                 Debug.Assert(copyLen >= 0);
 
                 if (copyLen > 0)
