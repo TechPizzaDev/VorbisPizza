@@ -12,7 +12,7 @@ namespace NVorbis.Contracts
     /// <summary>
     /// Describes the interface for <see cref="VorbisReader"/>.
     /// </summary>
-    public interface IVorbisReader : IDisposable
+    public interface IVorbisReader : IStreamSerialProvider, IDisposable
     {
         /// <summary>
         /// Raised when a new stream has been encountered in the container.

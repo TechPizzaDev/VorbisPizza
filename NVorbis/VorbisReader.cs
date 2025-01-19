@@ -111,6 +111,9 @@ namespace NVorbis
         // we can make life simpler for users by exposing the first stream's properties and methods here.
 
         /// <inheritdoc/>
+        public int StreamSerial => _streamDecoder.StreamSerial;
+        
+        /// <inheritdoc/>
         public int Channels => _streamDecoder.Channels;
 
         /// <inheritdoc/>
