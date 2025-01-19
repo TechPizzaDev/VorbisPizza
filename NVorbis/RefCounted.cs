@@ -8,7 +8,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Threading;
 
-namespace VoxelPizza.Memory;
+namespace NVorbis;
 
 /// <summary>
 /// Represents a tracker used for safely managing a resource or allocation.

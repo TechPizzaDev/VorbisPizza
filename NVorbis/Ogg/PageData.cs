@@ -1,7 +1,5 @@
 using System;
-using System.Diagnostics;
 using System.Runtime.CompilerServices;
-using VoxelPizza.Memory;
 
 namespace NVorbis.Ogg
 {
