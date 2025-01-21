@@ -50,7 +50,7 @@ namespace NVorbis.Ogg
                 }
             }
 
-            isContinued = segments[^1] == 255;
+            isContinued = segments.Length > 0 && segments[^1] == 255;
             if (isContinued)
                 ++pktCnt;
 
