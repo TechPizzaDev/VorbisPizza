@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 
 namespace NVorbis.Ogg
@@ -93,10 +94,7 @@ namespace NVorbis.Ogg
 #if DEBUG
         ~PageData()
         {
-            if (Count > 0)
-            {
-                _pool.Return(this);
-            }
+            Debug.WriteLine($"Leaked PageData with ref-count {Count}.");
         }
 #endif
     }
