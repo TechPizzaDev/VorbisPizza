@@ -83,8 +83,8 @@ namespace NVorbis
                 {
                     for (; d + 8 <= dimensions; d += 8, o += 4)
                     {
-                        Vector128<float> lookup0 = Vector128.LoadUnsafe(ref lookup, d + 0); // [ 0, 1, 2, 3 ]
-                        Vector128<float> lookup1 = Vector128.LoadUnsafe(ref lookup, d + 4); // [ 4, 5, 6, 7 ]
+                        Vector128<float> lookup0 = Vector128.Create(lookup.Slice(d + 0)); // [ 0, 1, 2, 3 ]
+                        Vector128<float> lookup1 = Vector128.Create(lookup.Slice(d + 4)); // [ 4, 5, 6, 7 ]
 
                         Vector128<float> aLo = Vector128Helper.UnpackLow(lookup0, lookup1);  // [ 0, 4, 1, 5 ] 
                         Vector128<float> aHi = Vector128Helper.UnpackHigh(lookup0, lookup1); // [ 2, 6, 3, 7 ]
@@ -92,22 +92,24 @@ namespace NVorbis
                         Vector128<float> bLo = Vector128Helper.UnpackLow(aLo, aHi);  // [ 0, 2, 4, 6 ] 
                         Vector128<float> bHi = Vector128Helper.UnpackHigh(aLo, aHi); // [ 1, 3, 5, 7 ]
 
-                        Vector128<float> vres0 = Vector128.LoadUnsafe(ref res0, o);
-                        Vector128<float> vres1 = Vector128.LoadUnsafe(ref res1, o);
+                        var res0 = residue0.Slice(o);
+                        var res1 = residue1.Slice(o);
+                        Vector128<float> vres0 = Vector128.Create<float>(res0);
+                        Vector128<float> vres1 = Vector128.Create<float>(res1);
 
                         Vector128<float> sum0 = vres0 + bLo;
                         Vector128<float> sum1 = vres1 + bHi;
-
-                        sum0.StoreUnsafe(ref res0, o);
-                        sum1.StoreUnsafe(ref res1, o);
+                        sum0.CopyTo(res0);
+                        sum1.CopyTo(res1);
                     }
                 }
 
                 for (; d < dimensions; d += 2, o++)
                 {
-                    Unsafe.Add(ref res0, o) += Unsafe.Add(ref lookup, d + 0);
-                    Unsafe.Add(ref res1, o) += Unsafe.Add(ref lookup, d + 1);
+                    residue0[o] += lookup[d + 0];
+                    residue1[o] += lookup[d + 1];
                 }
+                return o;
             }
         }
 

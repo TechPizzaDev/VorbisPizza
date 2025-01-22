@@ -180,20 +180,19 @@ namespace NVorbis
             }
         }
 
-        private static void ApplyCoupling(Span<float> magnitudeSpan, Span<float> angleSpan)
+        private static void ApplyCoupling(Span<float> mag, Span<float> ang)
         {
-            int length = Math.Min(magnitudeSpan.Length, angleSpan.Length);
+            if (mag.Length != ang.Length)
+        {
+                throw new InvalidOperationException();
+            }
 
-            ref float magnitude = ref MemoryMarshal.GetReference(magnitudeSpan);
-            ref float angle = ref MemoryMarshal.GetReference(angleSpan);
-
-            int j = 0;
             if (Vector.IsHardwareAccelerated)
             {
-                for (; j + Vector<float>.Count <= length; j += Vector<float>.Count)
+                while (mag.Length >= Vector<float>.Count)
                 {
-                    Vector<float> oldM = VectorHelper.LoadUnsafe(ref magnitude, j);
-                    Vector<float> oldA = VectorHelper.LoadUnsafe(ref angle, j);
+                    Vector<float> oldM = VectorHelper.Create<float>(mag);
+                    Vector<float> oldA = VectorHelper.Create<float>(ang);
 
                     Vector<float> posM = Vector.GreaterThan<float>(oldM, Vector<float>.Zero);
                     Vector<float> posA = Vector.GreaterThan<float>(oldA, Vector<float>.Zero);
@@ -210,15 +209,18 @@ namespace NVorbis
                     Vector<float> newM = oldM - Vector.AndNot(signedA, posA);
                     Vector<float> newA = oldM + (signedA & posA);
 
-                    newM.StoreUnsafe(ref magnitude, (nuint) j);
-                    newA.StoreUnsafe(ref angle, (nuint) j);
+                    newM.CopyTo(mag);
+                    newA.CopyTo(ang);
+
+                    mag = mag.Slice(Vector<float>.Count);
+                    ang = ang.Slice(Vector<float>.Count);
                 }
             }
 
-            for (; j < length; j++)
+            for (int j = 0; j < mag.Length; j++)
             {
-                float oldM = Unsafe.Add(ref magnitude, j);
-                float oldA = Unsafe.Add(ref angle, j);
+                float oldM = mag[j];
+                float oldA = ang[j];
 
                 float newM = oldM;
                 float newA = oldM;
@@ -246,8 +248,8 @@ namespace NVorbis
                     }
                 }
 
-                Unsafe.Add(ref magnitude, j) = newM;
-                Unsafe.Add(ref angle, j) = newA;
+                mag[j] = newM;
+                ang[j] = newA;
             }
         }
     }

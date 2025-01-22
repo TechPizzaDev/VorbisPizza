@@ -12,7 +12,7 @@ namespace NVorbis
     {
         private static ConcurrentDictionary<int, MdctImpl> _setupCache = new();
 
-        public static void Reverse(float[] samples, float[] buf2, int sampleCount)
+        public static void Reverse(Span<float> samples, float[] buf2, int sampleCount)
         {
             MdctImpl impl = _setupCache.GetOrAdd(sampleCount, static (c) => new MdctImpl(c));
             impl.CalcReverse(samples, buf2);
@@ -65,7 +65,7 @@ namespace NVorbis
                 }
             }
 
-            public void CalcReverse(float[] buffer, float[] buf2)
+            public void CalcReverse(Span<float> buffer, float[] buf2)
             {
                 fixed (float* bufferPtr = buffer)
                 fixed (float* buf2Ptr = buf2)

@@ -430,18 +430,18 @@ namespace NVorbis
             int idx = 0;
 
             // try to fill the buffer; drain the last buffer if EOS, resync, bad packet, or parameter change
-            while (idx < samplesToRead)
+        while (idx == 0)
+        {
+            // if we don't have any more valid data in the current packet, read in the next packet
+            if (_prevPacketStart == _prevPacketEnd)
             {
-                // if we don't have any more valid data in the current packet, read in the next packet
-                if (_prevPacketStart == _prevPacketEnd)
+                if (_eosFound != EndOfStreamFlags.None)
                 {
-                    if (_eosFound != EndOfStreamFlags.None)
-                    {
-                        // no more samples, so just return
-                        ReturnBuffer(_prevPacketBuf);
-                        _prevPacketBuf = null;
-                        break;
-                    }
+                    // no more samples, so just return
+                    ReturnBuffer(_prevPacketBuf);
+                    _prevPacketBuf = null;
+                    break;
+                }
 
                     if (!ReadNextPacket(idx, out long samplePosition))
                     {
@@ -463,9 +463,11 @@ namespace NVorbis
                 // we read out the valid samples from the previous packet
                 int copyLen = Math.Min(samplesToRead - idx, _prevPacketEnd - _prevPacketStart);
                 Debug.Assert(copyLen >= 0);
+            if (copyLen <= 0)
+            {
+                continue;
+            }
 
-                if (copyLen > 0)
-                {
                     if (interleave)
                     {
                         Span<float> target = buffer.Slice(idx * channels, copyLen * channels);
@@ -480,14 +482,12 @@ namespace NVorbis
                     }
                     else
                     {
-                        Span<float> target = buffer.Slice(idx, channelStride + copyLen);
-                        StoreContiguous(target, copyLen, channelStride, ClipSamples);
+                StoreContiguous(buffer, idx, copyLen, channelStride, ClipSamples);
                     }
 
                     idx += copyLen;
                     _prevPacketStart += copyLen;
                 }
-            }
 
             // update the position
             _currentPosition += idx;
@@ -602,19 +602,22 @@ namespace NVorbis
 
                 if (clip)
                 {
-                    ref float dst = ref MemoryMarshal.GetReference(destination);
-                    ref float src = ref MemoryMarshal.GetReference(source);
-                    int j = 0;
+                src.CopyTo(dst);
+                continue;
+            }
 
                     if (Vector.IsHardwareAccelerated)
                     {
                         Vector<float> clipped = Vector<float>.Zero;
 
-                        for (; j + Vector<float>.Count <= count; j += Vector<float>.Count)
+                while (src.Length >= Vector<float>.Count)
                         {
-                            Vector<float> p0 = VectorHelper.LoadUnsafe(ref src, j);
+                    Vector<float> p0 = VectorHelper.Create(src);
                             Vector<float> c0 = Utils.ClipValue(p0, ref clipped);
-                            c0.StoreUnsafe(ref dst, (nuint)j);
+                    c0.CopyTo(dst);
+
+                    src = src.Slice(Vector<float>.Count);
+                    dst = dst.Slice(Vector<float>.Count);
                         }
 
                         _hasClipped |= !Vector.EqualsAll(clipped, Vector<float>.Zero);
@@ -623,20 +626,15 @@ namespace NVorbis
                     {
                         bool clipped = false;
 
-                        for (; j < count; j++)
+                for (int j = 0; j < src.Length; j++)
                         {
-                            Unsafe.Add(ref dst, j) = Utils.ClipValue(Unsafe.Add(ref src, j), ref clipped);
+                    dst[j] = Utils.ClipValue(src[j], ref clipped);
                         }
 
                         _hasClipped |= clipped;
                     }
                 }
-                else
-                {
-                    source.CopyTo(destination);
                 }
-            }
-        }
 
         private bool ReadNextPacket(nint bufferedSamples, out long samplePosition)
         {
@@ -765,17 +763,6 @@ namespace NVorbis
                 ref float next = ref MemoryMarshal.GetReference(nextSpan);
 
                 int i = 0;
-                if (Vector.IsHardwareAccelerated)
-                {
-                    for (; i + Vector<float>.Count <= length; i += Vector<float>.Count)
-                    {
-                        Vector<float> ni = VectorHelper.LoadUnsafe(ref next, i);
-                        Vector<float> pi = VectorHelper.LoadUnsafe(ref prev, i);
-
-                        Vector<float> result = ni + pi;
-                        result.StoreUnsafe(ref next, (nuint)i);
-                    }
-                }
                 for (; i < length; i++)
                 {
                     Unsafe.Add(ref next, i) += Unsafe.Add(ref prev, i);
