@@ -1,6 +1,6 @@
 using System.Runtime.CompilerServices;
 
-namespace NVorbis.Tests;
+namespace NVorbis.Tests.Utils;
 
 [InlineArray(4)]
 public struct Sha256 : IEquatable<Sha256>
@@ -14,7 +14,7 @@ public struct Sha256 : IEquatable<Sha256>
         this[2] = e2;
         this[3] = e3;
     }
-    
+
     public bool Equals(Sha256 other)
     {
         return ((ReadOnlySpan<ulong>)this).SequenceEqual(other);

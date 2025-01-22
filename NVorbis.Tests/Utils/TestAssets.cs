@@ -9,7 +9,7 @@
 // at your option. Please see the LICENSE file
 // attached to this source distribution for details.
 
-namespace NVorbis.Tests;
+namespace NVorbis.Tests.Utils;
 
 public static class TestAssets
 {
