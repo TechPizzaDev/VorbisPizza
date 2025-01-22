@@ -40,7 +40,7 @@ public static unsafe class Vorbisfile
     public const uint STREAMSET = 3;
     public const uint INITSET = 4;
         
-    private const string LibName = "libvorbisfile";
+    private const string LibName = "vorbisfile";
 
     [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
     public static extern c_int ov_open_callbacks(
@@ -75,7 +75,7 @@ public static unsafe class Vorbisfile
     [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
     public static extern CLong ov_read_float(
         OggVorbis_File* vf,
-        float** pcm_channels,
+        float*** pcm_channels,
         c_int samples,
         c_int* bitstream);
 
@@ -188,7 +188,6 @@ public unsafe struct vorbis_dsp_state
     public vorbis_info* vi;
     public float** pcm;
     public float** pcmret;
-    public float* preextrapolate_work;
     public c_int pcm_storage;
     public c_int pcm_current;
     public c_int pcm_returned;

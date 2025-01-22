@@ -28,7 +28,7 @@ public unsafe class NativeDecoder : SafeHandle
             seek_func = &seek_func,
             tell_func = &tell_func
         };
-        
+
         var result = check_errors(Vorbisfile.ov_open_callbacks(
             (void*)GCHandle.ToIntPtr(selfHandle),
             vorbis,
@@ -54,13 +54,44 @@ public unsafe class NativeDecoder : SafeHandle
         return result == 0;
     }
 
+    public NativeResult next_packet_f32(Span<float> destination, int channelStride, out NativePacket packet)
+    {
+        float** channelPtrs;
+        nint readResult;
+        fixed (float* dstPtr = destination)
+        fixed (int* bitstreamPtr = &current_logical_bitstream)
+        {
+            readResult = Vorbisfile.ov_read_float(
+                vorbis,
+                &channelPtrs,
+                channelStride,
+                bitstreamPtr).Value;
+        }
+        var info = Vorbisfile.ov_info(vorbis, current_logical_bitstream);
+        var result = CheckNextPacket(readResult, info, out packet);
+        if (result != NativeResult.Ok)
+        {
+            return result;
+        }
+
+        if (channelPtrs != null)
+        {
+            for (int i = 0; i < info->channels; i++)
+            {
+                var channelSrc = new Span<float>(channelPtrs[i], packet.samples);
+                channelSrc.CopyTo(destination.Slice(i * channelStride, channelStride));
+            }
+        }
+        return result;
+    }
+
     public NativeResult next_packet(Span<short> destination, out NativePacket packet)
     {
-        nint result;
+        nint readResult;
         fixed (short* dstPtr = destination)
         fixed (int* bitstreamPtr = &current_logical_bitstream)
         {
-            result = Vorbisfile.ov_read(
+            readResult = Vorbisfile.ov_read(
                 vorbis,
                 (byte*)dstPtr,
                 destination.Length * sizeof(short),
@@ -69,7 +100,14 @@ public unsafe class NativeDecoder : SafeHandle
                 1,
                 bitstreamPtr).Value;
         }
+        var info = Vorbisfile.ov_info(vorbis, current_logical_bitstream);
+        var result = CheckNextPacket(readResult, info, out packet);
+        packet.samples /= (sizeof(short) * info->channels);
+        return result;
+    }
 
+    private NativeResult CheckNextPacket(nint result, vorbis_info* info, out NativePacket packet)
+    {
         if (result == 0)
         {
             if (read_error != null)
@@ -86,10 +124,15 @@ public unsafe class NativeDecoder : SafeHandle
             return check_errors(result);
         }
 
-        var info = Vorbisfile.ov_info(vorbis, current_logical_bitstream);
+        if (info == null)
+        {
+            packet = default;
+            return NativeResult.NoInfo;
+        }
+
         packet = new NativePacket()
         {
-            Length = (int)(result / sizeof(short)),
+            samples = (int)result,
             channels = (ushort)info->channels,
             rate = (ulong)info->rate.Value,
             bitrate_upper = (ulong)info->bitrate_upper.Value,
@@ -209,27 +252,4 @@ public unsafe class NativeDecoder : SafeHandle
             return new CLong(-1);
         }
     }
-}
-
-public enum NativeResult
-{
-    Ok,
-    NotVorbis,
-    VersionMismatch,
-    BadHeader,
-    InvalidSetup,
-    Hole,
-    Read,
-    Unimplemented,
-}
-
-public struct NativePacket
-{
-    public int Length;
-    public ushort channels;
-    public ulong rate;
-    public ulong bitrate_upper;
-    public ulong bitrate_nominal;
-    public ulong bitrate_lower;
-    public ulong bitrate_window;
 }
