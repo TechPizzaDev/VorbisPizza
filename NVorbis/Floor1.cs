@@ -72,8 +72,11 @@ namespace NVorbis
                 for (int j = 0; j < _subclassBooks[i].Length; j++)
                 {
                     int bookNum = (int)packet.ReadBits(8) - 1;
-                    if (bookNum >= 0) _subclassBooks[i][j] = codebooks[bookNum];
-                    _subclassBookIndex[i][j] = bookNum;
+                    if (bookNum >= codebooks.Length)
+                    {
+                        throw new InvalidDataException();
+                    }
+                    _subclassBooks[i][j] = bookNum;
                 }
             }
 
