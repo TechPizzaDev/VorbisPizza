@@ -1,30 +1,43 @@
 using System;
+using System.IO;
+using System.Numerics;
 using NVorbis.Contracts;
 
 namespace NVorbis
 {
-    internal struct Huffman
+    internal readonly struct Huffman
     {
-        public static Huffman Empty { get; } = new Huffman()
-        {
-            TableBits = 0,
-            PrefixTree = Array.Empty<HuffmanListNode>(),
-            OverflowList = Array.Empty<HuffmanListNode>(),
-        };
+        public static Huffman Empty { get; } = new Huffman([], []);
 
         private const int MAX_TABLE_BITS = 10;
 
-        public int TableBits { get; private set; }
-        public HuffmanListNode[] PrefixTree { get; private set; }
-        public HuffmanListNode[] OverflowList { get; private set; }
+        public byte TableBits => (byte)BitOperations.Log2((uint)PrefixTree.Length);
+        public HuffmanListNode[] PrefixTree { get; }
+        public HuffmanListNode[] OverflowList { get; }
+
+        private Huffman(HuffmanListNode[] prefixTree, HuffmanListNode[] overflowList)
+        {
+            PrefixTree = prefixTree;
+            OverflowList = overflowList;
+        }
 
         public static Huffman GenerateTable(int[]? values, int[] lengthList, int[] codeList)
         {
             HuffmanListNode[] list = new HuffmanListNode[lengthList.Length];
 
+            int count = 0;
+            int lastValidIdx = -1;
+
             int maxLen = 0;
             for (int i = 0; i < list.Length; i++)
             {
+                int length = lengthList[i];
+                if (length != 0)
+                {
+                    count++;
+                    lastValidIdx = i;
+                }
+
                 list[i] = new HuffmanListNode
                 {
                     Value = values != null ? values[i] : i,
@@ -32,13 +45,21 @@ namespace NVorbis
                     Bits = codeList[i],
                     Mask = (1 << lengthList[i]) - 1,
                 };
-                if (lengthList[i] > 0 && maxLen < lengthList[i])
+                if (lengthList[i] > 0)
                 {
-                    maxLen = lengthList[i];
+                    maxLen = Math.Max(maxLen, lengthList[i]);
                 }
             }
 
-            Array.Sort(list, 0, list.Length);
+            if (count == 1)
+            {
+                if (lengthList[lastValidIdx] != 1)
+                {
+                    throw new InvalidDataException("Invalid single entry.");
+                }
+            }
+
+            list.AsSpan().Sort();
 
             int tableBits = maxLen > MAX_TABLE_BITS ? MAX_TABLE_BITS : maxLen;
 
@@ -80,12 +101,7 @@ namespace NVorbis
                 Array.Resize(ref overflowList, overflowIndex);
             }
 
-            return new Huffman
-            {
-                TableBits = tableBits,
-                PrefixTree = prefixList,
-                OverflowList = overflowList,
-            };
+            return new Huffman(prefixList, overflowList);
         }
     }
 }
