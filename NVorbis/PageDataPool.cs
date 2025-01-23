@@ -56,7 +56,6 @@ namespace NVorbis
                 if (_objectPool.Count <= 4)
                 {
                     _objectPool.Enqueue(pageData);
-                    return;
                 }
             }
         }

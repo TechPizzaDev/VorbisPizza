@@ -133,7 +133,7 @@ public abstract class AssetTest
             }
 
             // Asserting some very basic things:
-            Assert.Equal(native_packet.rate, (ulong)ogg_rdr.SampleRate);
+            Assert.Equal(native_packet.rate, (uint)ogg_rdr.SampleRate);
             Assert.Equal(native_packet.channels, (ushort)ogg_rdr.Channels);
 
             total_sample_count += (ulong)samples_read * (uint)ogg_rdr.Channels;

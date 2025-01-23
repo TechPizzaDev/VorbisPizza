@@ -83,7 +83,6 @@ namespace NVorbis.Ogg
             return new PageSlice(this, 0, 0);
         }
 
-        [MethodImpl(MethodImplOptions.NoInlining)]
         protected override void Release()
         {
             _pool.Return(this);
