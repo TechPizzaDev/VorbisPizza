@@ -182,10 +182,7 @@ namespace NVorbis
             {
                 count = _bitCount;
             }
-
-            ulong value = _bitBucket;
-            ulong mask = ~(ulong.MaxValue << count);
-            return value & mask;
+            return _bitBucket & Utils.Mask64(count);
         }
 
         /// <summary>
@@ -204,10 +201,7 @@ namespace NVorbis
             {
                 return RefillBits(ref bitsRead);
             }
-
-            ulong value = _bitBucket;
-            ulong mask = ~(ulong.MaxValue << count);
-            return value & mask;
+            return _bitBucket & Utils.Mask64(count);
         }
 
         /// <summary>

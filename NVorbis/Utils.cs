@@ -8,6 +8,13 @@ namespace NVorbis
     {
         private const float LowerClip = -0.99999994f;
         private const float UpperClip = 0.99999994f;
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static ulong Mask64(int bitCount)
+        {
+            ulong mask = bitCount == 0 ? 0 : ulong.MaxValue;
+            return mask >> (64 - bitCount);
+        }
 
         internal static int ilog(int x)
         {
@@ -85,9 +92,9 @@ namespace NVorbis
         internal static float ConvertFromVorbisFloat32(uint bits)
         {
             // do as much as possible with bit tricks in integer math
-            int sign = (int) bits >> 31;   // sign-extend to the full 32-bits
-            int exponent = (int) ((bits & 0x7fe00000) >> 21) - 788;  // grab the exponent, remove the bias.
-            float mantissa = ((int) (bits & 0x1fffff) ^ sign) + (sign & 1);  // grab the mantissa and apply the sign bit.
+            int sign = (int)bits >> 31;   // sign-extend to the full 32-bits
+            int exponent = (int)((bits & 0x7fe00000) >> 21) - 788;  // grab the exponent, remove the bias.
+            float mantissa = ((int)(bits & 0x1fffff) ^ sign) + (sign & 1);  // grab the mantissa and apply the sign bit.
 
             // NB: We could use bit tricks to calc the exponent, but it can't be more than 63 in either direction.
             //     This creates an issue, since the exponent field allows for a *lot* more than that.
