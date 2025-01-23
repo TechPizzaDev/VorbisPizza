@@ -21,14 +21,17 @@ namespace NVorbis
 
         private IPacketProvider? _packetProvider;
         private StreamStats _stats;
-        private Queue<float[][]> _bufferPool;
+        private Queue<float[]> _bufferPool;
 
         private byte _channels;
         private int _sampleRate;
-        private int _block0Size;
-        private int _block1Size;
+        private BlockSizes _blockSizes;
+        private Pair<BlocksizeDerivedCache> _blockSizeCache;
+        private Codebook[] _books;
+        private IFloor[] _floors;
+        private Residue0[] _residues;
         private Mode[] _modes;
-        private int _modeFieldBits;
+        private byte _modeFieldBits;
 
         private byte[] _utf8Vendor;
         private byte[][] _utf8Comments;
@@ -39,8 +42,8 @@ namespace NVorbis
         private bool _hasPosition;
         private EndOfStreamFlags _eosFound;
 
-        private float[][]? _nextPacketBuf;
-        private float[][]? _prevPacketBuf;
+        private float[]? _nextPacketBuf;
+        private float[]? _prevPacketBuf;
         private int _prevPacketStart;
         private int _prevPacketEnd;
         private int _prevPacketStop;
@@ -54,7 +57,7 @@ namespace NVorbis
             _packetProvider = packetProvider ?? throw new ArgumentNullException(nameof(packetProvider));
 
             _stats = new StreamStats();
-            _bufferPool = new Queue<float[][]>(MaxPooledBuffers);
+            _bufferPool = new Queue<float[]>(MaxPooledBuffers);
 
             _utf8Vendor = Array.Empty<byte>();
             _utf8Comments = Array.Empty<byte[]>();
@@ -220,8 +223,10 @@ namespace NVorbis
             NominalBitrate = (int)packet.ReadBits(32);
             LowerBitrate = (int)packet.ReadBits(32);
 
-            _block0Size = 1 << (int)packet.ReadBits(4);
-            _block1Size = 1 << (int)packet.ReadBits(4);
+            _blockSizes = new BlockSizes((int)packet.ReadBits(4), (int)packet.ReadBits(4));
+            _blockSizeCache = new(
+                new BlocksizeDerivedCache(_blockSizes.Size0),
+                new BlocksizeDerivedCache(_blockSizes.Size1));
 
             if (NominalBitrate == 0 && UpperBitrate > 0 && LowerBitrate > 0)
             {
@@ -267,6 +272,7 @@ namespace NVorbis
             {
                 books[i] = new Codebook(ref packet);
             }
+            _books = books;
 
             // Vorbis never used this feature, so we just skip the appropriate number of bits
             int times = (int)packet.ReadBits(6) + 1;
@@ -276,8 +282,9 @@ namespace NVorbis
             IFloor[] floors = new IFloor[packet.ReadBits(6) + 1];
             for (int i = 0; i < floors.Length; i++)
             {
-                floors[i] = CreateFloor(ref packet, _block0Size, _block1Size, books);
+                floors[i] = CreateFloor(ref packet, _blockSizes, books);
             }
+            _floors = floors;
 
             // read the residues
             Residue0[] residues = new Residue0[packet.ReadBits(6) + 1];
@@ -285,6 +292,7 @@ namespace NVorbis
             {
                 residues[i] = CreateResidue(ref packet, _channels, books);
             }
+            _residues = residues;
 
             // read the mappings
             Mapping[] mappings = new Mapping[packet.ReadBits(6) + 1];
@@ -297,7 +305,7 @@ namespace NVorbis
             _modes = new Mode[packet.ReadBits(6) + 1];
             for (int i = 0; i < _modes.Length; i++)
             {
-                _modes[i] = new Mode(ref packet, _block0Size, _block1Size, mappings);
+                _modes[i] = new Mode(ref packet, _blockSizes, mappings);
             }
 
             // verify the closing bit
@@ -305,19 +313,19 @@ namespace NVorbis
                 throw new InvalidDataException("Book packet did not end on correct bit!");
 
             // save off the number of bits to read to determine packet mode
-            _modeFieldBits = Utils.ilog(_modes.Length - 1);
+            _modeFieldBits = (byte)Utils.ilog(_modes.Length - 1);
 
             _stats.AddPacket(-1, packet.BitsRead, packet.BitsRemaining, packet.ContainerOverheadBits);
 
             return true;
         }
 
-        private static IFloor CreateFloor(ref VorbisPacket packet, int block0Size, int block1Size, Codebook[] codebooks)
+        private static IFloor CreateFloor(ref VorbisPacket packet, BlockSizes blockSizes, Codebook[] codebooks)
         {
             int type = (int)packet.ReadBits(16);
             return type switch
             {
-                0 => new Floor0(ref packet, block0Size, block1Size, codebooks),
+                0 => new Floor0(ref packet, blockSizes, codebooks),
                 1 => new Floor1(ref packet, codebooks),
                 _ => throw new InvalidDataException("Invalid floor type!"),
             };
@@ -337,9 +345,9 @@ namespace NVorbis
             int type = (int)packet.ReadBits(16);
             return type switch
             {
-                0 => new Residue0(ref packet, channels, codebooks),
-                1 => new Residue1(ref packet, channels, codebooks),
-                2 => new Residue2(ref packet, channels, codebooks),
+                0 => new Residue0(ref packet, codebooks),
+                1 => new Residue1(ref packet, codebooks),
+                2 => new Residue2(ref packet, codebooks),
                 _ => throw new InvalidDataException("Invalid residue type!"),
             };
         }
@@ -360,30 +368,25 @@ namespace NVorbis
             _hasPosition = false;
         }
 
-        private float[][] GetBuffer()
+        private float[] GetBuffer()
         {
-            if (!_bufferPool.TryDequeue(out float[][]? buffer))
+            if (!_bufferPool.TryDequeue(out float[]? buffer))
             {
-                buffer = new float[_channels][];
-                for (int i = 0; i < buffer.Length; i++)
-                {
-                    buffer[i] = new float[_block1Size];
-                }
+                buffer = new float[_blockSizes.Size1 * _channels];
             }
             return buffer;
         }
 
-        private void ReturnBuffer(float[][]? buffer)
+        private void ReturnBuffer(float[]? buffer)
         {
             if (buffer == null)
             {
                 return;
             }
 
-            Debug.Assert(buffer.Length == _channels);
-            for (int i = 0; i < buffer.Length; i++)
+            if (buffer.Length != _blockSizes.Size1 * _channels)
             {
-                Debug.Assert(buffer[i].Length == _block1Size);
+                throw new InvalidOperationException();
             }
 
             if (_bufferPool.Count < MaxPooledBuffers)
@@ -430,20 +433,20 @@ namespace NVorbis
             int idx = 0;
 
             // try to fill the buffer; drain the last buffer if EOS, resync, bad packet, or parameter change
-        while (idx == 0)
-        {
-            // if we don't have any more valid data in the current packet, read in the next packet
-            if (_prevPacketStart == _prevPacketEnd)
+            while (idx == 0)
             {
-                if (_eosFound != EndOfStreamFlags.None)
+                // if we don't have any more valid data in the current packet, read in the next packet
+                if (_prevPacketStart == _prevPacketEnd)
                 {
-                    // no more samples, so just return
-                    ReturnBuffer(_prevPacketBuf);
-                    _prevPacketBuf = null;
-                    break;
-                }
+                    if (_eosFound != EndOfStreamFlags.None)
+                    {
+                        // no more samples, so just return
+                        ReturnBuffer(_prevPacketBuf);
+                        _prevPacketBuf = null;
+                        break;
+                    }
 
-                    if (!ReadNextPacket(idx, out long samplePosition))
+                    if (!ReadNextPacket(out long samplePosition))
                     {
                         if ((_eosFound & EndOfStreamFlags.PacketFlag) != 0)
                         {
@@ -463,34 +466,32 @@ namespace NVorbis
                 // we read out the valid samples from the previous packet
                 int copyLen = Math.Min(samplesToRead - idx, _prevPacketEnd - _prevPacketStart);
                 Debug.Assert(copyLen >= 0);
-            if (copyLen <= 0)
-            {
-                continue;
-            }
+                if (copyLen <= 0)
+                {
+                    continue;
+                }
 
-                    if (interleave)
+                if (interleave)
+                {
+                    Span<float> target = buffer.Slice(idx * channels, copyLen * channels);
+                    if (ClipSamples)
                     {
-                        Span<float> target = buffer.Slice(idx * channels, copyLen * channels);
-                        if (ClipSamples)
-                        {
-                            StoreInterleaved<ClipEnable>(target, copyLen);
-                        }
-                        else
-                        {
-                            StoreInterleaved<ClipDisable>(target, copyLen);
-                        }
+                        StoreInterleaved<ClipEnable>(target, copyLen);
                     }
                     else
                     {
-                StoreContiguous(buffer, idx, copyLen, channelStride, ClipSamples);
+                        StoreInterleaved<ClipDisable>(target, copyLen);
                     }
-
-                    idx += copyLen;
-                    _prevPacketStart += copyLen;
+                }
+                else
+                {
+                    StoreContiguous(buffer, idx, copyLen, channelStride, ClipSamples);
                 }
 
-            // update the position
-            _currentPosition += idx;
+                idx += copyLen;
+                _prevPacketStart += copyLen;
+                _currentPosition += copyLen;
+            }
 
             // return count of floats written
             return idx;
@@ -514,7 +515,7 @@ namespace NVorbis
         private void StoreInterleaved<T>(Span<float> target, int count)
             where T : IClipValue
         {
-            float[][]? prevPacketBuf = _prevPacketBuf;
+            float[]? prevPacketBuf = _prevPacketBuf;
             Debug.Assert(prevPacketBuf != null);
 
             int channels = _channels;
@@ -528,8 +529,8 @@ namespace NVorbis
 
                 if (channels == 2)
                 {
-                    ref float prev0 = ref MemoryMarshal.GetReference(prevPacketBuf[0].AsSpan(_prevPacketStart, count));
-                    ref float prev1 = ref MemoryMarshal.GetReference(prevPacketBuf[1].AsSpan(_prevPacketStart, count));
+                    ref float prev0 = ref MemoryMarshal.GetReference(prevPacketBuf.AsSpan(_prevPacketStart, count));
+                    ref float prev1 = ref MemoryMarshal.GetReference(prevPacketBuf.AsSpan(_prevPacketStart + _blockSizes.Size1, count));
 
                     for (; j + Vector128<float>.Count <= count; j += Vector128<float>.Count)
                     {
@@ -552,7 +553,7 @@ namespace NVorbis
                 }
                 else if (channels == 1)
                 {
-                    ref float prev0 = ref MemoryMarshal.GetReference(prevPacketBuf[0].AsSpan(_prevPacketStart, count));
+                    ref float prev0 = ref MemoryMarshal.GetReference(prevPacketBuf.AsSpan(_prevPacketStart, count));
 
                     for (; j + Vector128<float>.Count <= count; j += Vector128<float>.Count)
                     {
@@ -571,7 +572,7 @@ namespace NVorbis
 
             for (int ch = 0; ch < channels; ch++)
             {
-                ref float prev = ref MemoryMarshal.GetReference(prevPacketBuf[ch].AsSpan(_prevPacketStart, count));
+                ref float prev = ref MemoryMarshal.GetReference(prevPacketBuf.AsSpan(_prevPacketStart + _blockSizes.Size1 * ch, count));
                 ref float tar = ref Unsafe.Add(ref dst, ch);
 
                 bool clipped = false;
@@ -590,57 +591,57 @@ namespace NVorbis
             }
         }
 
-        private void StoreContiguous(Span<float> buffer, int count, int channelStride, bool clip)
+        private void StoreContiguous(Span<float> buffer, int offset, int count, int channelStride, bool clip)
         {
-            float[][]? prevPacketBuf = _prevPacketBuf;
+            float[]? prevPacketBuf = _prevPacketBuf;
             Debug.Assert(prevPacketBuf != null);
 
             for (int ch = 0; ch < _channels; ch++)
             {
-                Span<float> destination = buffer.Slice(ch * channelStride, count);
-                Span<float> source = prevPacketBuf[ch].AsSpan(_prevPacketStart, count);
+                Span<float> dst = buffer.Slice(ch * channelStride + offset, count);
+                ReadOnlySpan<float> src = prevPacketBuf.AsSpan(_prevPacketStart + _blockSizes.Size1 * ch, count);
 
-                if (clip)
+                if (!clip)
                 {
-                src.CopyTo(dst);
-                continue;
+                    src.CopyTo(dst);
+                    continue;
+                }
+
+                if (Vector.IsHardwareAccelerated)
+                {
+                    Vector<float> clipped = Vector<float>.Zero;
+
+                    while (src.Length >= Vector<float>.Count)
+                    {
+                        Vector<float> p0 = VectorHelper.Create(src);
+                        Vector<float> c0 = Utils.ClipValue(p0, ref clipped);
+                        c0.CopyTo(dst);
+
+                        src = src.Slice(Vector<float>.Count);
+                        dst = dst.Slice(Vector<float>.Count);
+                    }
+
+                    _hasClipped |= !Vector.EqualsAll(clipped, Vector<float>.Zero);
+                }
+
+                {
+                    bool clipped = false;
+
+                    for (int j = 0; j < src.Length; j++)
+                    {
+                        dst[j] = Utils.ClipValue(src[j], ref clipped);
+                    }
+
+                    _hasClipped |= clipped;
+                }
             }
+        }
 
-                    if (Vector.IsHardwareAccelerated)
-                    {
-                        Vector<float> clipped = Vector<float>.Zero;
-
-                while (src.Length >= Vector<float>.Count)
-                        {
-                    Vector<float> p0 = VectorHelper.Create(src);
-                            Vector<float> c0 = Utils.ClipValue(p0, ref clipped);
-                    c0.CopyTo(dst);
-
-                    src = src.Slice(Vector<float>.Count);
-                    dst = dst.Slice(Vector<float>.Count);
-                        }
-
-                        _hasClipped |= !Vector.EqualsAll(clipped, Vector<float>.Zero);
-                    }
-
-                    {
-                        bool clipped = false;
-
-                for (int j = 0; j < src.Length; j++)
-                        {
-                    dst[j] = Utils.ClipValue(src[j], ref clipped);
-                        }
-
-                        _hasClipped |= clipped;
-                    }
-                }
-                }
-
-        private bool ReadNextPacket(nint bufferedSamples, out long samplePosition)
+        private bool ReadNextPacket(out long samplePosition)
         {
             // decode the next packet now so we can start overlapping with it
-            float[][]? curPacket = DecodeNextPacket(
-                out int startIndex, out int validLen, out int totalLen, out EndOfStreamFlags isEndOfStream,
+            float[]? curPacket = DecodeNextPacket(
+                out PacketInfo packetInfo, out EndOfStreamFlags isEndOfStream,
                 out samplePosition, out int bitsRead, out int bitsRemaining, out int containerOverheadBits);
 
             _eosFound |= isEndOfStream;
@@ -650,47 +651,50 @@ namespace NVorbis
                 return false;
             }
 
+            int packetLen = _prevPacketStop - _prevPacketEnd;
+            int rightStart = packetInfo.RightStart;
+
             // if we get a max sample position, back off our valid length to match
             if (samplePosition != -1 && isEndOfStream != EndOfStreamFlags.None)
             {
-                long actualEnd = _currentPosition + bufferedSamples + validLen - startIndex;
-                int diff = (int)(samplePosition - actualEnd);
-                if (diff < 0)
+                long actualEnd = _currentPosition + packetLen;
+                int diff = (int)(actualEnd - samplePosition);
+                if (diff > 0)
                 {
-                    validLen = Math.Max(validLen + diff, 0);
+                    rightStart = Math.Max(rightStart - diff, 0);
                 }
             }
 
             // start overlapping (if we don't have an previous packet data,
             // just loop and the previous packet logic will handle things appropriately)
-            if (_prevPacketEnd > 0)
+            if (_prevPacketBuf != null)
             {
-                Debug.Assert(_prevPacketBuf != null);
-
                 // overlap the first samples in the packet with the previous packet, then loop
-                OverlapBuffers(_prevPacketBuf, curPacket, _prevPacketStart, _prevPacketStop, startIndex, _channels);
-                _prevPacketStart = startIndex;
+                OverlapBuffers(packetInfo, _prevPacketBuf, curPacket, packetLen);
+                _prevPacketStart = packetInfo.LeftStart;
             }
-            else if (_prevPacketBuf == null)
+            else
             {
                 // first packet, so it doesn't have any good data before the valid length
-                _prevPacketStart = validLen;
+                _prevPacketStart = rightStart;
             }
 
+            _prevPacketEnd = rightStart;
+            _prevPacketStop = packetInfo.RightEnd;
+
             // update stats
-            _stats.AddPacket(validLen - _prevPacketStart, bitsRead, bitsRemaining, containerOverheadBits);
+            _stats.AddPacket(packetLen, bitsRead, bitsRemaining, containerOverheadBits);
 
             // keep the old buffer so the GC doesn't have to reallocate every packet
             _nextPacketBuf = _prevPacketBuf;
 
             // save off our current packet's data for the next pass
-            _prevPacketEnd = validLen;
-            _prevPacketStop = totalLen;
             _prevPacketBuf = curPacket;
             return true;
         }
 
-        private float[][]? DecodeNextPacket(out int packetStartIndex, out int packetValidLength, out int packetTotalLength, out EndOfStreamFlags isEndOfStream,
+        private float[]? DecodeNextPacket(
+            out PacketInfo packetInfo, out EndOfStreamFlags isEndOfStream,
             out long samplePosition, out int bitsRead, out int bitsRemaining, out int containerOverheadBits)
         {
             Debug.Assert(_packetProvider != null);
@@ -703,27 +707,27 @@ namespace NVorbis
                 bitsRead = 0;
                 bitsRemaining = 0;
                 containerOverheadBits = 0;
+                goto NoInfo;
             }
-            else
+
+            try
             {
-                try
+                // if the packet is flagged as the end of the stream, we can safely mark _eosFound
+                isEndOfStream = packet.IsEndOfStream ? EndOfStreamFlags.PacketFlag : EndOfStreamFlags.None;
+
+                // resync... that means we've probably lost some data; pick up a new position
+                if (packet.IsResync)
                 {
-                    // if the packet is flagged as the end of the stream, we can safely mark _eosFound
-                    isEndOfStream = packet.IsEndOfStream ? EndOfStreamFlags.PacketFlag : EndOfStreamFlags.None;
+                    _hasPosition = false;
+                }
 
-                    // resync... that means we've probably lost some data; pick up a new position
-                    if (packet.IsResync)
-                    {
-                        _hasPosition = false;
-                    }
+                // grab the container overhead now, since the read won't affect it
+                containerOverheadBits = packet.ContainerOverheadBits;
 
-                    // grab the container overhead now, since the read won't affect it
-                    containerOverheadBits = packet.ContainerOverheadBits;
-
-                    // make sure the packet starts with a 0 bit as per the spec
-                    if (packet.ReadBits(1) == 0)
-                    {
-                        // if we get here, we should have a good packet; decode it and add it to the buffer
+                // make sure the packet starts with a 0 bit as per the spec
+                if (packet.ReadBits(1) == 0)
+                {
+                    // if we get here, we should have a good packet; decode it and add it to the buffer
                     int modeIdx = (int)packet.ReadBits(_modeFieldBits);
                     if ((uint)modeIdx >= (uint)_modes.Length)
                     {
@@ -731,47 +735,57 @@ namespace NVorbis
                     }
 
                     ref Mode mode = ref _modes[modeIdx];
-                     _nextPacketBuf ??= GetBuffer();
-                    if (mode.Decode(ref packet, _nextPacketBuf, out packetStartIndex, out packetValidLength, out packetTotalLength))
-                        {
-                            // per the spec, do not decode more samples than the last granulePosition
-                            samplePosition = packet.GranulePosition;
-                            bitsRead = packet.BitsRead;
-                            bitsRemaining = packet.BitsRemaining;
-                            return _nextPacketBuf;
-                        }
+                    _nextPacketBuf ??= GetBuffer();
+                    var channelBuf = new ChannelBuffer(_nextPacketBuf, _channels, _blockSizes.Size1);
+
+                    if (mode.Decode(ref packet, channelBuf, _books, _floors, _residues, out packetInfo))
+                    {
+                        // per the spec, do not decode more samples than the last granulePosition
+                        samplePosition = packet.GranulePosition;
+                        bitsRead = packet.BitsRead;
+                        bitsRemaining = packet.BitsRemaining;
+                        return _nextPacketBuf;
                     }
-                    bitsRead = packet.BitsRead;
-                    bitsRemaining = packet.BitsRead + packet.BitsRemaining;
                 }
-                finally
-                {
-                    packet.Finish();
-                }
+                bitsRead = packet.BitsRead;
+                bitsRemaining = packet.BitsRead + packet.BitsRemaining;
+            }
+            finally
+            {
+                packet.Finish();
             }
 
-            packetStartIndex = 0;
-            packetValidLength = 0;
-            packetTotalLength = 0;
+        NoInfo:
+            packetInfo = default;
             samplePosition = -1;
             return null;
         }
 
-        private static void OverlapBuffers(float[][] previousBuffers, float[][] nextBuffers, int prevStart, int prevLen, int nextStart, int channels)
+        private void OverlapBuffers(
+            in PacketInfo packetInfo,
+            Span<float> previousBuffer,
+            Span<float> nextBuffer,
+            int packetLen)
         {
-            int length = prevLen - prevStart;
-            for (int c = 0; c < channels; c++)
+            var windowSlope = _blockSizeCache[packetInfo.LeftUseSize1].WindowSlope;
+            int size1 = _blockSizes.Size1;
+
+            for (int ch = 0; ch < _channels; ch++)
             {
-                Span<float> prevSpan = previousBuffers[c].AsSpan(prevStart, length);
-                Span<float> nextSpan = nextBuffers[c].AsSpan(nextStart, length);
+                Span<float> prev = _prevPacketBuf.AsSpan(size1 * ch, size1)[_prevPacketEnd.._prevPacketStop];
 
-                ref float prev = ref MemoryMarshal.GetReference(prevSpan);
-                ref float next = ref MemoryMarshal.GetReference(nextSpan);
+                // TODO: fix crash when previous length is larger than slope
+                ReadOnlySpan<float> slope = windowSlope.AsSpan(0, packetLen);
 
-                int i = 0;
-                for (; i < length; i++)
+                // TODO: vectorize anew
+                Span<float> chan = nextBuffer.Slice(packetInfo.LeftStart + size1 * ch, packetLen);
+                for (int i = 0; i < packetLen; i++)
                 {
-                    Unsafe.Add(ref next, i) += Unsafe.Add(ref prev, i);
+                    ref float v = ref chan[i];
+                    float v_lhs = slope[i];
+                    float v_prev = prev[i];
+                    float v_rhs = slope[^(i + 1)];
+                    v = (v * v_lhs) + (v_prev * v_rhs);
                 }
             }
         }
@@ -837,7 +851,7 @@ namespace NVorbis
             _hasPosition = true;
 
             // read the pre-roll packet
-            if (!ReadNextPacket(0, out _))
+            if (!ReadNextPacket(out _))
             {
                 // we'll use this to force ReadSamples to fail to read
                 _eosFound |= EndOfStreamFlags.InvalidPreroll;
@@ -852,7 +866,7 @@ namespace NVorbis
             }
 
             // read the actual packet
-            if (!ReadNextPacket(0, out _))
+            if (!ReadNextPacket(out _))
             {
                 ResetDecoder();
                 // we'll use this to force ReadSamples to fail to read
@@ -886,7 +900,11 @@ namespace NVorbis
                 if (modeIdx >= (uint)_modes.Length)
                     return 0;
 
-                return _modes[modeIdx].GetPacketSampleCount(ref curPacket);
+                if (_modes[modeIdx].GetPacketInfo(ref curPacket, out PacketInfo info))
+                {
+                    return info.SampleCount;
+                }
+                return 0;
             }
             finally
             {

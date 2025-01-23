@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using NVorbis.Contracts;
@@ -16,22 +17,21 @@ namespace NVorbis
             internal readonly int[] Posts = new int[64];
             internal int PostCount;
 
-            public override bool ExecuteChannel => (ForceEnergy || PostCount > 0) && !ForceNoEnergy;
+            public override bool ExecuteChannel => PostCount > 0;
 
             public override void Reset()
             {
                 Array.Clear(Posts);
                 PostCount = 0;
-                ForceEnergy = false;
-                ForceNoEnergy = false;
             }
         }
 
-        private int[] _partitionClass, _classDimensions, _classSubclasses, _xList, _classMasterBookIndex, _hNeigh, _lNeigh, _sortIdx;
+        private byte[] _partitionClass, _classDimensions, _classSubclasses, _classMasterBookIndex;
+        private int[] _xList, _hNeigh, _lNeigh, _sortIdx;
         private int _multiplier, _range, _yBits;
-        private Codebook[] _classMasterbooks;
-        private Codebook[][] _subclassBooks;
-        private int[][] _subclassBookIndex;
+        private byte[] _classMasterbooks;
+        private short[][] _subclassBooks;
+        private byte[][] _subclassBookIndex;
 
         private static ReadOnlySpan<byte> RangeLookup => new byte[] { 128, 64, 43, 32 };
         private static ReadOnlySpan<byte> YBitsLookup => new byte[] { 8, 7, 7, 6 };
@@ -39,36 +39,31 @@ namespace NVorbis
         public Floor1(ref VorbisPacket packet, Codebook[] codebooks)
         {
             int maximum_class = -1;
-            int[] partitionClass = new int[(int)packet.ReadBits(5)];
-            _partitionClass = partitionClass;
-
+            byte[] partitionClass = new byte[(int)packet.ReadBits(5)];
             for (int i = 0; i < partitionClass.Length; i++)
             {
-                partitionClass[i] = (int)packet.ReadBits(4);
-                if (partitionClass[i] > maximum_class)
-                {
-                    maximum_class = partitionClass[i];
-                }
+                partitionClass[i] = (byte)packet.ReadBits(4);
+                maximum_class = Math.Max(maximum_class, partitionClass[i]);
             }
+            _partitionClass = partitionClass;
+            maximum_class += 1;
 
-            _classDimensions = new int[++maximum_class];
-            _classSubclasses = new int[maximum_class];
-            _classMasterbooks = new Codebook[maximum_class];
-            _classMasterBookIndex = new int[maximum_class];
-            _subclassBooks = new Codebook[maximum_class][];
-            _subclassBookIndex = new int[maximum_class][];
+            _classDimensions = new byte[maximum_class];
+            _classSubclasses = new byte[maximum_class];
+            _classMasterbooks = new byte[maximum_class];
+            _classMasterBookIndex = new byte[maximum_class];
+            _subclassBooks = new short[maximum_class][];
             for (int i = 0; i < maximum_class; i++)
             {
-                _classDimensions[i] = (int)packet.ReadBits(3) + 1;
-                _classSubclasses[i] = (int)packet.ReadBits(2);
+                _classDimensions[i] = (byte)(packet.ReadBits(3) + 1);
+                _classSubclasses[i] = (byte)packet.ReadBits(2);
                 if (_classSubclasses[i] > 0)
                 {
-                    _classMasterBookIndex[i] = (int)packet.ReadBits(8);
-                    _classMasterbooks[i] = codebooks[_classMasterBookIndex[i]];
+                    _classMasterBookIndex[i] = (byte)packet.ReadBits(8);
+                    _classMasterbooks[i] = _classMasterBookIndex[i];
                 }
 
-                _subclassBooks[i] = new Codebook[1 << _classSubclasses[i]];
-                _subclassBookIndex[i] = new int[_subclassBooks[i].Length];
+                _subclassBooks[i] = new short[1 << _classSubclasses[i]];
                 for (int j = 0; j < _subclassBooks[i].Length; j++)
                 {
                     int bookNum = (int)packet.ReadBits(8) - 1;
@@ -76,12 +71,12 @@ namespace NVorbis
                     {
                         throw new InvalidDataException();
                     }
-                    _subclassBooks[i][j] = bookNum;
+                    _subclassBooks[i][j] = (short)bookNum;
                 }
             }
 
             int multiplier = (int)packet.ReadBits(2);
-            
+
             _range = RangeLookup[multiplier] * 2;
             _yBits = YBitsLookup[multiplier];
 
@@ -126,11 +121,13 @@ namespace NVorbis
                     int temp = xList[j];
                     if (temp < xList[i])
                     {
-                        if (temp > xList[lNeigh[i]]) lNeigh[i] = j;
+                        if (temp > xList[lNeigh[i]])
+                            lNeigh[i] = j;
                     }
                     else
                     {
-                        if (temp < xList[hNeigh[i]]) hNeigh[i] = j;
+                        if (temp < xList[hNeigh[i]])
+                            hNeigh[i] = j;
                     }
                 }
             }
@@ -141,7 +138,7 @@ namespace NVorbis
                 for (int j = i + 1; j < sortIdx.Length; j++)
                 {
                     if (xList[i] == xList[j])
-                        throw new System.IO.InvalidDataException();
+                        throw new InvalidDataException();
 
                     if (xList[sortIdx[i]] > xList[sortIdx[j]])
                     {
@@ -162,13 +159,14 @@ namespace NVorbis
             return new Data();
         }
 
-        public void Unpack(ref VorbisPacket packet, FloorData floorData, int blockSize, int channel)
+        public void Unpack(ref VorbisPacket packet, FloorData floorData, int channel, Codebook[] books)
         {
             Data data = (Data)floorData;
 
             // hoist ReadPosts to here since that's all we're doing...
             if (!packet.ReadBit())
             {
+                data.PostCount = 0;
                 return;
             }
 
@@ -176,7 +174,7 @@ namespace NVorbis
             data.Posts[0] = (int)packet.ReadBits(_yBits);
             data.Posts[1] = (int)packet.ReadBits(_yBits);
 
-            int[] partitionClass = _partitionClass;
+            byte[] partitionClass = _partitionClass;
             for (int i = 0; i < partitionClass.Length; i++)
             {
                 int clsNum = partitionClass[i];
@@ -186,7 +184,7 @@ namespace NVorbis
                 uint cval = 0U;
                 if (cbits > 0)
                 {
-                    if ((cval = (uint)_classMasterbooks[clsNum].DecodeScalar(ref packet)) == uint.MaxValue)
+                    if ((cval = (uint)books[_classMasterbooks[clsNum]].DecodeScalar(ref packet)) == uint.MaxValue)
                     {
                         // we read a bad value...  bail
                         postCount = 0;
@@ -194,13 +192,17 @@ namespace NVorbis
                     }
                 }
 
+                var dimBooks = _subclassBooks[clsNum];
                 for (int j = 0; j < cdim; j++)
                 {
-                    Codebook book = _subclassBooks[clsNum][cval & csub];
+                    int bookIdx = dimBooks[cval & csub];
                     cval >>= cbits;
-                    if (book != null)
+                    int post = 0;
+                    if (bookIdx >= 0)
                     {
-                        if ((data.Posts[postCount] = book.DecodeScalar(ref packet)) == -1)
+                        Codebook book = books[bookIdx];
+                        post = book.DecodeScalar(ref packet);
+                        if (post == -1)
                         {
                             // we read a bad value... bail
                             postCount = 0;
@@ -208,6 +210,7 @@ namespace NVorbis
                             break;
                         }
                     }
+                    data.Posts[postCount] = post;
                     ++postCount;
                 }
             }
@@ -216,19 +219,19 @@ namespace NVorbis
         }
 
         [SkipLocalsInit]
-        public unsafe void Apply(FloorData floorData, int blockSize, float[] residue)
+        public void Apply(FloorData floorData, int blockSize, Span<float> residue)
         {
             int n = blockSize / 2;
             Data data = (Data)floorData;
 
             if (data.PostCount > 0)
             {
-                bool* stepFlags = stackalloc bool[64];
+                Span<bool> stepFlags = stackalloc bool[64];
 
                 UnwrapPosts(stepFlags, data);
 
                 ref float dbTable = ref MemoryMarshal.GetArrayDataReference(inverse_dB_table);
-                ref float res = ref MemoryMarshal.GetArrayDataReference(residue);
+                ref float res = ref MemoryMarshal.GetReference(residue);
 
                 int lx = 0;
                 int ly = data.Posts[0] * _multiplier;
@@ -260,11 +263,11 @@ namespace NVorbis
             }
             else
             {
-                Array.Clear(residue, 0, n);
+                residue.Slice(0, n);
             }
         }
 
-        private unsafe void UnwrapPosts(bool* stepFlags, Data data)
+        private unsafe void UnwrapPosts(Span<bool> stepFlags, Data data)
         {
             ref int xList = ref MemoryMarshal.GetArrayDataReference(_xList);
             ref int posts = ref MemoryMarshal.GetArrayDataReference(data.Posts);
