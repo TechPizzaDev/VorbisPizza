@@ -352,18 +352,11 @@ namespace NVorbis
         /// </summary>
         public void Finish()
         {
-            Span<PacketData> dataParts = DataParts;
-            for (int i = 0; i < dataParts.Length; i++)
+            foreach (ref PacketData packetData in DataParts.AsSpan())
             {
-                ref PacketData packetData = ref dataParts[i];
-                if (packetData.Slice.Page != null)
-                {
-                    packetData.Slice.Page.DecrementRef();
-                    packetData.Slice = default;
-                }
+                packetData.Slice.Page.DecrementRef();
             }
-
-            PacketProvider.FinishPacket(ref this);
+            PacketProvider.ReturnPacket(ref this);
         }
 
         /// <summary>

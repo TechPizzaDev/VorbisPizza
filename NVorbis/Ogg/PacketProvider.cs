@@ -480,7 +480,7 @@ namespace NVorbis.Ogg
                     // add the packet to the list
                     if (dataParts.Length <= partCount)
                     {
-                        Array.Resize(ref dataParts, dataParts.Length + 2);
+                        Array.Resize(ref dataParts, dataParts.Length * 2);
                     }
 
                     PacketLocation location = new(contPageIdx, 0);
@@ -568,12 +568,13 @@ namespace NVorbis.Ogg
             return pageData.GetPacket(packetIndex);
         }
 
-        public void FinishPacket(ref VorbisPacket packet)
+        public void ReturnPacket(ref VorbisPacket packet)
         {
             if (packet.DataParts.Array != null)
             {
                 ReturnDataPartArray(packet.DataParts.Array);
             }
+            packet = new VorbisPacket(this, default);
         }
 
         private void Dispose(bool disposing)

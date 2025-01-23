@@ -8,7 +8,7 @@ namespace NVorbis.Ogg
     /// </summary>
     public readonly struct PageSlice
     {
-        internal PageData? Page { get; }
+        internal PageData Page { get; }
 
         /// <summary>
         /// Gets the data offset within the page.
@@ -33,13 +33,8 @@ namespace NVorbis.Ogg
         /// <summary>
         /// Gets a span view over the page data slice.
         /// </summary>
-        /// <returns></returns>
         public Span<byte> AsSpan()
         {
-            if (Page == null)
-            {
-                return Span<byte>.Empty;
-            }
             return Page.AsSpan().Slice(Start, Length);
         }
 
@@ -48,10 +43,6 @@ namespace NVorbis.Ogg
         /// </summary>
         public ArraySegment<byte> AsSegment()
         {
-            if (Page == null)
-            {
-                return ArraySegment<byte>.Empty;
-            }
             return Page.AsSegment().Slice(Start, Length);
         }
     }

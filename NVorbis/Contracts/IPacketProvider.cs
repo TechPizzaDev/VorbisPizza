@@ -44,6 +44,6 @@ namespace NVorbis.Contracts
         /// Used to finish a packet. Using a finished packet is undefined behavior.
         /// </summary>
         /// <param name="packet">The packet to finish.</param>
-        void FinishPacket(ref VorbisPacket packet);
+        void ReturnPacket(ref VorbisPacket packet);
     }
 }

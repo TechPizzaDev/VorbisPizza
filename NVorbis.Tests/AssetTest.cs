@@ -49,7 +49,7 @@ public abstract class AssetTest
                     break;
                 }
                 n += 1;
-                provider.FinishPacket(ref packet);
+                packet.Finish();
             }
             while (true);
             return true;
