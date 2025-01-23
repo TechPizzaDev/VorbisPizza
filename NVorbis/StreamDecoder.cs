@@ -724,9 +724,15 @@ namespace NVorbis
                     if (packet.ReadBits(1) == 0)
                     {
                         // if we get here, we should have a good packet; decode it and add it to the buffer
-                        ref Mode mode = ref _modes[(int)packet.ReadBits(_modeFieldBits)];
-                        _nextPacketBuf ??= GetBuffer();
-                        if (mode.Decode(ref packet, _nextPacketBuf, out packetStartIndex, out packetValidLength, out packetTotalLength))
+                    int modeIdx = (int)packet.ReadBits(_modeFieldBits);
+                    if ((uint)modeIdx >= (uint)_modes.Length)
+                    {
+                        throw new InvalidDataException("Unused mode index.");
+                    }
+
+                    ref Mode mode = ref _modes[modeIdx];
+                     _nextPacketBuf ??= GetBuffer();
+                    if (mode.Decode(ref packet, _nextPacketBuf, out packetStartIndex, out packetValidLength, out packetTotalLength))
                         {
                             // per the spec, do not decode more samples than the last granulePosition
                             samplePosition = packet.GranulePosition;
