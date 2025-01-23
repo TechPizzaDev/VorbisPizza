@@ -62,17 +62,15 @@ public abstract class AssetTest
         return (decode_duration, native_decode_duration, n);
     }
 
-    public static (ulong, ulong) cmp_file_output(string file_path)
+    public static (ulong pck_diff_cnt, ulong pck_cnt, ulong sample_cnt, bool chained) cmp_file_output(string file_path)
     {
         var f_1 = File.OpenRead(file_path);
         var f_2 = File.OpenRead(file_path);
-        return cmp_output(f_1, f_2, (u, v, _, _) => (u, v));
+        return cmp_output(f_1, f_2);
     }
 
-    public static T cmp_output<T>(
-        Stream rdr_1,
-        Stream rdr_2,
-        Func<ulong, ulong, ulong, bool, T> f)
+    public static (ulong pck_diff_cnt, ulong pck_cnt, ulong sample_cnt, bool chained) cmp_output(
+        Stream rdr_1, Stream rdr_2)
     {
         using var native_dec = new NativeDecoder(rdr_1, false);
 
@@ -187,13 +185,15 @@ public abstract class AssetTest
                 dec_data.Clear();
             }
         }
-        return f(pcks_with_diffs, n, total_sample_count, chained_ogg_file);
+        return (pcks_with_diffs, n, total_sample_count, chained_ogg_file);
     }
 
     public void cmp_output(string filePath, ulong max_diff)
     {
-        var (diff_pck_count, _) = cmp_file_output(filePath);
-        Assert.True(diff_pck_count <= max_diff, $"{diff_pck_count} differing packets of allowed {max_diff}");
+        var (pck_diff_cnt, pck_cnt, _, _) = cmp_file_output(filePath);
+        Assert.True(
+            pck_diff_cnt <= max_diff,
+            $"{pck_diff_cnt} differing packets of allowed {max_diff}. {pck_cnt} packets in total.");
     }
 
     /// Ensures that a file is malformed and returns an error,
