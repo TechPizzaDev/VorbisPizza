@@ -182,10 +182,7 @@ namespace NVorbis
             {
                 count = _bitCount;
             }
-
-            ulong value = _bitBucket;
-            ulong mask = ulong.MaxValue >> (64 - count);
-            return value & mask;
+            return _bitBucket & Utils.Mask64(count);
         }
 
         /// <summary>
@@ -197,17 +194,14 @@ namespace NVorbis
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ulong TryPeekBits(int count, out int bitsRead)
         {
-            Debug.Assert((uint)(count - 1) < 64);
+            Debug.Assert((uint)count <= 64);
 
             bitsRead = count;
             if (_bitCount < count)
             {
                 return RefillBits(ref bitsRead);
             }
-
-            ulong value = _bitBucket;
-            ulong mask = ulong.MaxValue >> (64 - count);
-            return value & mask;
+            return _bitBucket & Utils.Mask64(count);
         }
 
         /// <summary>

@@ -9,6 +9,13 @@ namespace NVorbis
         private const float LowerClip = -0.99999994f;
         private const float UpperClip = 0.99999994f;
         
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static ulong Mask64(int bitCount)
+        {
+            ulong mask = bitCount == 0 ? 0 : ulong.MaxValue;
+            return mask >> (64 - bitCount);
+        }
+
         internal static int ilog(int x)
         {
             int cnt = 0;
